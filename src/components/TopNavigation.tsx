@@ -1,11 +1,29 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronDown, Settings, FileText, BarChart3, Database } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
 const TopNavigation = () => {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  // Keyboard shortcuts handler
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'F6') {
+        event.preventDefault();
+        navigate('/profit-loss-report');
+      } else if (event.key === 'F12') {
+        event.preventDefault();
+        navigate('/final-trial-balance');
+      } else if (event.key === 'F9') {
+        event.preventDefault();
+        navigate('/transaction-report');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [navigate]);
 
   const toggleDropdown = (dropdown: string) => {
     setActiveDropdown(activeDropdown === dropdown ? null : dropdown);
@@ -19,6 +37,11 @@ const TopNavigation = () => {
   const handlePartyLedger = () => {
     setActiveDropdown(null);
     navigate('/party-ledger');
+  };
+
+  const handleReportNavigation = (path: string) => {
+    setActiveDropdown(null);
+    navigate(path);
   };
 
   return (
@@ -72,7 +95,7 @@ const TopNavigation = () => {
                       New Party
                     </button>
                     <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900">
-                      New M
+                      New Transaction
                     </a>
                   </div>
                 </div>
@@ -120,12 +143,24 @@ const TopNavigation = () => {
               {activeDropdown === 'report' && (
                 <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50">
                   <div className="py-1">
-                    <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900">
-                      Financial Reports
-                    </a>
-                    <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900">
-                      Commission Reports
-                    </a>
+                    <button
+                      onClick={() => handleReportNavigation('/profit-loss-report')}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                    >
+                      Profit / Loss Report <span className="text-xs text-gray-500 ml-2">F6</span>
+                    </button>
+                    <button
+                      onClick={() => handleReportNavigation('/final-trial-balance')}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                    >
+                      Final Trial Balance <span className="text-xs text-gray-500 ml-2">F12</span>
+                    </button>
+                    <button
+                      onClick={() => handleReportNavigation('/transaction-report')}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                    >
+                      Transaction Report <span className="text-xs text-gray-500 ml-2">F9</span>
+                    </button>
                   </div>
                 </div>
               )}

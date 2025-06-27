@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useNavigate } from 'react-router-dom';
 
 const PartyLedger = () => {
@@ -10,6 +11,7 @@ const PartyLedger = () => {
   const [selectedParty, setSelectedParty] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedParties, setSelectedParties] = useState<string[]>([]);
 
   // Mock party data
   const parties = [
@@ -48,6 +50,28 @@ const PartyLedger = () => {
     navigate(`/account-ledger/${encodeURIComponent(partyName)}`);
   };
 
+  const handleCheckboxChange = (partyName: string, checked: boolean) => {
+    if (checked) {
+      setSelectedParties(prev => [...prev, partyName]);
+    } else {
+      setSelectedParties(prev => prev.filter(name => name !== partyName));
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selectedParties.length === filteredParties.length) {
+      setSelectedParties([]);
+    } else {
+      setSelectedParties(filteredParties.map(party => party.name));
+    }
+  };
+
+  const handleMondayFinal = () => {
+    if (selectedParties.length > 0) {
+      console.log('Monday Final for:', selectedParties);
+    }
+  };
+
   const handleExit = () => {
     navigate('/');
   };
@@ -55,7 +79,7 @@ const PartyLedger = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <TopNavigation />
-      <div className="max-w-4xl mx-auto px-4 py-6">
+      <div className="max-w-6xl mx-auto px-4 py-6">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
           <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 rounded-t-lg">
             <h2 className="text-xl font-semibold">Party A/C. Ledger</h2>
@@ -75,7 +99,7 @@ const PartyLedger = () => {
                     onClick={() => setIsDialogOpen(true)}
                   />
                 </DialogTrigger>
-                <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden">
+                <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden">
                   <DialogHeader>
                     <DialogTitle>Select Party</DialogTitle>
                   </DialogHeader>
@@ -91,6 +115,12 @@ const PartyLedger = () => {
                       <Table>
                         <TableHeader>
                           <TableRow>
+                            <TableHead>
+                              <Checkbox
+                                checked={selectedParties.length === filteredParties.length && filteredParties.length > 0}
+                                onCheckedChange={handleSelectAll}
+                              />
+                            </TableHead>
                             <TableHead>Party Name</TableHead>
                             <TableHead>Monday Final</TableHead>
                             <TableHead>Select</TableHead>
@@ -100,8 +130,14 @@ const PartyLedger = () => {
                           {filteredParties.map((party, index) => (
                             <TableRow 
                               key={index} 
-                              className={party.mondayFinal === 'Yes' ? 'bg-green-100' : 'bg-red-100'}
+                              className={party.mondayFinal === 'Yes' ? 'bg-green-50' : 'bg-red-50'}
                             >
+                              <TableCell>
+                                <Checkbox
+                                  checked={selectedParties.includes(party.name)}
+                                  onCheckedChange={(checked) => handleCheckboxChange(party.name, checked as boolean)}
+                                />
+                              </TableCell>
                               <TableCell className="font-medium">{party.name}</TableCell>
                               <TableCell>
                                 <span className={`px-2 py-1 rounded text-sm ${
@@ -125,6 +161,19 @@ const PartyLedger = () => {
                         </TableBody>
                       </Table>
                     </div>
+                    {selectedParties.length > 0 && (
+                      <div className="flex justify-between items-center bg-blue-50 p-3 rounded-md">
+                        <span className="text-sm font-medium text-blue-700">
+                          {selectedParties.length} parties selected
+                        </span>
+                        <button
+                          onClick={handleMondayFinal}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm"
+                        >
+                          Monday Final
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </DialogContent>
               </Dialog>

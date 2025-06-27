@@ -9,6 +9,7 @@ import UserSettings from "./pages/UserSettings";
 import NewParty from "./pages/NewParty";
 import PartyLedger from "./pages/PartyLedger";
 import AccountLedger from "./pages/AccountLedger";
+import FinalTrialBalance from "./pages/FinalTrialBalance";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -25,6 +26,9 @@ const App = () => (
           <Route path="/new-party" element={<NewParty />} />
           <Route path="/party-ledger" element={<PartyLedger />} />
           <Route path="/account-ledger/:partyName" element={<AccountLedger />} />
+          <Route path="/final-trial-balance" element={<FinalTrialBalance />} />
+          <Route path="/profit-loss-report" element={<div>Profit Loss Report - Coming Soon</div>} />
+          <Route path="/transaction-report" element={<div>Transaction Report - Coming Soon</div>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
