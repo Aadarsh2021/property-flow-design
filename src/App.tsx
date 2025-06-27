@@ -7,6 +7,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import UserSettings from "./pages/UserSettings";
 import NewParty from "./pages/NewParty";
+import PartyLedger from "./pages/PartyLedger";
+import AccountLedger from "./pages/AccountLedger";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -21,6 +23,8 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/user-settings" element={<UserSettings />} />
           <Route path="/new-party" element={<NewParty />} />
+          <Route path="/party-ledger" element={<PartyLedger />} />
+          <Route path="/account-ledger/:partyName" element={<AccountLedger />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -16,6 +16,11 @@ const TopNavigation = () => {
     navigate('/new-party');
   };
 
+  const handlePartyLedger = () => {
+    setActiveDropdown(null);
+    navigate('/party-ledger');
+  };
+
   return (
     <nav className="bg-white border-b border-gray-200 shadow-sm">
       <div className="max-w-7xl mx-auto px-4">
@@ -66,9 +71,12 @@ const TopNavigation = () => {
                     >
                       New Party
                     </button>
-                    <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900">
-                      Party Report
-                    </a>
+                    <button
+                      onClick={handlePartyLedger}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                    >
+                      Party A/C. Ledger
+                    </button>
                     <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900">
                       New M
                     </a>

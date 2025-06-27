@@ -50,7 +50,7 @@ const NewParty = () => {
     setPartyData(prev => ({
       ...prev,
       [section]: {
-        ...prev[section as keyof typeof prev],
+        ...(prev[section as keyof typeof prev] as object),
         [field]: value
       }
     }));
@@ -251,7 +251,7 @@ const NewParty = () => {
                     <input
                       type="text"
                       value={partyData.rate}
-                      onChange={(e) => setParty({...partyData, rate: e.target.value})}
+                      onChange={(e) => setPartyData({...partyData, rate: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
