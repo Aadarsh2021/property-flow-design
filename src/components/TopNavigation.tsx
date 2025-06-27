@@ -71,12 +71,6 @@ const TopNavigation = () => {
                     >
                       New Party
                     </button>
-                    <button
-                      onClick={handlePartyLedger}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-                    >
-                      Party A/C. Ledger
-                    </button>
                     <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900">
                       New M
                     </a>
@@ -97,6 +91,12 @@ const TopNavigation = () => {
               {activeDropdown === 'data' && (
                 <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50">
                   <div className="py-1">
+                    <button
+                      onClick={handlePartyLedger}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                    >
+                      Party A/C. Ledger
+                    </button>
                     <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900">
                       Transaction Entry
                     </a>
