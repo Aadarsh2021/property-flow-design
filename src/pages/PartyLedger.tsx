@@ -14,7 +14,7 @@ const PartyLedger = () => {
   const [selectedParties, setSelectedParties] = useState<string[]>([]);
 
   // Mock party data
-  const parties = [
+  const [parties, setParties] = useState([
     { name: '001-AR RTGS', mondayFinal: 'Yes' },
     { name: '01-KANHA RTGS', mondayFinal: 'Yes' },
     { name: '09-KHILADI RTGS', mondayFinal: 'Yes' },
@@ -38,7 +38,7 @@ const PartyLedger = () => {
     { name: 'BERLIN', mondayFinal: 'Yes' },
     { name: 'BG RTGS', mondayFinal: 'Yes' },
     { name: 'BIG B RTGS', mondayFinal: 'Yes' }
-  ];
+  ]);
 
   const filteredParties = parties.filter(party =>
     party.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -69,6 +69,21 @@ const PartyLedger = () => {
   const handleMondayFinal = () => {
     if (selectedParties.length > 0) {
       console.log('Monday Final for:', selectedParties);
+    }
+  };
+
+  const handleDelete = () => {
+    if (selectedParties.length > 0) {
+      const confirmDelete = window.confirm(`Are you sure you want to delete ${selectedParties.length} selected parties?`);
+      if (confirmDelete) {
+        setParties(prevParties => 
+          prevParties.filter(party => !selectedParties.includes(party.name))
+        );
+        setSelectedParties([]);
+        console.log('Deleted parties:', selectedParties);
+      }
+    } else {
+      alert('Please select parties to delete.');
     }
   };
 
@@ -166,12 +181,20 @@ const PartyLedger = () => {
                         <span className="text-sm font-medium text-blue-700">
                           {selectedParties.length} parties selected
                         </span>
-                        <button
-                          onClick={handleMondayFinal}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm"
-                        >
-                          Monday Final
-                        </button>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={handleMondayFinal}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm"
+                          >
+                            Monday Final
+                          </button>
+                          <button
+                            onClick={handleDelete}
+                            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm"
+                          >
+                            Delete Selected
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
