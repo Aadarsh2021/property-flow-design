@@ -68,7 +68,17 @@ const PartyLedger = () => {
 
   const handleMondayFinal = () => {
     if (selectedParties.length > 0) {
-      console.log('Monday Final for:', selectedParties);
+      setParties(prevParties => 
+        prevParties.map(party => 
+          selectedParties.includes(party.name) 
+            ? { ...party, mondayFinal: 'Yes' }
+            : party
+        )
+      );
+      console.log('Monday Final updated for:', selectedParties);
+      setSelectedParties([]);
+    } else {
+      alert('Please select parties to update Monday Final status.');
     }
   };
 
@@ -76,11 +86,12 @@ const PartyLedger = () => {
     if (selectedParties.length > 0) {
       const confirmDelete = window.confirm(`Are you sure you want to delete ${selectedParties.length} selected parties?`);
       if (confirmDelete) {
+        console.log('Deleting parties:', selectedParties);
         setParties(prevParties => 
           prevParties.filter(party => !selectedParties.includes(party.name))
         );
         setSelectedParties([]);
-        console.log('Deleted parties:', selectedParties);
+        console.log('Parties deleted successfully');
       }
     } else {
       alert('Please select parties to delete.');
