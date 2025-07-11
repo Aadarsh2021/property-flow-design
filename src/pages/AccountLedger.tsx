@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -79,15 +79,26 @@ const AccountLedger = () => {
     );
   };
 
+  // Generate remarks based on party name and remarks input
+  const generateRemarks = () => {
+    if (!newEntry.partyName) return newEntry.remarks;
+    
+    if (newEntry.remarks) {
+      return `${newEntry.partyName} (${newEntry.remarks})`;
+    }
+    
+    return newEntry.partyName;
+  };
+
   const handleAddEntry = () => {
-    if (newEntry.partyName && newEntry.amount && newEntry.remarks) {
+    if (newEntry.partyName && newEntry.amount) {
       const amount = parseFloat(newEntry.amount);
       const lastBalance = ledgerEntries.length > 0 ? ledgerEntries[ledgerEntries.length - 1].balance : 0;
       
       const newLedgerEntry = {
         id: ledgerEntries.length + 1,
         date: new Date().toLocaleDateString('en-GB'),
-        remarks: newEntry.remarks,
+        remarks: generateRemarks(),
         tnsType: amount > 0 ? 'CR' : 'DR',
         credit: amount > 0 ? amount : 0,
         debit: amount < 0 ? amount : 0,
@@ -136,7 +147,9 @@ const AccountLedger = () => {
                 </div>
                 <div className="flex items-center space-x-4">
                   <span className="text-sm font-medium text-gray-700">Closing Balance :</span>
-                  <span className="font-bold text-lg text-blue-600">{closingBalance}</span>
+                  <span className={`font-bold text-lg ${closingBalance < 0 ? 'text-red-600' : 'text-blue-600'}`}>
+                    {closingBalance}
+                  </span>
                 </div>
               </div>
 
@@ -173,7 +186,9 @@ const AccountLedger = () => {
                         </TableCell>
                         <TableCell className="text-right">{entry.credit || ''}</TableCell>
                         <TableCell className="text-right">{entry.debit || ''}</TableCell>
-                        <TableCell className="text-right font-semibold">{entry.balance}</TableCell>
+                        <TableCell className={`text-right font-semibold ${entry.balance < 0 ? 'text-red-600' : ''}`}>
+                          {entry.balance}
+                        </TableCell>
                         <TableCell className="text-center">
                           <Checkbox
                             checked={entry.chk}
@@ -217,8 +232,13 @@ const AccountLedger = () => {
                       value={newEntry.remarks}
                       onChange={(e) => setNewEntry({...newEntry, remarks: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter remarks"
+                      placeholder="Enter remarks (optional)"
                     />
+                    {newEntry.partyName && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        Preview: {generateRemarks()}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <button
