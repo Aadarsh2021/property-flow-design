@@ -6,21 +6,36 @@ import { useNavigate } from 'react-router-dom';
 const NewParty = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
+    srNo: '163',
     partyName: '',
-    phoneNumber: '',
-    address: '',
-    email: '',
-    gstNumber: '',
-    panNumber: '',
-    bankDetails: '',
-    creditLimit: ''
+    status: 'R',
+    commiSystem: 'Take',
+    balanceLimit: '',
+    mCommission: 'No Commission',
+    rate: '',
+    selfLD: { M: '', S: '', A: '', T: '', C: '' },
+    agentLD: { name: '', M: '', S: '', A: '', T: '', C: '' },
+    thirdPartyLD: { name: '', M: '', S: '', A: '', T: '', C: '' },
+    selfCommission: { M: '', S: '' },
+    agentCommission: { M: '', S: '' },
+    thirdPartyCommission: { M: '', S: '' }
   });
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+  const handleInputChange = (section: string, field: string, value: string) => {
+    if (section === 'basic') {
+      setFormData(prev => ({
+        ...prev,
+        [field]: value
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [section]: {
+          ...prev[section as keyof typeof prev] as any,
+          [field]: value
+        }
+      }));
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -43,132 +58,266 @@ const NewParty = () => {
           </div>
           
           <form onSubmit={handleSubmit} className="p-6">
-            <div className="grid grid-cols-4 gap-6 mb-6">
-              {/* Section 1: Basic Information */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold mb-4 text-gray-800">Basic Information</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Party Name *</label>
+            <div className="grid grid-cols-2 gap-6 mb-6">
+              {/* Row 1: Party Informations and Self LD */}
+              <div className="bg-blue-100 border border-gray-300">
+                <div className="bg-blue-200 px-4 py-2 border-b border-gray-300">
+                  <h3 className="text-sm font-semibold text-gray-800">Party Informations</h3>
+                </div>
+                <div className="p-4 space-y-4">
+                  <div className="flex items-center">
+                    <label className="w-24 text-sm font-medium text-gray-700">Sr No</label>
+                    <input
+                      type="text"
+                      value={formData.srNo}
+                      onChange={(e) => handleInputChange('basic', 'srNo', e.target.value)}
+                      className="flex-1 px-2 py-1 border border-gray-300 text-sm"
+                    />
+                  </div>
+                  <div className="flex items-center">
+                    <label className="w-24 text-sm font-medium text-gray-700">Party Name</label>
                     <input
                       type="text"
                       value={formData.partyName}
-                      onChange={(e) => handleInputChange('partyName', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter party name"
-                      required
+                      onChange={(e) => handleInputChange('basic', 'partyName', e.target.value)}
+                      className="flex-1 px-2 py-1 border border-gray-300 text-sm"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-                    <input
-                      type="tel"
-                      value={formData.phoneNumber}
-                      onChange={(e) => handleInputChange('phoneNumber', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter phone number"
-                    />
+                  <div className="flex items-center">
+                    <label className="w-24 text-sm font-medium text-gray-700">Status</label>
+                    <select
+                      value={formData.status}
+                      onChange={(e) => handleInputChange('basic', 'status', e.target.value)}
+                      className="flex-1 px-2 py-1 border border-gray-300 text-sm"
+                    >
+                      <option value="R">R</option>
+                      <option value="A">A</option>
+                    </select>
                   </div>
-                </div>
-              </div>
-
-              {/* Section 2: Contact Details */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold mb-4 text-gray-800">Contact Details</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                    <input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => handleInputChange('email', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter email address"
-                    />
+                  <div className="flex items-center">
+                    <label className="w-24 text-sm font-medium text-gray-700">Commi System</label>
+                    <div className="flex-1 flex items-center space-x-4">
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="commiSystem"
+                          value="Take"
+                          checked={formData.commiSystem === 'Take'}
+                          onChange={(e) => handleInputChange('basic', 'commiSystem', e.target.value)}
+                          className="mr-1"
+                        />
+                        <span className="text-sm">Take (Lena)</span>
+                      </label>
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="commiSystem"
+                          value="Give"
+                          checked={formData.commiSystem === 'Give'}
+                          onChange={(e) => handleInputChange('basic', 'commiSystem', e.target.value)}
+                          className="mr-1"
+                        />
+                        <span className="text-sm">Give (Dena)</span>
+                      </label>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-                    <textarea
-                      value={formData.address}
-                      onChange={(e) => handleInputChange('address', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                      rows={3}
-                      placeholder="Enter address"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Section 3: Tax Information */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold mb-4 text-gray-800">Tax Information</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">GST Number</label>
+                  <div className="flex items-center">
+                    <label className="w-24 text-sm font-medium text-gray-700">Balance Limit</label>
                     <input
                       type="text"
-                      value={formData.gstNumber}
-                      onChange={(e) => handleInputChange('gstNumber', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter GST number"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">PAN Number</label>
-                    <input
-                      type="text"
-                      value={formData.panNumber}
-                      onChange={(e) => handleInputChange('panNumber', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter PAN number"
+                      value={formData.balanceLimit}
+                      onChange={(e) => handleInputChange('basic', 'balanceLimit', e.target.value)}
+                      className="flex-1 px-2 py-1 border border-gray-300 text-sm"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* Section 4: Financial Details */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold mb-4 text-gray-800">Financial Details</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Bank Details</label>
+              <div className="bg-blue-100 border border-gray-300">
+                <div className="bg-blue-200 px-4 py-2 border-b border-gray-300">
+                  <h3 className="text-sm font-semibold text-gray-800">Self LD</h3>
+                </div>
+                <div className="p-4 space-y-3">
+                  {['M', 'S', 'A', 'T', 'C'].map((field) => (
+                    <div key={field} className="flex items-center">
+                      <label className="w-8 text-sm font-medium text-gray-700">{field}</label>
+                      <input
+                        type="text"
+                        value={formData.selfLD[field as keyof typeof formData.selfLD]}
+                        onChange={(e) => handleInputChange('selfLD', field, e.target.value)}
+                        className="flex-1 px-2 py-1 border border-gray-300 text-sm mr-2"
+                      />
+                      <span className="text-red-500 text-sm">%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Row 2: Agent LD and ThirdParty LD */}
+              <div className="bg-blue-100 border border-gray-300">
+                <div className="bg-blue-200 px-4 py-2 border-b border-gray-300">
+                  <h3 className="text-sm font-semibold text-gray-800">Agent LD</h3>
+                </div>
+                <div className="p-4 space-y-3">
+                  <div className="flex items-center">
+                    <label className="w-8 text-sm font-medium text-gray-700">Name</label>
                     <input
                       type="text"
-                      value={formData.bankDetails}
-                      onChange={(e) => handleInputChange('bankDetails', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter bank details"
+                      value={formData.agentLD.name}
+                      onChange={(e) => handleInputChange('agentLD', 'name', e.target.value)}
+                      className="flex-1 px-2 py-1 border border-gray-300 text-sm"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Credit Limit</label>
+                  {['M', 'S', 'A', 'T', 'C'].map((field) => (
+                    <div key={field} className="flex items-center">
+                      <label className="w-8 text-sm font-medium text-gray-700">{field}</label>
+                      <input
+                        type="text"
+                        value={formData.agentLD[field as keyof typeof formData.agentLD]}
+                        onChange={(e) => handleInputChange('agentLD', field, e.target.value)}
+                        className="flex-1 px-2 py-1 border border-gray-300 text-sm mr-2"
+                      />
+                      <span className="text-red-500 text-sm">%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-blue-100 border border-gray-300">
+                <div className="bg-blue-200 px-4 py-2 border-b border-gray-300">
+                  <h3 className="text-sm font-semibold text-gray-800">ThirdParty LD</h3>
+                </div>
+                <div className="p-4 space-y-3">
+                  <div className="flex items-center">
+                    <label className="w-8 text-sm font-medium text-gray-700">Name</label>
                     <input
-                      type="number"
-                      value={formData.creditLimit}
-                      onChange={(e) => handleInputChange('creditLimit', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter credit limit"
+                      type="text"
+                      value={formData.thirdPartyLD.name}
+                      onChange={(e) => handleInputChange('thirdPartyLD', 'name', e.target.value)}
+                      className="flex-1 px-2 py-1 border border-gray-300 text-sm"
+                    />
+                  </div>
+                  {['M', 'S', 'A', 'T', 'C'].map((field) => (
+                    <div key={field} className="flex items-center">
+                      <label className="w-8 text-sm font-medium text-gray-700">{field}</label>
+                      <input
+                        type="text"
+                        value={formData.thirdPartyLD[field as keyof typeof formData.thirdPartyLD]}
+                        onChange={(e) => handleInputChange('thirdPartyLD', field, e.target.value)}
+                        className="flex-1 px-2 py-1 border border-gray-300 text-sm mr-2"
+                      />
+                      <span className="text-red-500 text-sm">%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Row 3: Incentive and Self Commission */}
+              <div className="bg-blue-100 border border-gray-300">
+                <div className="bg-blue-200 px-4 py-2 border-b border-gray-300">
+                  <h3 className="text-sm font-semibold text-gray-800">Incentive</h3>
+                </div>
+                <div className="p-4 space-y-4">
+                  <div className="flex items-center">
+                    <label className="w-24 text-sm font-medium text-gray-700">M Commission</label>
+                    <select
+                      value={formData.mCommission}
+                      onChange={(e) => handleInputChange('basic', 'mCommission', e.target.value)}
+                      className="flex-1 px-2 py-1 border border-gray-300 text-sm"
+                    >
+                      <option value="No Commission">No Commission</option>
+                      <option value="With Commission">With Commission</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center">
+                    <label className="w-24 text-sm font-medium text-gray-700">Rate</label>
+                    <input
+                      type="text"
+                      value={formData.rate}
+                      onChange={(e) => handleInputChange('basic', 'rate', e.target.value)}
+                      className="flex-1 px-2 py-1 border border-gray-300 text-sm"
                     />
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Action Buttons */}
-            <div className="flex justify-end space-x-4 pt-6 border-t">
-              <button
-                type="button"
-                onClick={handleExit}
-                className="px-6 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium"
-              >
-                Save Party
-              </button>
+              <div className="bg-blue-100 border border-gray-300">
+                <div className="bg-blue-200 px-4 py-2 border-b border-gray-300">
+                  <h3 className="text-sm font-semibold text-gray-800">Self Commission</h3>
+                </div>
+                <div className="p-4 space-y-3">
+                  {['M', 'S'].map((field) => (
+                    <div key={field} className="flex items-center">
+                      <label className="w-8 text-sm font-medium text-gray-700">{field}</label>
+                      <input
+                        type="text"
+                        value={formData.selfCommission[field as keyof typeof formData.selfCommission]}
+                        onChange={(e) => handleInputChange('selfCommission', field, e.target.value)}
+                        className="flex-1 px-2 py-1 border border-gray-300 text-sm mr-2"
+                      />
+                      <span className="text-red-500 text-sm">%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Row 4: Agent Commission and ThirdParty Commission */}
+              <div className="bg-blue-100 border border-gray-300">
+                <div className="bg-blue-200 px-4 py-2 border-b border-gray-300">
+                  <h3 className="text-sm font-semibold text-gray-800">Agent Commission</h3>
+                </div>
+                <div className="p-4 space-y-3">
+                  {['M', 'S'].map((field) => (
+                    <div key={field} className="flex items-center">
+                      <label className="w-8 text-sm font-medium text-gray-700">{field}</label>
+                      <input
+                        type="text"
+                        value={formData.agentCommission[field as keyof typeof formData.agentCommission]}
+                        onChange={(e) => handleInputChange('agentCommission', field, e.target.value)}
+                        className="flex-1 px-2 py-1 border border-gray-300 text-sm mr-2"
+                      />
+                      <span className="text-red-500 text-sm">%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-blue-100 border border-gray-300 relative">
+                <div className="bg-blue-200 px-4 py-2 border-b border-gray-300">
+                  <h3 className="text-sm font-semibold text-gray-800">ThirdParty Commission</h3>
+                </div>
+                <div className="p-4 space-y-3">
+                  {['M', 'S'].map((field) => (
+                    <div key={field} className="flex items-center">
+                      <label className="w-8 text-sm font-medium text-gray-700">{field}</label>
+                      <input
+                        type="text"
+                        value={formData.thirdPartyCommission[field as keyof typeof formData.thirdPartyCommission]}
+                        onChange={(e) => handleInputChange('thirdPartyCommission', field, e.target.value)}
+                        className="flex-1 px-2 py-1 border border-gray-300 text-sm mr-2"
+                      />
+                      <span className="text-red-500 text-sm">%</span>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Action Buttons positioned in bottom right */}
+                <div className="absolute bottom-4 right-4 flex space-x-2">
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-gray-500 text-white text-sm rounded hover:bg-gray-600 transition-colors"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExit}
+                    className="px-4 py-2 bg-orange-600 text-white text-sm rounded hover:bg-orange-700 transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
             </div>
           </form>
         </div>
