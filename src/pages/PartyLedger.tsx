@@ -1,10 +1,12 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useNavigate } from 'react-router-dom';
+import { apiClient, Party } from '../lib/api';
+import { useToast } from '@/hooks/use-toast';
 
 const PartyLedger = () => {
   const navigate = useNavigate();
@@ -12,36 +14,37 @@ const PartyLedger = () => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedParties, setSelectedParties] = useState<string[]>([]);
+  const [parties, setParties] = useState<Party[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock party data
-  const [parties, setParties] = useState([
-    { name: '001-AR RTGS', mondayFinal: 'Yes' },
-    { name: '01-KANHA RTGS', mondayFinal: 'Yes' },
-    { name: '09-KHILADI RTGS', mondayFinal: 'Yes' },
-    { name: '11AA RTGS', mondayFinal: 'Yes' },
-    { name: '44WIN RTGS', mondayFinal: 'Yes' },
-    { name: '626 SHIVAY RT', mondayFinal: 'Yes' },
-    { name: '99-VISHAL RTGS', mondayFinal: 'Yes' },
-    { name: 'AA RTGS', mondayFinal: 'Yes' },
-    { name: 'AADI RTGS', mondayFinal: 'Yes' },
-    { name: 'AB BAJRANG RTGS', mondayFinal: 'Yes' },
-    { name: 'ABHI RTGS', mondayFinal: 'Yes' },
-    { name: 'AED MANISH', mondayFinal: 'Yes' },
-    { name: 'AJ RTGS', mondayFinal: 'Yes' },
-    { name: 'AKKI RTGS', mondayFinal: 'Yes' },
-    { name: 'ANISH RTGS', mondayFinal: 'Yes' },
-    { name: 'ANTH RTGS', mondayFinal: 'Yes' },
-    { name: 'AQC', mondayFinal: 'No' },
-    { name: 'BABA RTGS', mondayFinal: 'Yes' },
-    { name: 'BADSHA RTGS', mondayFinal: 'Yes' },
-    { name: 'BB RTGS', mondayFinal: 'Yes' },
-    { name: 'BERLIN', mondayFinal: 'Yes' },
-    { name: 'BG RTGS', mondayFinal: 'Yes' },
-    { name: 'BIG B RTGS', mondayFinal: 'Yes' }
-  ]);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const fetchParties = async () => {
+      try {
+        setLoading(true);
+        const fetchedParties = await apiClient.getAllParties();
+        setParties(fetchedParties);
+      } catch (err) {
+        setError('Failed to fetch parties.');
+        toast({
+          title: 'Error fetching parties',
+          description: 'Failed to fetch parties. Please try again later.',
+          variant: 'destructive',
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchParties();
+    const interval = setInterval(fetchParties, 5000); // Poll every 5 seconds
+    return () => clearInterval(interval);
+  }, [toast]);
 
   const filteredParties = parties.filter(party =>
-    party.name.toLowerCase().includes(searchTerm.toLowerCase())
+    party.partyName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handlePartySelect = (partyName: string) => {
@@ -62,36 +65,69 @@ const PartyLedger = () => {
     if (selectedParties.length === filteredParties.length) {
       setSelectedParties([]);
     } else {
-      setSelectedParties(filteredParties.map(party => party.name));
+      setSelectedParties(filteredParties.map(party => party.partyName));
     }
   };
 
-  const handleMondayFinal = () => {
+  const handleMondayFinal = async () => {
     if (selectedParties.length > 0) {
-      setParties(prevParties => 
-        prevParties.map(party => 
-          selectedParties.includes(party.name) 
-            ? { ...party, mondayFinal: 'Yes' }
-            : party
-        )
-      );
-      console.log('Monday Final updated for:', selectedParties);
+      try {
+        // Update status to active for selected parties
+        for (const partyName of selectedParties) {
+          const party = parties.find(p => p.partyName === partyName);
+          if (party && party._id) {
+            await apiClient.updateParty(party._id, { status: 'active' });
+          }
+        }
+        toast({
+          title: 'Success',
+          description: `Status updated for ${selectedParties.length} parties.`,
+        });
       setSelectedParties([]);
+        // Refresh parties after update
+        const fetchedParties = await apiClient.getAllParties();
+        setParties(fetchedParties);
+      } catch (err) {
+        setError('Failed to update status.');
+        toast({
+          title: 'Error updating status',
+          description: 'Failed to update status. Please try again later.',
+          variant: 'destructive',
+        });
+      }
     } else {
-      alert('Please select parties to update Monday Final status.');
+      alert('Please select parties to update status.');
     }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (selectedParties.length > 0) {
       const confirmDelete = window.confirm(`Are you sure you want to delete ${selectedParties.length} selected parties?`);
       if (confirmDelete) {
-        console.log('Deleting parties:', selectedParties);
-        setParties(prevParties => 
-          prevParties.filter(party => !selectedParties.includes(party.name))
-        );
+        try {
+          // Delete selected parties
+          for (const partyName of selectedParties) {
+            const party = parties.find(p => p.partyName === partyName);
+            if (party && party._id) {
+              await apiClient.deleteParty(party._id);
+            }
+          }
+          toast({
+            title: 'Success',
+            description: `Deleted ${selectedParties.length} parties.`,
+          });
         setSelectedParties([]);
-        console.log('Parties deleted successfully');
+          // Refresh parties after deletion
+          const fetchedParties = await apiClient.getAllParties();
+          setParties(fetchedParties);
+        } catch (err) {
+          setError('Failed to delete parties.');
+          toast({
+            title: 'Error deleting parties',
+            description: 'Failed to delete parties. Please try again later.',
+            variant: 'destructive',
+          });
+        }
       }
     } else {
       alert('Please select parties to delete.');
@@ -101,6 +137,18 @@ const PartyLedger = () => {
   const handleExit = () => {
     navigate('/');
   };
+
+  if (loading && parties.length === 0) {
+    return <div className="text-center py-8">Loading parties...</div>;
+  }
+
+  if (error) {
+    return <div className="text-center py-8 text-red-500">{error}</div>;
+  }
+
+  if (parties.length === 0) {
+    return <div className="text-center py-8">No parties found.</div>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -156,29 +204,29 @@ const PartyLedger = () => {
                           {filteredParties.map((party, index) => (
                             <TableRow 
                               key={index} 
-                              className={party.mondayFinal === 'Yes' ? 'bg-green-50' : 'bg-red-50'}
+                              className={party.status === 'active' ? 'bg-green-50' : 'bg-red-50'}
                             >
                               <TableCell>
                                 <Checkbox
-                                  checked={selectedParties.includes(party.name)}
-                                  onCheckedChange={(checked) => handleCheckboxChange(party.name, checked as boolean)}
+                                  checked={selectedParties.includes(party.partyName)}
+                                  onCheckedChange={(checked) => handleCheckboxChange(party.partyName, checked as boolean)}
                                 />
                               </TableCell>
-                              <TableCell className="font-medium">{party.name}</TableCell>
+                              <TableCell className="font-medium">{party.partyName}</TableCell>
                               <TableCell>
                                 <span className={`px-2 py-1 rounded text-sm ${
-                                  party.mondayFinal === 'Yes' 
+                                  party.status === 'active' 
                                     ? 'bg-green-200 text-green-800' 
                                     : 'bg-red-200 text-red-800'
                                 }`}>
-                                  {party.mondayFinal}
+                                  {party.status}
                                 </span>
                               </TableCell>
                               <TableCell>
                                 <input
                                   type="radio"
                                   name="selectedParty"
-                                  onChange={() => handlePartySelect(party.name)}
+                                  onChange={() => handlePartySelect(party.partyName)}
                                   className="cursor-pointer"
                                 />
                               </TableCell>

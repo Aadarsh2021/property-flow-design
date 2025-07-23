@@ -2,9 +2,12 @@
 import React, { useState } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { useNavigate } from 'react-router-dom';
+import { apiClient } from '../lib/api';
+import { useToast } from '@/hooks/use-toast';
 
 const NewParty = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [formData, setFormData] = useState({
     srNo: '163',
     partyName: '',
@@ -38,10 +41,57 @@ const NewParty = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Form submitted:', formData);
-    // Add your submission logic here
+
+    try {
+      // Prepare data for backend (matching our NewParty model)
+      const partyData = {
+        srNo: parseInt(formData.srNo) || 0,
+        partyName: formData.partyName,
+        status: (formData.status === 'R' ? 'active' : 'inactive') as 'active' | 'inactive',
+        comiSuite: formData.commiSystem,
+        balanceLimit: parseFloat(formData.balanceLimit) || 0
+      };
+
+      console.log('Submitting party data:', partyData);
+
+      // Call our backend API
+      const response = await apiClient.createParty(partyData);
+
+      console.log('Party created successfully:', response);
+
+      toast({
+        title: "Success!",
+        description: `Party "${formData.partyName}" created successfully.`,
+      });
+
+      // Reset form or navigate back
+      setFormData({
+        srNo: '163',
+        partyName: '',
+        status: 'R',
+        commiSystem: 'Take',
+        balanceLimit: '',
+        mCommission: 'No Commission',
+        rate: '',
+        selfLD: { M: '', S: '', A: '', T: '', C: '' },
+        agentLD: { name: '', M: '', S: '', A: '', T: '', C: '' },
+        thirdPartyLD: { name: '', M: '', S: '', A: '', T: '', C: '' },
+        selfCommission: { M: '', S: '' },
+        agentCommission: { M: '', S: '' },
+        thirdPartyCommission: { M: '', S: '' }
+      });
+
+    } catch (error) {
+      console.error('Error creating party:', error);
+
+      toast({
+        title: "Error",
+        description: "Failed to create party. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleExit = () => {
