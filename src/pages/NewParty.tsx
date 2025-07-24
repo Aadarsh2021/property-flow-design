@@ -1,13 +1,14 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { useNavigate } from 'react-router-dom';
-import { apiClient } from '../lib/api';
-import { useToast } from '@/hooks/use-toast';
+import { newPartyAPI } from '../lib/api';
+import { useToast } from '../hooks/use-toast';
 
 const NewParty = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     srNo: '163',
     partyName: '',
@@ -23,6 +24,26 @@ const NewParty = () => {
     agentCommission: { M: '', S: '' },
     thirdPartyCommission: { M: '', S: '' }
   });
+
+  // Get next SR number on component mount
+  useEffect(() => {
+    const getNextSrNo = async () => {
+      try {
+        const response = await newPartyAPI.getNextSrNo();
+        if (response.success) {
+          setFormData(prev => ({
+            ...prev,
+            srNo: response.data.nextSrNo
+          }));
+        }
+      } catch (error) {
+        console.error('Error fetching next SR number:', error);
+        // Keep default SR number if API fails
+      }
+    };
+
+    getNextSrNo();
+  }, []);
 
   const handleInputChange = (section: string, field: string, value: string) => {
     if (section === 'basic') {
@@ -43,54 +64,42 @@ const NewParty = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    try {
-      // Prepare data for backend (matching our NewParty model)
-      const partyData = {
-        srNo: parseInt(formData.srNo) || 0,
-        partyName: formData.partyName,
-        status: (formData.status === 'R' ? 'active' : 'inactive') as 'active' | 'inactive',
-        comiSuite: formData.commiSystem,
-        balanceLimit: parseFloat(formData.balanceLimit) || 0
-      };
-
-      console.log('Submitting party data:', partyData);
-
-      // Call our backend API
-      const response = await apiClient.createParty(partyData);
-
-      console.log('Party created successfully:', response);
-
+    
+    if (!formData.partyName.trim()) {
       toast({
-        title: "Success!",
-        description: `Party "${formData.partyName}" created successfully.`,
+        title: "Error",
+        description: "Party name is required",
+        variant: "destructive"
       });
+      return;
+    }
 
-      // Reset form or navigate back
-      setFormData({
-        srNo: '163',
-        partyName: '',
-        status: 'R',
-        commiSystem: 'Take',
-        balanceLimit: '',
-        mCommission: 'No Commission',
-        rate: '',
-        selfLD: { M: '', S: '', A: '', T: '', C: '' },
-        agentLD: { name: '', M: '', S: '', A: '', T: '', C: '' },
-        thirdPartyLD: { name: '', M: '', S: '', A: '', T: '', C: '' },
-        selfCommission: { M: '', S: '' },
-        agentCommission: { M: '', S: '' },
-        thirdPartyCommission: { M: '', S: '' }
-      });
-
+    setLoading(true);
+    try {
+      const response = await newPartyAPI.create(formData);
+      
+      if (response.success) {
+        toast({
+          title: "Success",
+          description: "Party created successfully",
+        });
+        navigate('/party-ledger');
+      } else {
+        toast({
+          title: "Error",
+          description: response.message || "Failed to create party",
+          variant: "destructive"
+        });
+      }
     } catch (error) {
       console.error('Error creating party:', error);
-
       toast({
         title: "Error",
         description: "Failed to create party. Please try again.",
-        variant: "destructive",
+        variant: "destructive"
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -131,6 +140,7 @@ const NewParty = () => {
                       value={formData.partyName}
                       onChange={(e) => handleInputChange('basic', 'partyName', e.target.value)}
                       className="flex-1 px-2 py-1 border border-gray-300 text-sm"
+                      required
                     />
                   </div>
                   <div className="flex items-center">
@@ -355,9 +365,10 @@ const NewParty = () => {
                 <div className="absolute bottom-4 right-4 flex space-x-2">
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-gray-500 text-white text-sm rounded hover:bg-gray-600 transition-colors"
+                    disabled={loading}
+                    className="px-4 py-2 bg-gray-500 text-white text-sm rounded hover:bg-gray-600 transition-colors disabled:opacity-50"
                   >
-                    Save
+                    {loading ? 'Saving...' : 'Save'}
                   </button>
                   <button
                     type="button"

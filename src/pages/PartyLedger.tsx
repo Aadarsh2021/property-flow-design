@@ -5,46 +5,51 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useNavigate } from 'react-router-dom';
-import { apiClient, Party } from '../lib/api';
-import { useToast } from '@/hooks/use-toast';
+import { partyLedgerAPI, mockData } from '../lib/api';
+import { useToast } from '../hooks/use-toast';
 
 const PartyLedger = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [selectedParty, setSelectedParty] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedParties, setSelectedParties] = useState<string[]>([]);
-  const [parties, setParties] = useState<Party[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [parties, setParties] = useState<any[]>([]);
 
-  const { toast } = useToast();
-
+  // Fetch parties on component mount
   useEffect(() => {
-    const fetchParties = async () => {
-      try {
-        setLoading(true);
-        const fetchedParties = await apiClient.getAllParties();
-        setParties(fetchedParties);
-      } catch (err) {
-        setError('Failed to fetch parties.');
-        toast({
-          title: 'Error fetching parties',
-          description: 'Failed to fetch parties. Please try again later.',
-          variant: 'destructive',
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchParties();
-    const interval = setInterval(fetchParties, 5000); // Poll every 5 seconds
-    return () => clearInterval(interval);
-  }, [toast]);
+  }, []);
+
+  const fetchParties = async () => {
+    setLoading(true);
+    try {
+      const response = await partyLedgerAPI.getAllParties();
+      if (response.success) {
+        setParties(response.data);
+      } else {
+        // Fallback to mock data if API fails
+        setParties(mockData.getMockParties());
+        console.warn('Using mock data due to API failure');
+      }
+    } catch (error) {
+      console.error('Error fetching parties:', error);
+      // Use mock data as fallback
+      setParties(mockData.getMockParties());
+      toast({
+        title: "Warning",
+        description: "Using offline data. Some features may be limited.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredParties = parties.filter(party =>
-    party.partyName.toLowerCase().includes(searchTerm.toLowerCase())
+    party.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handlePartySelect = (partyName: string) => {
@@ -65,38 +70,49 @@ const PartyLedger = () => {
     if (selectedParties.length === filteredParties.length) {
       setSelectedParties([]);
     } else {
-      setSelectedParties(filteredParties.map(party => party.partyName));
+      setSelectedParties(filteredParties.map(party => party.name));
     }
   };
 
   const handleMondayFinal = async () => {
     if (selectedParties.length > 0) {
       try {
-        // Update status to active for selected parties
-        for (const partyName of selectedParties) {
-          const party = parties.find(p => p.partyName === partyName);
-          if (party && party._id) {
-            await apiClient.updateParty(party._id, { status: 'active' });
-          }
-        }
-        toast({
-          title: 'Success',
-          description: `Status updated for ${selectedParties.length} parties.`,
-        });
+        const response = await partyLedgerAPI.updateMondayFinal(selectedParties);
+        if (response.success) {
+          // Update local state
+      setParties(prevParties => 
+        prevParties.map(party => 
+          selectedParties.includes(party.name) 
+            ? { ...party, mondayFinal: 'Yes' }
+            : party
+        )
+      );
       setSelectedParties([]);
-        // Refresh parties after update
-        const fetchedParties = await apiClient.getAllParties();
-        setParties(fetchedParties);
-      } catch (err) {
-        setError('Failed to update status.');
+          toast({
+            title: "Success",
+            description: "Monday Final status updated successfully",
+          });
+        } else {
+          toast({
+            title: "Error",
+            description: response.message || "Failed to update Monday Final status",
+            variant: "destructive"
+          });
+        }
+      } catch (error) {
+        console.error('Error updating Monday Final:', error);
         toast({
-          title: 'Error updating status',
-          description: 'Failed to update status. Please try again later.',
-          variant: 'destructive',
+          title: "Error",
+          description: "Failed to update Monday Final status",
+          variant: "destructive"
         });
       }
     } else {
-      alert('Please select parties to update status.');
+      toast({
+        title: "Warning",
+        description: "Please select parties to update Monday Final status.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -105,50 +121,44 @@ const PartyLedger = () => {
       const confirmDelete = window.confirm(`Are you sure you want to delete ${selectedParties.length} selected parties?`);
       if (confirmDelete) {
         try {
-          // Delete selected parties
-          for (const partyName of selectedParties) {
-            const party = parties.find(p => p.partyName === partyName);
-            if (party && party._id) {
-              await apiClient.deleteParty(party._id);
-            }
-          }
-          toast({
-            title: 'Success',
-            description: `Deleted ${selectedParties.length} parties.`,
-          });
+          const response = await partyLedgerAPI.deleteParties(selectedParties);
+          if (response.success) {
+        setParties(prevParties => 
+          prevParties.filter(party => !selectedParties.includes(party.name))
+        );
         setSelectedParties([]);
-          // Refresh parties after deletion
-          const fetchedParties = await apiClient.getAllParties();
-          setParties(fetchedParties);
-        } catch (err) {
-          setError('Failed to delete parties.');
+            toast({
+              title: "Success",
+              description: "Parties deleted successfully",
+            });
+          } else {
+            toast({
+              title: "Error",
+              description: response.message || "Failed to delete parties",
+              variant: "destructive"
+            });
+          }
+        } catch (error) {
+          console.error('Error deleting parties:', error);
           toast({
-            title: 'Error deleting parties',
-            description: 'Failed to delete parties. Please try again later.',
-            variant: 'destructive',
+            title: "Error",
+            description: "Failed to delete parties",
+            variant: "destructive"
           });
         }
       }
     } else {
-      alert('Please select parties to delete.');
+      toast({
+        title: "Warning",
+        description: "Please select parties to delete.",
+        variant: "destructive"
+      });
     }
   };
 
   const handleExit = () => {
     navigate('/');
   };
-
-  if (loading && parties.length === 0) {
-    return <div className="text-center py-8">Loading parties...</div>;
-  }
-
-  if (error) {
-    return <div className="text-center py-8 text-red-500">{error}</div>;
-  }
-
-  if (parties.length === 0) {
-    return <div className="text-center py-8">No parties found.</div>;
-  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -186,6 +196,9 @@ const PartyLedger = () => {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <div className="overflow-y-auto max-h-96">
+                      {loading ? (
+                        <div className="text-center py-4">Loading parties...</div>
+                      ) : (
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -203,30 +216,30 @@ const PartyLedger = () => {
                         <TableBody>
                           {filteredParties.map((party, index) => (
                             <TableRow 
-                              key={index} 
-                              className={party.status === 'active' ? 'bg-green-50' : 'bg-red-50'}
+                              key={party.name || `party-${index}`} 
+                              className={party.mondayFinal === 'Yes' ? 'bg-green-50' : 'bg-red-50'}
                             >
                               <TableCell>
                                 <Checkbox
-                                  checked={selectedParties.includes(party.partyName)}
-                                  onCheckedChange={(checked) => handleCheckboxChange(party.partyName, checked as boolean)}
+                                  checked={selectedParties.includes(party.name)}
+                                  onCheckedChange={(checked) => handleCheckboxChange(party.name, checked as boolean)}
                                 />
                               </TableCell>
-                              <TableCell className="font-medium">{party.partyName}</TableCell>
+                              <TableCell className="font-medium">{party.name}</TableCell>
                               <TableCell>
                                 <span className={`px-2 py-1 rounded text-sm ${
-                                  party.status === 'active' 
+                                  party.mondayFinal === 'Yes' 
                                     ? 'bg-green-200 text-green-800' 
                                     : 'bg-red-200 text-red-800'
                                 }`}>
-                                  {party.status}
+                                  {party.mondayFinal}
                                 </span>
                               </TableCell>
                               <TableCell>
                                 <input
                                   type="radio"
                                   name="selectedParty"
-                                  onChange={() => handlePartySelect(party.partyName)}
+                                  onChange={() => handlePartySelect(party.name)}
                                   className="cursor-pointer"
                                 />
                               </TableCell>
@@ -234,6 +247,7 @@ const PartyLedger = () => {
                           ))}
                         </TableBody>
                       </Table>
+                      )}
                     </div>
                     {selectedParties.length > 0 && (
                       <div className="flex justify-between items-center bg-blue-50 p-3 rounded-md">

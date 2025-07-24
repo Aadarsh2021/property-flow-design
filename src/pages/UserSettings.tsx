@@ -1,9 +1,13 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronDown, Lock } from 'lucide-react';
 import TopNavigation from '../components/TopNavigation';
+import { userSettingsAPI } from '../lib/api';
+import { useToast } from '../hooks/use-toast';
 
 const UserSettings = () => {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
   const [settings, setSettings] = useState({
     decimalFormat: 'FULL AMOUNT',
     companyAccount: 'AQC',
@@ -15,9 +19,50 @@ const UserSettings = () => {
     isLocked: false
   });
 
-  const handleSave = () => {
-    console.log('Settings saved:', settings);
-    // Here you would typically save to backend
+  // Load user settings on component mount
+  useEffect(() => {
+    loadUserSettings();
+  }, []);
+
+  const loadUserSettings = async () => {
+    try {
+      // Using a default user ID - in real app, this would come from auth context
+      const response = await userSettingsAPI.get('default-user');
+      if (response.success) {
+        setSettings(response.data);
+      }
+    } catch (error) {
+      console.error('Error loading user settings:', error);
+      // Keep default settings if API fails
+    }
+  };
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      const response = await userSettingsAPI.update('default-user', settings);
+      if (response.success) {
+        toast({
+          title: "Success",
+          description: "Settings saved successfully",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: response.message || "Failed to save settings",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save settings. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleClose = () => {
@@ -153,9 +198,10 @@ const UserSettings = () => {
             <div className="flex space-x-3 pt-6 border-t border-gray-200">
               <button
                 onClick={handleSave}
-                className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium"
+                disabled={loading}
+                className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium disabled:opacity-50"
               >
-                Save
+                {loading ? 'Saving...' : 'Save'}
               </button>
               <button
                 onClick={handleClose}

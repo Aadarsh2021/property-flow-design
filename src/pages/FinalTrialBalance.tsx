@@ -1,65 +1,49 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useNavigate } from 'react-router-dom';
+import { finalTrialBalanceAPI, mockData } from '../lib/api';
+import { useToast } from '../hooks/use-toast';
 
 const FinalTrialBalance = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [partyName, setPartyName] = useState('');
   const [selectedEntries, setSelectedEntries] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [trialBalanceData, setTrialBalanceData] = useState<any[]>([]);
 
-  // Mock data for Final Trial Balance
-  const trialBalanceData = [
-    // Credit entries
-    { id: 'anth', name: 'ANTH RTGS', amount: 237923, type: 'credit' },
-    { id: 'commission', name: 'COMMISSION', amount: 43219733, type: 'credit' },
-    { id: 'daniel', name: 'DANIEL PAYMENT', amount: 426529, type: 'credit' },
-    { id: 'gk', name: 'GK RTGS', amount: 174216, type: 'credit' },
-    { id: 'madhu', name: 'MADHU', amount: 1575000, type: 'credit' },
-    { id: 'om', name: 'OM SAI RTGS', amount: 194000, type: 'credit' },
-    { id: 'pawan', name: 'PAWAN PAYMENT', amount: 1984235, type: 'credit' },
-    { id: 'pk', name: 'PK PAYMENT', amount: 229412, type: 'credit' },
-    { id: 'r83', name: 'R83 RONY', amount: 48500, type: 'credit' },
-    { id: 'raja', name: 'RAJA RTGS', amount: 68774, type: 'credit' },
-    { id: 'rolex', name: 'ROLEX RTGS', amount: 392650, type: 'credit' },
-    { id: 'shi', name: 'SHI RTGS', amount: 19400, type: 'credit' },
-    { id: 'summit', name: 'SUMMIT', amount: 553312, type: 'credit' },
-    { id: 'teja', name: 'TEJA RTGS', amount: 1920900, type: 'credit' },
-    { id: 'xam', name: 'X AM RTGS', amount: 6537, type: 'credit' },
-    { id: 'zextra', name: 'Z EXTRA', amount: 3480312, type: 'credit' },
-    
-    // Debit entries
-    { id: 'aed', name: 'AED MANISH', amount: -271465, type: 'debit' },
-    { id: 'aqc', name: 'AQC', amount: -12704412, type: 'debit' },
-    { id: 'baba', name: 'BABA RTGS', amount: -194000, type: 'debit' },
-    { id: 'dan', name: 'DAN RTGS', amount: -51500, type: 'debit' },
-    { id: 'devil', name: 'DEVIL RTGS', amount: -321290, type: 'debit' },
-    { id: 'draj', name: 'DRAJ INR', amount: -3110990, type: 'debit' },
-    { id: 'dubai', name: 'DUBAI RTGS', amount: -1575315, type: 'debit' },
-    { id: 'extra', name: 'EXTRA', amount: -716730, type: 'debit' },
-    { id: 'honey', name: 'HONEY RTGS', amount: -1640484, type: 'debit' },
-    { id: 'hritik', name: 'HRITIK-J RTGS', amount: -145300, type: 'debit' },
-    { id: 'inr', name: 'INR PRASANT', amount: -2515629, type: 'debit' },
-    { id: 'kanhaiya', name: 'KANHAIYA', amount: -314229, type: 'debit' },
-    { id: 'l164', name: 'L164 RONY', amount: -340468, type: 'debit' },
-    { id: 'l328', name: 'L328 RONY RTGS', amount: -173872, type: 'debit' },
-    { id: 'l412', name: 'L412 HRITIK', amount: -388000, type: 'debit' },
-    { id: 'melvin', name: 'MELVIN', amount: -1395352, type: 'debit' },
-    { id: 'mumbai', name: 'MUMBAI', amount: -1606580, type: 'debit' },
-    { id: 'qjnr', name: 'Q-JNR MAHESH', amount: -1639587, type: 'debit' },
-    { id: 'r239', name: 'R239 JSHIK', amount: -267798, type: 'debit' },
-    { id: 'rtgs', name: 'RTGS SSN PRN', amount: -97004, type: 'debit' },
-    { id: 'rudra', name: 'RUDRA PAYMENT', amount: -2106189, type: 'debit' },
-    { id: 'scanner', name: 'SCANNER', amount: -918704, type: 'debit' },
-    { id: 'ss', name: 'SS INFO', amount: -6937615, type: 'debit' },
-    { id: 'udaipur', name: 'UDAIPUR RJ', amount: -8707104, type: 'debit' },
-    { id: 'vaibhav', name: 'VAIBHAV', amount: -210861, type: 'debit' },
-    { id: 'vipul', name: 'VIPUL', amount: -4906763, type: 'debit' },
-    { id: 'vishal', name: 'VISHAL INR', amount: -849457, type: 'debit' },
-    { id: 'vw', name: 'VW-AM RTGS', amount: -180910, type: 'debit' },
-    { id: 'withdrawal', name: 'WITHDRAWAL N', amount: -243825, type: 'debit' }
-  ];
+  // Load trial balance data on component mount
+  useEffect(() => {
+    loadTrialBalance();
+  }, []);
+
+  const loadTrialBalance = async () => {
+    setLoading(true);
+    try {
+      const response = await finalTrialBalanceAPI.get();
+      if (response.success) {
+        const { creditEntries, debitEntries } = response.data;
+        setTrialBalanceData([...creditEntries, ...debitEntries]);
+      } else {
+        // Fallback to mock data if API fails
+        setTrialBalanceData(mockData.getMockTrialBalance());
+        console.warn('Using mock data due to API failure');
+      }
+    } catch (error) {
+      console.error('Error loading trial balance:', error);
+      // Use mock data as fallback
+      setTrialBalanceData(mockData.getMockTrialBalance());
+      toast({
+        title: "Warning",
+        description: "Using offline data. Some features may be limited.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const creditEntries = trialBalanceData.filter(entry => entry.type === 'credit');
   const debitEntries = trialBalanceData.filter(entry => entry.type === 'debit');
@@ -87,17 +71,49 @@ const FinalTrialBalance = () => {
     }
   };
 
-  const handleShow = () => {
-    console.log('Show selected entries:', selectedEntries);
+  const handleShow = async () => {
+    if (partyName.trim()) {
+      try {
+        const response = await finalTrialBalanceAPI.getPartyBalance(partyName);
+        if (response.success) {
+          const partyEntry = response.data;
+          setTrialBalanceData([partyEntry]);
+          toast({
+            title: "Success",
+            description: `Showing data for ${partyName}`,
+          });
+        } else {
+          toast({
+            title: "Error",
+            description: response.message || "Party not found",
+            variant: "destructive"
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching party balance:', error);
+        toast({
+          title: "Error",
+          description: "Failed to fetch party data",
+          variant: "destructive"
+        });
+      }
+    } else {
+      // Show all data
+      loadTrialBalance();
+    }
   };
 
   const handlePrint = () => {
     window.print();
   };
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setSelectedEntries([]);
-    console.log('Data refreshed');
+    await loadTrialBalance();
+    toast({
+      title: "Success",
+      description: "Data refreshed successfully",
+    });
   };
 
   const handleExit = () => {
@@ -141,9 +157,10 @@ const FinalTrialBalance = () => {
                 </button>
                 <button
                   onClick={handleRefresh}
-                  className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors font-medium"
+                  disabled={loading}
+                  className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors font-medium disabled:opacity-50"
                 >
-                  Refresh
+                  {loading ? 'Refreshing...' : 'Refresh'}
                 </button>
                 <button
                   onClick={handleExit}
@@ -155,6 +172,9 @@ const FinalTrialBalance = () => {
             </div>
 
             {/* Trial Balance Table */}
+            {loading ? (
+              <div className="text-center py-8">Loading trial balance data...</div>
+            ) : (
             <div className="grid grid-cols-4 gap-4">
               {/* Credit Column 1 */}
               <div>
@@ -168,8 +188,8 @@ const FinalTrialBalance = () => {
                     <span className="ml-auto">Amount (Cr)</span>
                   </div>
                 </div>
-                {creditEntries.slice(0, Math.ceil(creditEntries.length/2)).map((entry) => (
-                  <div key={entry.id} className="flex items-center justify-between p-2 border-b border-gray-200">
+                {creditEntries.slice(0, Math.ceil(creditEntries.length/2)).map((entry, index) => (
+                  <div key={entry.id || `credit-${index}`} className="flex items-center justify-between p-2 border-b border-gray-200">
                     <div className="flex items-center space-x-2">
                       <Checkbox
                         checked={selectedEntries.includes(entry.id)}
@@ -190,8 +210,8 @@ const FinalTrialBalance = () => {
                     <span className="ml-auto">Amount (Cr)</span>
                   </div>
                 </div>
-                {creditEntries.slice(Math.ceil(creditEntries.length/2)).map((entry) => (
-                  <div key={entry.id} className="flex items-center justify-between p-2 border-b border-gray-200">
+                {creditEntries.slice(Math.ceil(creditEntries.length/2)).map((entry, index) => (
+                  <div key={entry.id || `credit-2-${index}`} className="flex items-center justify-between p-2 border-b border-gray-200">
                     <div className="flex items-center space-x-2">
                       <Checkbox
                         checked={selectedEntries.includes(entry.id)}
@@ -216,8 +236,8 @@ const FinalTrialBalance = () => {
                     <span className="ml-auto">Amount (Dr)</span>
                   </div>
                 </div>
-                {debitEntries.slice(0, Math.ceil(debitEntries.length/2)).map((entry) => (
-                  <div key={entry.id} className="flex items-center justify-between p-2 border-b border-gray-200">
+                {debitEntries.slice(0, Math.ceil(debitEntries.length/2)).map((entry, index) => (
+                  <div key={entry.id || `debit-${index}`} className="flex items-center justify-between p-2 border-b border-gray-200">
                     <div className="flex items-center space-x-2">
                       <Checkbox
                         checked={selectedEntries.includes(entry.id)}
@@ -238,8 +258,8 @@ const FinalTrialBalance = () => {
                     <span className="ml-auto">Amount (Dr)</span>
                   </div>
                 </div>
-                {debitEntries.slice(Math.ceil(debitEntries.length/2)).map((entry) => (
-                  <div key={entry.id} className="flex items-center justify-between p-2 border-b border-gray-200">
+                {debitEntries.slice(Math.ceil(debitEntries.length/2)).map((entry, index) => (
+                  <div key={entry.id || `debit-2-${index}`} className="flex items-center justify-between p-2 border-b border-gray-200">
                     <div className="flex items-center space-x-2">
                       <Checkbox
                         checked={selectedEntries.includes(entry.id)}
@@ -252,6 +272,7 @@ const FinalTrialBalance = () => {
                 ))}
               </div>
             </div>
+            )}
 
             {/* Totals */}
             <div className="grid grid-cols-2 gap-4 mt-6">
