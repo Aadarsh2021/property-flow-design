@@ -32,6 +32,26 @@ export interface User {
   updatedAt?: string;
 }
 
+export interface Transaction {
+  _id?: string;
+  partyId: string | Party;
+  date: string;
+  remarks: string;
+  transactionType: 'CR' | 'DR' | 'Monday Final' | 'Commission' | 'Settlement';
+  credit: number;
+  debit: number;
+  balance: number;
+  timeIndicator?: string;
+  isChecked?: boolean;
+  commissionAmount?: number;
+  settlementType?: string;
+  referenceNumber?: string;
+  weekNumber?: number;
+  isMondayFinal?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 class ApiClient {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
@@ -123,9 +143,89 @@ class ApiClient {
     });
   }
 
+
+
+  // Self ID endpoints
+  async getAllSelfIds(): Promise<any[]> {
+    return this.request('/self-id');
+  }
+
+  async createSelfId(data: any): Promise<any> {
+    return this.request('/self-id', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Transaction endpoints
+  async createTransaction(data: Partial<Transaction>): Promise<Transaction> {
+    return this.request('/transactions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getPartyLedger(partyId: string, params: { limit?: number; skip?: number; startDate?: string; endDate?: string } = {}): Promise<{ party: Party; transactions: Transaction[]; currentBalance: number; totalTransactions: number }> {
+    const query = new URLSearchParams(params as any).toString();
+    return this.request(`/transactions/party/${partyId}${query ? `?${query}` : ''}`);
+  }
+
+  async getTransactionById(id: string): Promise<Transaction> {
+    return this.request(`/transactions/${id}`);
+  }
+
+  async updateTransaction(id: string, data: Partial<Transaction>): Promise<Transaction> {
+    return this.request(`/transactions/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteTransaction(id: string): Promise<void> {
+    return this.request(`/transactions/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async bulkDeleteTransactions(transactionIds: string[]): Promise<{ message: string; deletedCount: number }> {
+    return this.request('/transactions/bulk', {
+      method: 'DELETE',
+      body: JSON.stringify({ transactionIds }),
+    });
+  }
+
+  async getPartyBalance(partyId: string): Promise<{ partyId: string; partyName: string; currentBalance: number; balanceLimit: number }> {
+    return this.request(`/transactions/party/${partyId}/balance`);
+  }
+
+  async createMondayFinal(data: { partyId: string; date?: string; remarks?: string }): Promise<any> {
+    return this.request('/transactions/monday-final', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async bulkMondayFinal(data: { partyIds: string[]; date?: string; remarks?: string }): Promise<any> {
+    return this.request('/transactions/monday-final/bulk', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getTransactionStats(partyId?: string, params: { startDate?: string; endDate?: string } = {}): Promise<any> {
+    const query = new URLSearchParams(params as any).toString();
+    return this.request(`/transactions/stats/${partyId || ''}${query ? `?${query}` : ''}`);
+  }
+
+  async searchTransactions(params: { partyId?: string; searchTerm?: string; transactionType?: string; startDate?: string; endDate?: string; limit?: number; skip?: number }): Promise<{ transactions: Transaction[]; total: number; hasMore: boolean }> {
+    const query = new URLSearchParams(params as any).toString();
+    return this.request(`/transactions/search${query ? `?${query}` : ''}`);
+  }
+
   // Final Trial Balance endpoints
-  async getFinalTrialBalance(): Promise<any[]> {
-    return this.request('/final-trial-balance');
+  async getFinalTrialBalances(params: { date?: string; type?: string; partyId?: string; limit?: number; skip?: number; startDate?: string; endDate?: string } = {}): Promise<{ entries: any[]; total: number; hasMore: boolean }> {
+    const query = new URLSearchParams(params as any).toString();
+    return this.request(`/final-trial-balance${query ? `?${query}` : ''}`);
   }
 
   async createFinalTrialBalance(data: any): Promise<any> {
@@ -148,13 +248,66 @@ class ApiClient {
     });
   }
 
-  // Self ID endpoints
-  async getAllSelfIds(): Promise<any[]> {
-    return this.request('/self-id');
+  async calculateTrialBalance(date?: string): Promise<any> {
+    const query = date ? `?date=${date}` : '';
+    return this.request(`/final-trial-balance/calculate${query}`);
   }
 
-  async createSelfId(data: any): Promise<any> {
-    return this.request('/self-id', {
+  async generateTrialBalance(data: { date?: string; includeCommission?: boolean }): Promise<any> {
+    return this.request('/final-trial-balance/generate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getTrialBalanceSummary(params: { startDate?: string; endDate?: string } = {}): Promise<any> {
+    const query = new URLSearchParams(params as any).toString();
+    return this.request(`/final-trial-balance/summary${query ? `?${query}` : ''}`);
+  }
+
+  async bulkDeleteTrialBalance(entryIds: string[]): Promise<{ message: string; deletedCount: number }> {
+    return this.request('/final-trial-balance/bulk', {
+      method: 'DELETE',
+      body: JSON.stringify({ entryIds }),
+    });
+  }
+
+  // Commission endpoints
+  async calculateCommission(data: { partyId: string; amount: number; transactionType?: string }): Promise<any> {
+    return this.request('/commission/calculate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async calculateBulkCommission(transactions: any[]): Promise<any> {
+    return this.request('/commission/calculate-bulk', {
+      method: 'POST',
+      body: JSON.stringify({ transactions }),
+    });
+  }
+
+  async getPartyCommission(partyId: string, params: { startDate?: string; endDate?: string } = {}): Promise<any> {
+    const query = new URLSearchParams(params as any).toString();
+    return this.request(`/commission/party/${partyId}${query ? `?${query}` : ''}`);
+  }
+
+  async getOverallCommission(params: { startDate?: string; endDate?: string } = {}): Promise<any> {
+    const query = new URLSearchParams(params as any).toString();
+    return this.request(`/commission/overall${query ? `?${query}` : ''}`);
+  }
+
+  async getCommissionReport(params: { startDate?: string; endDate?: string; partyId?: string; format?: string } = {}): Promise<any> {
+    const query = new URLSearchParams(params as any).toString();
+    return this.request(`/commission/report${query ? `?${query}` : ''}`);
+  }
+
+  async getCommissionStats(period: string = 'month'): Promise<any> {
+    return this.request(`/commission/stats?period=${period}`);
+  }
+
+  async settleCommission(partyId: string, data: { settlementAmount: number; settlementType?: string }): Promise<any> {
+    return this.request(`/commission/settle/${partyId}`, {
       method: 'POST',
       body: JSON.stringify(data),
     });

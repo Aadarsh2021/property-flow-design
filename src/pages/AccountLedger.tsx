@@ -4,79 +4,222 @@ import TopNavigation from '../components/TopNavigation';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useParams, useNavigate } from 'react-router-dom';
+import { apiClient, Transaction } from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
 
 const AccountLedger = () => {
   const { partyName } = useParams<{ partyName: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
+  
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
+  const [editingTransaction, setEditingTransaction] = useState<string | null>(null);
+  const [closingBalance, setClosingBalance] = useState(0);
+  
   const [newEntry, setNewEntry] = useState({
     partyName: '',
     amount: '',
     remarks: ''
   });
 
-  // Mock ledger data
-  const [ledgerEntries, setLedgerEntries] = useState([
-    {
-      id: 1,
-      date: '27/06/2025',
-      remarks: 'Monday Final 27/06/2025',
-      tnsType: 'Monday S...',
-      credit: 0,
-      debit: 0,
-      balance: 0,
-      chk: false,
-      ti: '12'
-    },
-    {
-      id: 2,
-      date: '27/06/2025',
-      remarks: 'VW-AM RTGS (5455)',
-      tnsType: 'CR',
-      credit: 100000,
-      debit: 0,
-      balance: 100000,
-      chk: false,
-      ti: '3:'
-    },
-    {
-      id: 3,
-      date: '27/06/2025',
-      remarks: 'COMMISSION',
-      tnsType: 'DR',
-      credit: 0,
-      debit: -3000,
-      balance: 97000,
-      chk: false,
-      ti: '3:'
-    },
-    {
-      id: 4,
-      date: '27/06/2025',
-      remarks: 'AQC',
-      tnsType: 'DR',
-      credit: 0,
-      debit: -97000,
-      balance: 0,
-      chk: true,
-      ti: '3:'
+  const [editForm, setEditForm] = useState({
+    amount: '',
+    remarks: ''
+  });
+
+  // Fetch transactions for the party
+  const fetchTransactions = async () => {
+    try {
+      setLoading(true);
+      const response = await apiClient.getPartyLedger(encodeURIComponent(partyName || ''));
+      
+      const sortedTransactions = response.transactions.sort((a: Transaction, b: Transaction) => 
+        new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime()
+      );
+      
+      setTransactions(sortedTransactions);
+      
+      // Calculate closing balance
+      const balance = sortedTransactions.reduce((acc: number, transaction: Transaction) => {
+        return acc + (transaction.credit - transaction.debit);
+      }, 0);
+      setClosingBalance(balance);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to fetch transactions",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
-  ]);
-
-  const [closingBalance, setClosingBalance] = useState(0);
-
-  const handleCheckboxChange = (id: number, checked: boolean) => {
-    setLedgerEntries(prevEntries =>
-      prevEntries.map(entry =>
-        entry.id === id ? { ...entry, chk: checked } : entry
-      )
-    );
   };
 
+  // Auto-refresh every 5 seconds
+  useEffect(() => {
+    fetchTransactions();
+    const interval = setInterval(fetchTransactions, 5000);
+    return () => clearInterval(interval);
+  }, [partyName]);
+
+  // Add new transaction
+  const handleAddEntry = async () => {
+    if (!newEntry.partyName || !newEntry.amount) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const amount = parseFloat(newEntry.amount);
+      await apiClient.createTransaction({
+        partyId: newEntry.partyName,
+        remarks: newEntry.remarks || newEntry.partyName,
+        transactionType: amount > 0 ? 'CR' : 'DR',
+        credit: amount > 0 ? amount : 0,
+        debit: amount < 0 ? Math.abs(amount) : 0,
+        balance: 0
+      });
+
+      toast({
+        title: "Success",
+        description: "Transaction added successfully",
+      });
+      setNewEntry({ partyName: '', amount: '', remarks: '' });
+      fetchTransactions();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add transaction",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Edit transaction
+  const handleEditTransaction = async (transactionId: string) => {
+    if (!editForm.amount) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter amount",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const amount = parseFloat(editForm.amount);
+      await apiClient.updateTransaction(transactionId, {
+        remarks: editForm.remarks,
+        transactionType: amount > 0 ? 'CR' : 'DR',
+        credit: amount > 0 ? amount : 0,
+        debit: amount < 0 ? Math.abs(amount) : 0
+      });
+
+      toast({
+        title: "Success",
+        description: "Transaction updated successfully",
+      });
+      setEditingTransaction(null);
+      setEditForm({ amount: '', remarks: '' });
+      fetchTransactions();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update transaction",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Delete transaction
+  const handleDeleteTransaction = async (transactionId: string) => {
+    if (!confirm('Are you sure you want to delete this transaction?')) return;
+
+    try {
+      await apiClient.deleteTransaction(transactionId);
+      
+      toast({
+        title: "Success",
+        description: "Transaction deleted successfully",
+      });
+      fetchTransactions();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete transaction",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Bulk delete selected transactions
+  const handleBulkDelete = async () => {
+    if (selectedTransactions.length === 0) {
+      toast({
+        title: "No Selection",
+        description: "Please select transactions to delete",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to delete ${selectedTransactions.length} transactions?`)) return;
+
+    try {
+      const response = await apiClient.bulkDeleteTransactions(selectedTransactions);
+
+      toast({
+        title: "Success",
+        description: response.message,
+      });
+      setSelectedTransactions([]);
+      fetchTransactions();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete transactions",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle checkbox selection
+  const handleCheckboxChange = (transactionId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedTransactions(prev => [...prev, transactionId]);
+    } else {
+      setSelectedTransactions(prev => prev.filter(id => id !== transactionId));
+    }
+  };
+
+  // Handle check all
   const handleCheckAll = () => {
-    const allChecked = ledgerEntries.every(entry => entry.chk);
-    setLedgerEntries(prevEntries =>
-      prevEntries.map(entry => ({ ...entry, chk: !allChecked }))
-    );
+    if (selectedTransactions.length === transactions.length) {
+      setSelectedTransactions([]);
+    } else {
+      setSelectedTransactions(transactions.map(t => t._id || ''));
+    }
+  };
+
+  // Start editing
+  const startEditing = (transaction: Transaction) => {
+    setEditingTransaction(transaction._id || '');
+    setEditForm({
+      amount: Math.abs(transaction.credit - transaction.debit).toString(),
+      remarks: transaction.remarks
+    });
+  };
+
+  // Cancel editing
+  const cancelEditing = () => {
+    setEditingTransaction(null);
+    setEditForm({ amount: '', remarks: '' });
   };
 
   // Generate remarks based on party name and remarks input
@@ -90,36 +233,50 @@ const AccountLedger = () => {
     return newEntry.partyName;
   };
 
-  const handleAddEntry = () => {
-    if (newEntry.partyName && newEntry.amount) {
-      const amount = parseFloat(newEntry.amount);
-      const lastBalance = ledgerEntries.length > 0 ? ledgerEntries[ledgerEntries.length - 1].balance : 0;
-      
-      const newLedgerEntry = {
-        id: ledgerEntries.length + 1,
-        date: new Date().toLocaleDateString('en-GB'),
-        remarks: generateRemarks(),
-        tnsType: amount > 0 ? 'CR' : 'DR',
-        credit: amount > 0 ? amount : 0,
-        debit: amount < 0 ? amount : 0,
-        balance: lastBalance + amount,
-        chk: false,
-        ti: '3:'
-      };
-
-      setLedgerEntries([...ledgerEntries, newLedgerEntry]);
-      setClosingBalance(newLedgerEntry.balance);
-      setNewEntry({ partyName: '', amount: '', remarks: '' });
-    }
-  };
-
   const handleRefreshAll = () => {
-    console.log('Refreshing all data...');
+    fetchTransactions();
+    toast({
+      title: "Refreshed",
+      description: "Data refreshed successfully",
+    });
   };
 
   const handleExit = () => {
     navigate('/party-ledger');
   };
+
+  // Monday Final
+  const handleMondayFinal = async () => {
+    try {
+      await apiClient.createMondayFinal({
+        partyId: partyName || '',
+        remarks: 'Monday Final'
+      });
+      
+      toast({
+        title: "Success",
+        description: "Monday Final processed successfully",
+      });
+      fetchTransactions();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to process Monday Final",
+        variant: "destructive",
+      });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading transactions...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -148,7 +305,7 @@ const AccountLedger = () => {
                 <div className="flex items-center space-x-4">
                   <span className="text-sm font-medium text-gray-700">Closing Balance :</span>
                   <span className={`font-bold text-lg ${closingBalance < 0 ? 'text-red-600' : 'text-blue-600'}`}>
-                    {closingBalance}
+                    ₹{closingBalance.toLocaleString()}
                   </span>
                 </div>
               </div>
@@ -165,37 +322,91 @@ const AccountLedger = () => {
                       <TableHead className="font-semibold text-right">Debit</TableHead>
                       <TableHead className="font-semibold text-right">Balance</TableHead>
                       <TableHead className="font-semibold text-center">Chk</TableHead>
-                      <TableHead className="font-semibold">Ti</TableHead>
+                      <TableHead className="font-semibold">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {ledgerEntries.map((entry) => (
-                      <TableRow key={entry.id} className={entry.chk ? 'bg-blue-100' : ''}>
-                        <TableCell>{entry.date}</TableCell>
-                        <TableCell className={entry.remarks === 'AQC' ? 'bg-blue-200 font-semibold' : ''}>
-                          {entry.remarks}
+                    {transactions.map((transaction) => (
+                      <TableRow key={transaction._id} className={selectedTransactions.includes(transaction._id || '') ? 'bg-blue-100' : ''}>
+                        <TableCell>{new Date(transaction.createdAt || '').toLocaleDateString('en-GB')}</TableCell>
+                        <TableCell className={transaction.remarks === 'AQC' ? 'bg-blue-200 font-semibold' : ''}>
+                          {editingTransaction === transaction._id ? (
+                            <input
+                              type="text"
+                              value={editForm.remarks}
+                              onChange={(e) => setEditForm({...editForm, remarks: e.target.value})}
+                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                            />
+                          ) : (
+                            transaction.remarks
+                          )}
                         </TableCell>
                         <TableCell>
                           <span className={`px-2 py-1 rounded text-sm ${
-                            entry.tnsType === 'CR' ? 'bg-green-100 text-green-800' : 
-                            entry.tnsType === 'DR' ? 'bg-red-100 text-red-800' : 
+                            transaction.transactionType === 'CR' ? 'bg-green-100 text-green-800' : 
+                            transaction.transactionType === 'DR' ? 'bg-red-100 text-red-800' : 
                             'bg-gray-100 text-gray-800'
                           }`}>
-                            {entry.tnsType}
+                            {transaction.transactionType}
                           </span>
                         </TableCell>
-                        <TableCell className="text-right">{entry.credit || ''}</TableCell>
-                        <TableCell className="text-right">{entry.debit || ''}</TableCell>
-                        <TableCell className={`text-right font-semibold ${entry.balance < 0 ? 'text-red-600' : ''}`}>
-                          {entry.balance}
+                        <TableCell className="text-right">
+                          {editingTransaction === transaction._id ? (
+                            <input
+                              type="number"
+                              value={editForm.amount}
+                              onChange={(e) => setEditForm({...editForm, amount: e.target.value})}
+                              className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-right"
+                            />
+                          ) : (
+                            transaction.credit > 0 ? `₹${transaction.credit.toLocaleString()}` : ''
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {transaction.debit > 0 ? `₹${transaction.debit.toLocaleString()}` : ''}
+                        </TableCell>
+                        <TableCell className={`text-right font-semibold ${transaction.balance < 0 ? 'text-red-600' : ''}`}>
+                          ₹{transaction.balance.toLocaleString()}
                         </TableCell>
                         <TableCell className="text-center">
                           <Checkbox
-                            checked={entry.chk}
-                            onCheckedChange={(checked) => handleCheckboxChange(entry.id, checked as boolean)}
+                            checked={selectedTransactions.includes(transaction._id || '')}
+                            onCheckedChange={(checked) => handleCheckboxChange(transaction._id || '', checked as boolean)}
                           />
                         </TableCell>
-                        <TableCell>{entry.ti}</TableCell>
+                        <TableCell>
+                          {editingTransaction === transaction._id ? (
+                            <div className="flex space-x-1">
+                              <button
+                                onClick={() => handleEditTransaction(transaction._id || '')}
+                                className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={cancelEditing}
+                                className="px-2 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex space-x-1">
+                              <button
+                                onClick={() => startEditing(transaction)}
+                                className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteTransaction(transaction._id || '')}
+                                className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
+                              >
+                                Del
+                              </button>
+                            </div>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -258,7 +469,10 @@ const AccountLedger = () => {
                 <button className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors font-medium text-sm">
                   DC Report
                 </button>
-                <button className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors font-medium text-sm">
+                <button 
+                  onClick={handleMondayFinal}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors font-medium text-sm"
+                >
                   Monday Final
                 </button>
                 <button className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors font-medium text-sm">
@@ -267,8 +481,16 @@ const AccountLedger = () => {
                 <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium text-sm">
                   Modify
                 </button>
-                <button className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors font-medium text-sm">
-                  Delete
+                <button 
+                  onClick={handleBulkDelete}
+                  disabled={selectedTransactions.length === 0}
+                  className={`px-4 py-2 rounded-md transition-colors font-medium text-sm ${
+                    selectedTransactions.length === 0 
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                      : 'bg-red-600 text-white hover:bg-red-700'
+                  }`}
+                >
+                  Delete ({selectedTransactions.length})
                 </button>
                 <button className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors font-medium text-sm">
                   Print
@@ -277,7 +499,7 @@ const AccountLedger = () => {
                   onClick={handleCheckAll}
                   className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors font-medium text-sm"
                 >
-                  Check All
+                  {selectedTransactions.length === transactions.length ? 'Uncheck All' : 'Check All'}
                 </button>
                 <button
                   onClick={handleExit}
