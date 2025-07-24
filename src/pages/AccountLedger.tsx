@@ -585,11 +585,12 @@ const AccountLedger = () => {
       `✅ Consolidate all current entries into one settlement\n` +
       `✅ Move all current entries to Old Records\n` +
       `✅ Start fresh with the settlement balance\n\n` +
-      `Are you absolutely sure you want to proceed?`;
+      `Are you absolutely sure you want to proceed?\n\n` +
+      `Type "CONFIRM" to proceed:`;
 
-    const userConfirmation = window.confirm(confirmMessage);
+    const userConfirmation = prompt(confirmMessage);
     
-    if (!userConfirmation) {
+    if (userConfirmation !== 'CONFIRM') {
       toast({
         title: "Cancelled",
         description: "Monday Final settlement was cancelled",
@@ -597,7 +598,23 @@ const AccountLedger = () => {
       return;
     }
 
+    // Final confirmation
+    const finalConfirm = window.confirm(
+      `🚨 FINAL CONFIRMATION\n\n` +
+      `You typed "CONFIRM". This action will:\n` +
+      `• Archive ${currentEntries.length} entries\n` +
+      `• Create settlement with balance: ${netBalance.toLocaleString()}\n` +
+      `• Cannot be undone easily\n\n` +
+      `Click OK to proceed or Cancel to abort.`
+    );
 
+    if (!finalConfirm) {
+      toast({
+        title: "Cancelled",
+        description: "Monday Final settlement was cancelled",
+      });
+      return;
+    }
 
     try {
       console.log('Creating Monday Final settlement:', {
