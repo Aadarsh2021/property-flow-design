@@ -8,6 +8,8 @@ const apiCall = async (endpoint: string, options: RequestInit = {}) => {
         'Content-Type': 'application/json',
         ...options.headers,
       },
+      credentials: 'include',
+      mode: 'cors',
       ...options,
     };
 
