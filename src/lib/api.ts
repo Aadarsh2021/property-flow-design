@@ -36,6 +36,18 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
   }
 };
 
+// Health check function
+export const checkBackendHealth = async () => {
+  try {
+    const response = await fetch('https://account-ledger-software-9sys.onrender.com/health');
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Health check failed:', error);
+    throw error;
+  }
+};
+
 // New Party API
 export const newPartyAPI = {
   // Get all parties
