@@ -42,12 +42,19 @@ const PartyLedger = () => {
     setLoading(true);
     try {
       const response = await partyLedgerAPI.getAllParties();
-      if (response.success) {
+      console.log('API Response:', response);
+      
+      if (response.success && response.data && response.data.length > 0) {
         setParties(response.data);
+        console.log('Parties loaded from API:', response.data.length);
       } else {
-        // Fallback to mock data if API fails
+        // Fallback to mock data if API returns empty or fails
+        console.warn('API returned empty data, using mock data');
         setParties(mockData.getMockParties());
-        console.warn('Using mock data due to API failure');
+        toast({
+          title: "Info",
+          description: "No parties found in database. Using sample data for demonstration.",
+        });
       }
     } catch (error) {
       console.error('Error fetching parties:', error);
@@ -55,7 +62,7 @@ const PartyLedger = () => {
       setParties(mockData.getMockParties());
       toast({
         title: "Warning",
-        description: "Using offline data. Some features may be limited.",
+        description: "Unable to connect to server. Using offline data for demonstration.",
         variant: "destructive"
       });
     } finally {
@@ -228,7 +235,10 @@ const PartyLedger = () => {
                     />
                     <div className="overflow-y-auto max-h-96">
                       {loading ? (
-                        <div className="text-center py-4">Loading parties...</div>
+                        <div className="text-center py-8">
+                          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                          <p className="text-gray-600">Loading parties...</p>
+                        </div>
                       ) : (
                       <Table>
                         <TableHeader>
@@ -278,6 +288,22 @@ const PartyLedger = () => {
                           ))}
                         </TableBody>
                       </Table>
+                      )}
+                      
+                      {!loading && filteredParties.length === 0 && (
+                        <div className="text-center py-8">
+                          <div className="text-gray-500 mb-2">
+                            {searchTerm ? 'No parties found matching your search.' : 'No parties available.'}
+                          </div>
+                          {searchTerm && (
+                            <button
+                              onClick={() => setSearchTerm('')}
+                              className="text-blue-600 hover:text-blue-800 text-sm"
+                            >
+                              Clear search
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                     {selectedParties.length > 0 && (
