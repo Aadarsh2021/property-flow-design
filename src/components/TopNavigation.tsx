@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronDown, Settings, FileText, BarChart3, Database } from 'lucide-react';
+import { ChevronDown, Settings, FileText, BarChart3, Database, Home } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
 const TopNavigation = () => {
@@ -47,7 +47,28 @@ const TopNavigation = () => {
   return (
     <nav className="bg-white border-b border-gray-200 shadow-sm">
       <div className="max-w-7xl mx-auto px-4">
-        <div className="flex items-center justify-between h-12">
+        <div className="flex items-center justify-between h-16">
+          {/* Logo Section */}
+          <div className="flex items-center">
+            <Link 
+              to="/" 
+              className="flex items-center space-x-3 hover:opacity-80 transition-opacity"
+            >
+              <div className="flex items-center justify-center w-10 h-10 bg-blue-600 rounded-lg shadow-md">
+                <Home className="w-6 h-6 text-white" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-lg font-bold text-gray-900 leading-tight">
+                  Account Ledger
+                </span>
+                <span className="text-xs text-gray-500 leading-tight">
+                  Financial Management System
+                </span>
+              </div>
+            </Link>
+          </div>
+
+          {/* Navigation Menu */}
           <div className="flex items-center space-x-8">
             <div className="relative">
               <button
