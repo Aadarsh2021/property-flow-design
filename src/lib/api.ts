@@ -7,6 +7,68 @@ const getAuthToken = () => {
   return localStorage.getItem('token');
 };
 
+// Retry mechanism for failed requests
+const retryRequest = async <T>(
+  url: string, 
+  config: RequestInit, 
+  maxRetries: number = 2,
+  delay: number = 1000
+): Promise<T> => {
+  let lastError: Error;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+      const response = await fetch(url, {
+        ...config,
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      // Check if response is ok before parsing JSON
+      if (!response.ok) {
+        let errorMessage = 'API request failed';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch {
+          // If JSON parsing fails, use status text
+          errorMessage = response.statusText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+      
+      const data = await response.json();
+      return data;
+    } catch (error: any) {
+      lastError = error;
+      
+      // Don't retry on certain errors
+      if (error.name === 'AbortError' || error.message.includes('Failed to fetch')) {
+        break;
+      }
+      
+      // If this is not the last attempt, wait before retrying
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, delay * (attempt + 1)));
+        continue;
+      }
+    }
+  }
+  
+  // If we get here, all retries failed
+  if (lastError!.name === 'AbortError') {
+    throw new Error('Request timeout. Server is taking too long to respond. Please try again.');
+  }
+  if (lastError!.message.includes('Failed to fetch')) {
+    throw new Error('Network error. Please check your internet connection and try again.');
+  }
+  throw lastError;
+};
+
 // Generic API helper with timeout and better error handling
 const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> => {
     const url = `${API_BASE_URL}${endpoint}`;
@@ -22,42 +84,29 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
     };
 
   try {
-    // Add timeout to fetch request
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-
-    const response = await fetch(url, {
-      ...config,
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeoutId);
-    
-    const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.message || 'API request failed');
-    }
-    
-    return data;
+    return await retryRequest<ApiResponse<T>>(url, config);
   } catch (error: any) {
     console.error('API Error:', error);
-    if (error.name === 'AbortError') {
-      throw new Error('Request timeout. Please check your connection and try again.');
-    }
     throw error;
   }
 };
 
-// Health check function
+// Health check function with timeout
 export const checkBackendHealth = async () => {
   try {
-    const response = await fetch('https://account-ledger-software-9sys.onrender.com/health');
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout for health check
+    
+    const response = await fetch('https://account-ledger-software-9sys.onrender.com/health', {
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
     const data = await response.json();
     return data;
   } catch (error) {
     console.error('Health check failed:', error);
-    throw error;
+    throw new Error('Backend server is not responding. Please try again later.');
   }
 };
 

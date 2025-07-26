@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Eye, EyeOff, Lock, User, Building2, Home } from 'lucide-react';
+import { Eye, EyeOff, Lock, User, Building2, Home, Wifi, WifiOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { authAPI } from '@/lib/api';
@@ -23,6 +23,8 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({});
+  const [loadingMessage, setLoadingMessage] = useState('Signing In...');
+  const [retryCount, setRetryCount] = useState(0);
 
   // Get the page user was trying to access
   const from = location.state?.from?.pathname || '/';
@@ -88,6 +90,8 @@ const Login = () => {
     
     setLoading(true);
     setError('');
+    setRetryCount(0);
+    setLoadingMessage('Connecting to server...');
 
     try {
       const response = await authAPI.login({
@@ -111,9 +115,21 @@ const Login = () => {
       }
     } catch (error: any) {
       console.error('Login error:', error);
-      setError(error.message || 'Network error. Please try again.');
+      
+      // Handle specific error types
+      if (error.message.includes('timeout')) {
+        setError('Server is taking too long to respond. Please try again.');
+      } else if (error.message.includes('Network error')) {
+        setError('Please check your internet connection and try again.');
+      } else if (error.message.includes('Backend server is not responding')) {
+        setError('Server is currently unavailable. Please try again later.');
+      } else {
+        setError(error.message || 'Network error. Please try again.');
+      }
     } finally {
       setLoading(false);
+      setLoadingMessage('Signing In...');
+      setRetryCount(0);
     }
   };
 
@@ -171,7 +187,10 @@ const Login = () => {
             <form onSubmit={handleSubmit} className="space-y-6">
               {error && (
                 <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
+                  <div className="flex items-center space-x-2">
+                    <WifiOff className="w-4 h-4" />
+                    <AlertDescription>{error}</AlertDescription>
+                  </div>
                 </Alert>
               )}
               
@@ -239,7 +258,7 @@ const Login = () => {
                 {loading ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                    Signing In...
+                    {loadingMessage}
                   </>
                 ) : (
                   'Sign In'
