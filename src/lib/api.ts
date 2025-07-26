@@ -1,6 +1,6 @@
 import { ApiResponse, NewPartyData, NewParty, Party, LedgerEntry, LedgerEntryInput, UserSettings, TrialBalanceEntry } from '../types';
 
-const API_BASE_URL = 'https://account-ledger-software.onrender.com/api';
+const API_BASE_URL = 'https://account-ledger-software-9sys.onrender.com/api';
 
 // Generic API helper
 const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> => {
