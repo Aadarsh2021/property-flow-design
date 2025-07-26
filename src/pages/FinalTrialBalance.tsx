@@ -1,10 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useNavigate } from 'react-router-dom';
 import { finalTrialBalanceAPI, mockData } from '../lib/api';
 import { useToast } from '../hooks/use-toast';
+import { TrialBalanceEntry } from '../types';
 
 const FinalTrialBalance = () => {
   const navigate = useNavigate();
@@ -12,29 +13,23 @@ const FinalTrialBalance = () => {
   const [partyName, setPartyName] = useState('');
   const [selectedEntries, setSelectedEntries] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [trialBalanceData, setTrialBalanceData] = useState<any[]>([]);
+  const [trialBalanceData, setTrialBalanceData] = useState<TrialBalanceEntry[]>([]);
 
-  // Load trial balance data on component mount
-  useEffect(() => {
-    loadTrialBalance();
-  }, []);
-
-  const loadTrialBalance = async () => {
+  const loadTrialBalance = useCallback(async () => {
     setLoading(true);
     try {
       const response = await finalTrialBalanceAPI.get();
       if (response.success) {
-        const { creditEntries, debitEntries } = response.data;
-        setTrialBalanceData([...creditEntries, ...debitEntries]);
+        setTrialBalanceData(response.data || []);
       } else {
         // Fallback to mock data if API fails
-        setTrialBalanceData(mockData.getMockTrialBalance());
+        setTrialBalanceData(mockData.getMockTrialBalance() as TrialBalanceEntry[]);
         console.warn('Using mock data due to API failure');
       }
     } catch (error) {
       console.error('Error loading trial balance:', error);
       // Use mock data as fallback
-      setTrialBalanceData(mockData.getMockTrialBalance());
+      setTrialBalanceData(mockData.getMockTrialBalance() as TrialBalanceEntry[]);
       toast({
         title: "Warning",
         description: "Using offline data. Some features may be limited.",
@@ -43,7 +38,12 @@ const FinalTrialBalance = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  // Load trial balance data on component mount
+  useEffect(() => {
+    loadTrialBalance();
+  }, [loadTrialBalance]);
 
   const creditEntries = trialBalanceData.filter(entry => entry.type === 'credit');
   const debitEntries = trialBalanceData.filter(entry => entry.type === 'debit');
@@ -77,7 +77,7 @@ const FinalTrialBalance = () => {
         const response = await finalTrialBalanceAPI.getPartyBalance(partyName);
         if (response.success) {
           const partyEntry = response.data;
-          setTrialBalanceData([partyEntry]);
+          setTrialBalanceData(Array.isArray(partyEntry) ? partyEntry : [partyEntry]);
           toast({
             title: "Success",
             description: `Showing data for ${partyName}`,

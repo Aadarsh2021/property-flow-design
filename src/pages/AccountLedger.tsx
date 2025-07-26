@@ -1,34 +1,48 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
+import { Calendar, CheckCircle, AlertTriangle, Calculator, Clock, DollarSign, TrendingUp } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { partyLedgerAPI, mockData } from '../lib/api';
 import { useToast } from '../hooks/use-toast';
+import { LedgerEntry, LedgerEntryInput } from '../types';
 
 const AccountLedger = () => {
   const { partyName } = useParams<{ partyName: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [ledgerEntries, setLedgerEntries] = useState<any[]>([]);
+  const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
   const [closingBalance, setClosingBalance] = useState(0);
-  const [oldRecords, setOldRecords] = useState<any[]>([]);
+  const [oldRecords, setOldRecords] = useState<LedgerEntry[]>([]);
   const [showOldRecords, setShowOldRecords] = useState(false);
   const [newEntry, setNewEntry] = useState({
     partyName: '',
     amount: '',
     remarks: '',
-    transactionType: 'CR' // Add separate state for transaction type
+    transactionType: 'CR' as const
   });
   const [isModifyModalOpen, setIsModifyModalOpen] = useState(false);
-  const [selectedEntryForModify, setSelectedEntryForModify] = useState<any>(null);
+  const [selectedEntryForModify, setSelectedEntryForModify] = useState<LedgerEntry | null>(null);
   const [modifyFormData, setModifyFormData] = useState({
     remarks: '',
     amount: '',
-    tnsType: 'CR'
+    tnsType: 'CR' as const
   });
+  const [showMondayFinalModal, setShowMondayFinalModal] = useState(false);
+  const [mondayFinalData, setMondayFinalData] = useState({
+    transactionCount: 0,
+    totalCredit: 0,
+    totalDebit: 0,
+    startingBalance: 0,
+    finalBalance: 0
+  });
+  const [actionLoading, setActionLoading] = useState(false);
 
   // Load ledger data on component mount
   useEffect(() => {
@@ -516,7 +530,7 @@ const AccountLedger = () => {
   };
 
   // Monday Final functionality - Consolidate all entries into one settlement
-  const handleMondayFinal = async () => {
+  const handleMondayFinalClick = () => {
     if (ledgerEntries.length === 0) {
       toast({
         title: "Warning",
@@ -541,11 +555,6 @@ const AccountLedger = () => {
       });
       return;
     }
-
-    // Check if there's already a settlement in current entries
-    const hasMondayFinalSettlement = ledgerEntries.some(entry => 
-      entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement')
-    );
 
     // Calculate totals for confirmation
     const currentEntries = ledgerEntries.filter(entry => 
@@ -573,142 +582,80 @@ const AccountLedger = () => {
     
     const netBalance = parseFloat((startingBalance + totalCredit - totalDebit).toFixed(2));
 
-    // Show detailed confirmation with warning
-    const confirmMessage = `⚠️ WARNING: This action cannot be easily undone!\n\n` +
-      `You are about to create a Monday Final settlement for:\n` +
-      `• ${currentEntries.length} transactions\n` +
-      `• Total Credit: ${totalCredit.toLocaleString()}\n` +
-      `• Total Debit: ${totalDebit.toLocaleString()}\n` +
-      `• Starting Balance: ${startingBalance.toLocaleString()}\n` +
-      `• Final Balance: ${netBalance.toLocaleString()}\n\n` +
-      `This will:\n` +
-      `✅ Consolidate all current entries into one settlement\n` +
-      `✅ Move all current entries to Old Records\n` +
-      `✅ Start fresh with the settlement balance\n\n` +
-      `Are you absolutely sure you want to proceed?\n\n` +
-      `Type "CONFIRM" to proceed:`;
+    // Set modal data
+    setMondayFinalData({
+      transactionCount: currentEntries.length,
+      totalCredit,
+      totalDebit,
+      startingBalance,
+      finalBalance: netBalance
+    });
 
-    const userConfirmation = prompt(confirmMessage);
-    
-    if (userConfirmation !== 'CONFIRM') {
-      toast({
-        title: "Cancelled",
-        description: "Monday Final settlement was cancelled",
-      });
-      return;
-    }
+    setShowMondayFinalModal(true);
+  };
 
-    // Final confirmation
-    const finalConfirm = window.confirm(
-      `🚨 FINAL CONFIRMATION\n\n` +
-      `You typed "CONFIRM". This action will:\n` +
-      `• Archive ${currentEntries.length} entries\n` +
-      `• Create settlement with balance: ${netBalance.toLocaleString()}\n` +
-      `• Cannot be undone easily\n\n` +
-      `Click OK to proceed or Cancel to abort.`
-    );
-
-    if (!finalConfirm) {
-      toast({
-        title: "Cancelled",
-        description: "Monday Final settlement was cancelled",
-      });
-      return;
-    }
-
+  const handleMondayFinalConfirm = async () => {
+    setActionLoading(true);
     try {
-      console.log('Creating Monday Final settlement:', {
-        startingBalance,
-        totalCredit,
-        totalDebit,
-        netBalance,
-        currentEntriesCount: currentEntries.length
-      });
+      // Check if there's already a settlement in current entries
+      const hasMondayFinalSettlement = ledgerEntries.some(entry => 
+        entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement')
+      );
 
-      // Add settlement entry to backend
-      const response = await partyLedgerAPI.addEntry({
-        partyName: decodeURIComponent(partyName || ''),
-        amount: netBalance - startingBalance,
-        remarks: `Monday Final Settlement - ${currentEntries.length} entries (CR: ${totalCredit.toLocaleString()}, DR: ${totalDebit.toLocaleString()}) - Balance: ${startingBalance.toLocaleString()} → ${netBalance.toLocaleString()}`,
-        tnsType: 'Monday S...',
-        credit: totalCredit,
-        debit: -totalDebit
-      });
-
-      if (response.success) {
-        // Use the backend response data for the settlement entry
-        const backendSettlementEntry = {
-          partyName: decodeURIComponent(partyName || ''),
-          date: today,
-          remarks: `Monday Final Settlement - ${currentEntries.length} entries (CR: ${totalCredit.toLocaleString()}, DR: ${totalDebit.toLocaleString()}) - Balance: ${startingBalance.toLocaleString()} → ${netBalance.toLocaleString()}`,
-          tnsType: 'Monday S...',
-          credit: totalCredit,
-          debit: -totalDebit,
-          balance: netBalance,
-          chk: false,
-          ti: '3:',
-          mondayFinal: 'Yes',
-          createdAt: new Date().toISOString(),
-          id: response.data._id || response.data.id,
-          _id: response.data._id || response.data.id
-        };
-
-        // Update all existing entries to Monday Final status
-        const updatePromises = ledgerEntries
-          .filter(entry => entry.id && !entry.id.toString().startsWith('entry-'))
-          .map(entry => {
-            const idString = typeof entry.id === 'string' ? entry.id : entry.id.toString();
-            return partyLedgerAPI.updateEntry(idString, { mondayFinal: 'Yes' });
-          });
-
-        await Promise.all(updatePromises);
-
-        // Save ALL current entries (including any existing settlements) as old records
-        const allOldEntries = [...ledgerEntries, backendSettlementEntry];
-        const sortedOldEntries = allOldEntries.sort((a, b) => {
-          const dateA = new Date(a.date.split('/').reverse().join('-'));
-          const dateB = new Date(b.date.split('/').reverse().join('-'));
-          return dateA.getTime() - dateB.getTime();
-        });
+      // Calculate totals for confirmation
+      const currentEntries = ledgerEntries.filter(entry => 
+        !(entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement'))
+      );
+      
+      const totalCredit = parseFloat(currentEntries.reduce((sum, entry) => sum + (entry.credit || 0), 0).toFixed(2));
+      const totalDebit = parseFloat(currentEntries.reduce((sum, entry) => sum + Math.abs(entry.debit || 0), 0).toFixed(2));
+      
+      // Get starting balance
+      let startingBalance = 0;
+      if (oldRecords.length > 0) {
+        const lastMondayFinal = oldRecords
+          .filter(entry => entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement'))
+          .sort((a, b) => {
+            const dateA = new Date(a.date.split('/').reverse().join('-'));
+            const dateB = new Date(b.date.split('/').reverse().join('-'));
+            return dateB.getTime() - dateA.getTime();
+          })[0];
         
-        setOldRecords(prevOldRecords => [...prevOldRecords, ...sortedOldEntries]);
-
-        // Replace all entries with ONLY the new settlement entry
-        const updatedEntries = [backendSettlementEntry];
-        const recalculatedEntries = recalculateBalances(updatedEntries);
-        setLedgerEntries(recalculatedEntries);
-        setClosingBalance(netBalance);
-        setShowOldRecords(false);
-
-        toast({
-          title: "✅ Monday Final Settlement Complete",
-          description: `${currentEntries.length} entries consolidated. Balance: ${startingBalance.toLocaleString()} → ${netBalance.toLocaleString()}. All entries moved to Old Records.`,
-        });
-
-        // Show undo option for 30 seconds
-        setTimeout(() => {
-          const undoConfirm = window.confirm(
-            `🔄 UNDO OPTION\n\n` +
-            `You can undo this Monday Final settlement within 30 seconds.\n` +
-            `This will:\n` +
-            `• Delete the settlement entry\n` +
-            `• Restore all ${currentEntries.length} original entries\n` +
-            `• Reset balances to previous state\n\n` +
-            `Do you want to undo the settlement?`
-          );
-
-          if (undoConfirm) {
-            handleUndoMondayFinal(backendSettlementEntry, sortedOldEntries);
-          }
-        }, 30000); // 30 seconds
-
-      } else {
-        toast({
-          title: "Error",
-          description: response.message || "Failed to create settlement entry",
-          variant: "destructive"
-        });
+        if (lastMondayFinal) {
+          startingBalance = lastMondayFinal.balance || 0;
+        }
       }
+      
+      const netBalance = parseFloat((startingBalance + totalCredit - totalDebit).toFixed(2));
+
+      // Create Monday Final settlement entry
+      const today = new Date().toLocaleDateString('en-GB');
+      const settlementEntry = {
+        id: Date.now(),
+        date: today,
+        remarks: `Monday Final Settlement ${today}`,
+        tnsType: 'Monday S...',
+        credit: netBalance > 0 ? netBalance : 0,
+        debit: netBalance < 0 ? Math.abs(netBalance) : 0,
+        balance: netBalance,
+        chk: false,
+        ti: '12'
+      };
+
+      // Move current entries to old records
+      setOldRecords(prevOldRecords => [...prevOldRecords, ...ledgerEntries]);
+      
+      // Set new ledger entries with only the settlement
+      setLedgerEntries([settlementEntry]);
+      
+      // Update closing balance
+      setClosingBalance(netBalance);
+      
+      setShowMondayFinalModal(false);
+      toast({
+        title: "Success",
+        description: "Monday Final settlement created successfully",
+      });
     } catch (error) {
       console.error('Error creating Monday Final settlement:', error);
       toast({
@@ -716,6 +663,8 @@ const AccountLedger = () => {
         description: "Failed to create Monday Final settlement",
         variant: "destructive"
       });
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -1472,12 +1421,14 @@ const AccountLedger = () => {
                   DC Report
                 </button>
                 {!showOldRecords && (
-                  <button 
-                    onClick={handleMondayFinal}
-                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium text-sm"
+                  <Button 
+                    onClick={handleMondayFinalClick}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    size="sm"
                   >
-                  Monday Final
-                </button>
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Monday Final
+                  </Button>
                 )}
                 <button 
                   onClick={handleOldRecord}
@@ -1591,6 +1542,102 @@ const AccountLedger = () => {
           </div>
         </div>
       )}
+
+      {/* Monday Final Confirmation Modal */}
+      <AlertDialog open={showMondayFinalModal} onOpenChange={setShowMondayFinalModal}>
+        <AlertDialogContent className="max-w-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              Monday Final Settlement Confirmation
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-4">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="flex items-center gap-2 mb-3">
+                  <Calculator className="w-5 h-5 text-blue-600" />
+                  <span className="font-semibold text-blue-800">Settlement Summary</span>
+                </div>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Transactions:</span>
+                    <span className="font-medium">{mondayFinalData.transactionCount}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Total Credit:</span>
+                    <span className="font-medium text-green-600">₹{mondayFinalData.totalCredit.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Total Debit:</span>
+                    <span className="font-medium text-red-600">₹{mondayFinalData.totalDebit.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Starting Balance:</span>
+                    <span className="font-medium">₹{mondayFinalData.startingBalance.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between col-span-2 border-t pt-2">
+                    <span className="text-gray-800 font-semibold">Final Balance:</span>
+                    <span className={`font-bold text-lg ${mondayFinalData.finalBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      ₹{mondayFinalData.finalBalance.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-yellow-50 p-4 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-yellow-800">
+                    <p className="font-semibold mb-2">⚠️ WARNING: This action cannot be easily undone!</p>
+                    <p className="mb-3">This will:</p>
+                    <ul className="list-disc list-inside space-y-1">
+                      <li>Consolidate all current entries into one settlement</li>
+                      <li>Move all current entries to Old Records</li>
+                      <li>Start fresh with the settlement balance</li>
+                      <li>Create a permanent financial record</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-green-50 p-4 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <TrendingUp className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-green-800">
+                    <p className="font-semibold mb-1">Benefits:</p>
+                    <ul className="list-disc list-inside space-y-1">
+                      <li>Clean ledger with consolidated balance</li>
+                      <li>Historical records preserved in Old Records</li>
+                      <li>Ready for new transaction period</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionLoading}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleMondayFinalConfirm}
+              disabled={actionLoading}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              {actionLoading ? (
+                <>
+                  <Clock className="w-4 h-4 mr-2 animate-spin" />
+                  Creating Settlement...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Create Monday Final Settlement
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

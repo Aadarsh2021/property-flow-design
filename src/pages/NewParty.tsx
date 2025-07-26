@@ -4,12 +4,13 @@ import TopNavigation from '../components/TopNavigation';
 import { useNavigate } from 'react-router-dom';
 import { newPartyAPI } from '../lib/api';
 import { useToast } from '../hooks/use-toast';
+import { NewPartyData } from '../types';
 
 const NewParty = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<NewPartyData>({
     srNo: '163',
     partyName: '',
     status: 'R',
@@ -55,7 +56,7 @@ const NewParty = () => {
       setFormData(prev => ({
         ...prev,
         [section]: {
-          ...prev[section as keyof typeof prev] as any,
+          ...(prev[section as keyof typeof prev] as unknown as Record<string, string>),
           [field]: value
         }
       }));

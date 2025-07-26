@@ -1,7 +1,9 @@
-const API_BASE_URL = 'https://account-ledger-software.onrender.com/api';
+import { ApiResponse, NewPartyData, NewParty, Party, LedgerEntry, LedgerEntryInput, UserSettings, TrialBalanceEntry } from '../types';
+
+const API_BASE_URL = 'http://localhost:5000/api';
 
 // Generic API helper
-const apiCall = async (endpoint: string, options: RequestInit = {}) => {
+const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> => {
     const url = `${API_BASE_URL}${endpoint}`;
     const config: RequestInit = {
       headers: {
@@ -29,66 +31,66 @@ const apiCall = async (endpoint: string, options: RequestInit = {}) => {
 // New Party API
 export const newPartyAPI = {
   // Get all parties
-  getAll: () => apiCall('/new-party'),
+  getAll: () => apiCall<NewParty[]>('/new-party'),
   
   // Get party by ID
-  getById: (id: string) => apiCall(`/new-party/${id}`),
+  getById: (id: string) => apiCall<NewParty>(`/new-party/${id}`),
   
   // Create new party
-  create: (partyData: any) => apiCall('/new-party', {
+  create: (partyData: NewPartyData) => apiCall<NewParty>('/new-party', {
       method: 'POST',
       body: JSON.stringify(partyData),
   }),
   
   // Update party
-  update: (id: string, partyData: any) => apiCall(`/new-party/${id}`, {
+  update: (id: string, partyData: Partial<NewPartyData>) => apiCall<NewParty>(`/new-party/${id}`, {
       method: 'PUT',
       body: JSON.stringify(partyData),
   }),
 
   // Delete party
-  delete: (id: string) => apiCall(`/new-party/${id}`, {
+  delete: (id: string) => apiCall<{ id: string; partyName: string }>(`/new-party/${id}`, {
       method: 'DELETE',
   }),
   
   // Get next SR number
-  getNextSrNo: () => apiCall('/new-party/next-sr-no'),
+  getNextSrNo: () => apiCall<{ nextSrNo: string }>('/new-party/next-sr-no'),
 };
 
 // Party Ledger API
 export const partyLedgerAPI = {
   // Get all parties for ledger
-  getAllParties: () => apiCall('/party-ledger/parties'),
+  getAllParties: () => apiCall<Party[]>('/party-ledger/parties'),
   
   // Get ledger for specific party
-  getPartyLedger: (partyName: string) => apiCall(`/party-ledger/${encodeURIComponent(partyName)}`),
+  getPartyLedger: (partyName: string) => apiCall<LedgerEntry[]>(`/party-ledger/${encodeURIComponent(partyName)}`),
   
   // Add new ledger entry
-  addEntry: (entryData: any) => apiCall('/party-ledger/entry', {
+  addEntry: (entryData: LedgerEntryInput) => apiCall<LedgerEntry>('/party-ledger/entry', {
     method: 'POST',
     body: JSON.stringify(entryData),
   }),
   
   // Update Monday Final status
-  updateMondayFinal: (partyNames: string[]) => apiCall('/party-ledger/monday-final', {
+  updateMondayFinal: (partyNames: string[]) => apiCall<{ updated: number }>('/party-ledger/monday-final', {
       method: 'PUT',
     body: JSON.stringify({ partyNames }),
   }),
 
   // Delete multiple parties
-  deleteParties: (partyNames: string[]) => apiCall('/party-ledger/parties', {
+  deleteParties: (partyNames: string[]) => apiCall<{ deleted: number }>('/party-ledger/parties', {
       method: 'DELETE',
     body: JSON.stringify({ partyNames }),
   }),
   
   // Update ledger entry
-  updateEntry: (id: string, entryData: any) => apiCall(`/party-ledger/entry/${id}`, {
+  updateEntry: (id: string, entryData: Partial<LedgerEntry>) => apiCall<LedgerEntry>(`/party-ledger/entry/${id}`, {
     method: 'PUT',
     body: JSON.stringify(entryData),
   }),
   
   // Delete ledger entry
-  deleteEntry: (id: string) => apiCall(`/party-ledger/entry/${id}`, {
+  deleteEntry: (id: string) => apiCall<{ deleted: boolean }>(`/party-ledger/entry/${id}`, {
     method: 'DELETE',
   }),
 };
@@ -96,22 +98,22 @@ export const partyLedgerAPI = {
 // User Settings API
 export const userSettingsAPI = {
   // Get user settings
-  get: (userId: string) => apiCall(`/settings/${userId}`),
+  get: (userId: string) => apiCall<UserSettings>(`/settings/${userId}`),
   
   // Update user settings
-  update: (userId: string, settingsData: any) => apiCall(`/settings/${userId}`, {
+  update: (userId: string, settingsData: Partial<UserSettings>) => apiCall<UserSettings>(`/settings/${userId}`, {
       method: 'PUT',
     body: JSON.stringify(settingsData),
   }),
   
   // Create user settings
-  create: (settingsData: any) => apiCall('/settings', {
+  create: (settingsData: UserSettings) => apiCall<UserSettings>('/settings', {
     method: 'POST',
     body: JSON.stringify(settingsData),
   }),
   
   // Delete user settings
-  delete: (userId: string) => apiCall(`/settings/${userId}`, {
+  delete: (userId: string) => apiCall<{ deleted: boolean }>(`/settings/${userId}`, {
       method: 'DELETE',
   }),
 };
@@ -119,13 +121,13 @@ export const userSettingsAPI = {
 // Final Trial Balance API
 export const finalTrialBalanceAPI = {
   // Get final trial balance
-  get: () => apiCall('/final-trial-balance'),
+  get: () => apiCall<TrialBalanceEntry[]>('/final-trial-balance'),
   
   // Get trial balance for specific party
-  getPartyBalance: (partyName: string) => apiCall(`/final-trial-balance/party/${encodeURIComponent(partyName)}`),
+  getPartyBalance: (partyName: string) => apiCall<TrialBalanceEntry[]>(`/final-trial-balance/party/${encodeURIComponent(partyName)}`),
   
   // Generate trial balance report
-  generateReport: (reportData: any) => apiCall('/final-trial-balance/report', {
+  generateReport: (reportData: { startDate: string; endDate: string; partyName?: string }) => apiCall<TrialBalanceEntry[]>('/final-trial-balance/report', {
       method: 'POST',
     body: JSON.stringify(reportData),
   }),

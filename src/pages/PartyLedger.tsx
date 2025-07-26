@@ -1,15 +1,17 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import TopNavigation from '../components/TopNavigation';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
+import { Calendar, CheckCircle, AlertTriangle, Users, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { partyLedgerAPI, mockData } from '../lib/api';
 import { useToast } from '../hooks/use-toast';
-import { AlertTriangle, CheckCircle, Calendar, Users } from 'lucide-react';
+import { Party } from '../types';
 
 const PartyLedger = () => {
   const navigate = useNavigate();
@@ -19,56 +21,40 @@ const PartyLedger = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedParties, setSelectedParties] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [parties, setParties] = useState<any[]>([]);
-  
-  // Monday Final confirmation modal states
+  const [parties, setParties] = useState<Party[]>([]);
   const [showMondayFinalModal, setShowMondayFinalModal] = useState(false);
-  const [mondayFinalLoading, setMondayFinalLoading] = useState(false);
-  const [mondayFinalDate, setMondayFinalDate] = useState<string>('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
-  // Get current date for Monday Final
-  useEffect(() => {
-    const today = new Date();
-    const formattedDate = today.toLocaleDateString('en-GB'); // DD/MM/YYYY format
-    setMondayFinalDate(formattedDate);
-  }, []);
-
-  // Fetch parties on component mount
-  useEffect(() => {
-    fetchParties();
-  }, []);
-
-  const fetchParties = async () => {
+  const fetchParties = useCallback(async () => {
     setLoading(true);
     try {
       const response = await partyLedgerAPI.getAllParties();
-      console.log('API Response:', response);
-      
-      if (response.success && response.data && response.data.length > 0) {
-        setParties(response.data);
-        console.log('Parties loaded from API:', response.data.length);
+      if (response.success) {
+        setParties(response.data || []);
       } else {
-        // Fallback to mock data if API returns empty or fails
-        console.warn('API returned empty data, using mock data');
-        setParties(mockData.getMockParties());
-        toast({
-          title: "Info",
-          description: "No parties found in database. Using sample data for demonstration.",
-        });
+        // Fallback to mock data if API fails
+        setParties(mockData.getMockParties() as Party[]);
+        console.warn('Using mock data due to API failure');
       }
     } catch (error) {
       console.error('Error fetching parties:', error);
       // Use mock data as fallback
-      setParties(mockData.getMockParties());
+      setParties(mockData.getMockParties() as Party[]);
       toast({
         title: "Warning",
-        description: "Unable to connect to server. Using offline data for demonstration.",
+        description: "Using offline data. Some features may be limited.",
         variant: "destructive"
       });
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  // Fetch parties on component mount
+  useEffect(() => {
+    fetchParties();
+  }, [fetchParties]);
 
   const filteredParties = parties.filter(party =>
     party.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -96,7 +82,7 @@ const PartyLedger = () => {
     }
   };
 
-  const handleMondayFinal = async () => {
+  const handleMondayFinalClick = () => {
     if (selectedParties.length > 0) {
       setShowMondayFinalModal(true);
     } else {
@@ -108,8 +94,8 @@ const PartyLedger = () => {
     }
   };
 
-  const confirmMondayFinal = async () => {
-    setMondayFinalLoading(true);
+  const handleMondayFinalConfirm = async () => {
+    setActionLoading(true);
     try {
       const response = await partyLedgerAPI.updateMondayFinal(selectedParties);
       if (response.success) {
@@ -125,7 +111,7 @@ const PartyLedger = () => {
         setShowMondayFinalModal(false);
         toast({
           title: "Success",
-          description: `Monday Final status updated successfully for ${selectedParties.length} parties`,
+          description: "Monday Final status updated successfully",
         });
       } else {
         toast({
@@ -142,14 +128,11 @@ const PartyLedger = () => {
         variant: "destructive"
       });
     } finally {
-      setMondayFinalLoading(false);
+      setActionLoading(false);
     }
   };
 
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteLoading, setDeleteLoading] = useState(false);
-
-  const handleDelete = async () => {
+  const handleDeleteClick = () => {
     if (selectedParties.length > 0) {
       setShowDeleteModal(true);
     } else {
@@ -161,8 +144,8 @@ const PartyLedger = () => {
     }
   };
 
-  const confirmDelete = async () => {
-    setDeleteLoading(true);
+  const handleDeleteConfirm = async () => {
+    setActionLoading(true);
     try {
       const response = await partyLedgerAPI.deleteParties(selectedParties);
       if (response.success) {
@@ -173,7 +156,7 @@ const PartyLedger = () => {
         setShowDeleteModal(false);
         toast({
           title: "Success",
-          description: `${selectedParties.length} parties deleted successfully`,
+          description: "Parties deleted successfully",
         });
       } else {
         toast({
@@ -190,7 +173,7 @@ const PartyLedger = () => {
         variant: "destructive"
       });
     } finally {
-      setDeleteLoading(false);
+      setActionLoading(false);
     }
   };
 
@@ -235,10 +218,7 @@ const PartyLedger = () => {
                     />
                     <div className="overflow-y-auto max-h-96">
                       {loading ? (
-                        <div className="text-center py-8">
-                          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                          <p className="text-gray-600">Loading parties...</p>
-                        </div>
+                        <div className="text-center py-4">Loading parties...</div>
                       ) : (
                       <Table>
                         <TableHeader>
@@ -289,22 +269,6 @@ const PartyLedger = () => {
                         </TableBody>
                       </Table>
                       )}
-                      
-                      {!loading && filteredParties.length === 0 && (
-                        <div className="text-center py-8">
-                          <div className="text-gray-500 mb-2">
-                            {searchTerm ? 'No parties found matching your search.' : 'No parties available.'}
-                          </div>
-                          {searchTerm && (
-                            <button
-                              onClick={() => setSearchTerm('')}
-                              className="text-blue-600 hover:text-blue-800 text-sm"
-                            >
-                              Clear search
-                            </button>
-                          )}
-                        </div>
-                      )}
                     </div>
                     {selectedParties.length > 0 && (
                       <div className="flex justify-between items-center bg-blue-50 p-3 rounded-md">
@@ -312,18 +276,22 @@ const PartyLedger = () => {
                           {selectedParties.length} parties selected
                         </span>
                         <div className="flex space-x-2">
-                          <button
-                            onClick={handleMondayFinal}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm"
+                          <Button
+                            onClick={handleMondayFinalClick}
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                            size="sm"
                           >
+                            <CheckCircle className="w-4 h-4 mr-2" />
                             Monday Final
-                          </button>
-                          <button
-                            onClick={handleDelete}
-                            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm"
+                          </Button>
+                          <Button
+                            onClick={handleDeleteClick}
+                            className="bg-red-600 hover:bg-red-700 text-white"
+                            size="sm"
                           >
+                            <AlertTriangle className="w-4 h-4 mr-2" />
                             Delete Selected
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     )}
@@ -331,81 +299,64 @@ const PartyLedger = () => {
                 </DialogContent>
               </Dialog>
               
-              <button
+              <Button
                 onClick={handleExit}
-                className="px-6 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors font-medium"
+                className="bg-orange-600 hover:bg-orange-700 text-white"
               >
                 Exit
-              </button>
+              </Button>
             </div>
           </div>
         </div>
       </div>
 
       {/* Monday Final Confirmation Modal */}
-      <Dialog open={showMondayFinalModal} onOpenChange={setShowMondayFinalModal}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-blue-600" />
+      <AlertDialog open={showMondayFinalModal} onOpenChange={setShowMondayFinalModal}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-green-600" />
               Monday Final Confirmation
-            </DialogTitle>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <Alert>
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                Are you sure you want to mark <strong>{selectedParties.length} parties</strong> as Monday Final?
-              </AlertDescription>
-            </Alert>
-
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <Users className="w-4 h-4 text-blue-600" />
-                <span className="font-medium text-blue-900">Selected Parties:</span>
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Users className="w-4 h-4" />
+                <span className="font-medium">{selectedParties.length} parties selected</span>
               </div>
-              <div className="max-h-32 overflow-y-auto">
-                {selectedParties.map((party, index) => (
-                  <div key={index} className="text-sm text-blue-800 py-1">
-                    • {party}
+              <div className="bg-blue-50 p-3 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  Are you sure you want to mark these parties as <strong>Monday Final</strong>? 
+                  This action will update their status to "Yes" and cannot be easily undone.
+                </p>
+              </div>
+              <div className="bg-yellow-50 p-3 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-yellow-800">
+                    <p className="font-medium">Important:</p>
+                    <ul className="list-disc list-inside mt-1 space-y-1">
+                      <li>This will affect financial calculations</li>
+                      <li>Parties will be marked as settled</li>
+                      <li>Action will be logged in the system</li>
+                    </ul>
                   </div>
-                ))}
+                </div>
               </div>
-            </div>
-
-            <div className="bg-green-50 p-3 rounded-lg">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-600" />
-                <span className="text-sm font-medium text-green-800">
-                  Date: {mondayFinalDate}
-                </span>
-              </div>
-            </div>
-
-            <div className="text-sm text-gray-600">
-              This action will update the Monday Final status for all selected parties. 
-              This cannot be undone easily.
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setShowMondayFinalModal(false)}
-              disabled={mondayFinalLoading}
-            >
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionLoading}>
               Cancel
-            </Button>
-            <Button
-              onClick={confirmMondayFinal}
-              disabled={mondayFinalLoading}
-              className="bg-blue-600 hover:bg-blue-700"
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleMondayFinalConfirm}
+              disabled={actionLoading}
+              className="bg-green-600 hover:bg-green-700 text-white"
             >
-              {mondayFinalLoading ? (
+              {actionLoading ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                  Updating...
+                  <Clock className="w-4 h-4 mr-2 animate-spin" />
+                  Processing...
                 </>
               ) : (
                 <>
@@ -413,77 +364,69 @@ const PartyLedger = () => {
                   Confirm Monday Final
                 </>
               )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete Confirmation Modal */}
-      <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <AlertTriangle className="w-5 h-5" />
-              Delete Confirmation
-            </DialogTitle>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                Are you sure you want to delete <strong>{selectedParties.length} parties</strong>? 
-                This action cannot be undone.
-              </AlertDescription>
-            </Alert>
-
-            <div className="bg-red-50 p-4 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <Users className="w-4 h-4 text-red-600" />
-                <span className="font-medium text-red-900">Parties to Delete:</span>
+      <AlertDialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-600" />
+              Delete Parties Confirmation
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Users className="w-4 h-4" />
+                <span className="font-medium">{selectedParties.length} parties selected</span>
               </div>
-              <div className="max-h-32 overflow-y-auto">
-                {selectedParties.map((party, index) => (
-                  <div key={index} className="text-sm text-red-800 py-1">
-                    • {party}
+              <div className="bg-red-50 p-3 rounded-lg">
+                <p className="text-sm text-red-800">
+                  Are you absolutely sure you want to <strong>permanently delete</strong> these parties? 
+                  This action cannot be undone and will remove all associated data.
+                </p>
+              </div>
+              <div className="bg-yellow-50 p-3 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-yellow-800">
+                    <p className="font-medium">Warning:</p>
+                    <ul className="list-disc list-inside mt-1 space-y-1">
+                      <li>All party data will be permanently removed</li>
+                      <li>Associated transactions will be deleted</li>
+                      <li>This action cannot be reversed</li>
+                    </ul>
                   </div>
-                ))}
+                </div>
               </div>
-            </div>
-
-            <div className="text-sm text-gray-600">
-              <strong>Warning:</strong> This will permanently remove all selected parties and their associated data.
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setShowDeleteModal(false)}
-              disabled={deleteLoading}
-            >
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionLoading}>
               Cancel
-            </Button>
-            <Button
-              onClick={confirmDelete}
-              disabled={deleteLoading}
-              variant="destructive"
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={actionLoading}
+              className="bg-red-600 hover:bg-red-700 text-white"
             >
-              {deleteLoading ? (
+              {actionLoading ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  <Clock className="w-4 h-4 mr-2 animate-spin" />
                   Deleting...
                 </>
               ) : (
                 <>
                   <AlertTriangle className="w-4 h-4 mr-2" />
-                  Delete Parties
+                  Delete Permanently
                 </>
               )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
