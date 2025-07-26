@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://account-ledger-software.onrender.com/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 
 // Generic API helper
 const apiCall = async (endpoint: string, options: RequestInit = {}) => {
@@ -8,8 +8,6 @@ const apiCall = async (endpoint: string, options: RequestInit = {}) => {
         'Content-Type': 'application/json',
         ...options.headers,
       },
-      credentials: 'include',
-      mode: 'cors',
       ...options,
     };
 
