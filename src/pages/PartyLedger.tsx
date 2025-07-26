@@ -96,40 +96,40 @@ const PartyLedger = () => {
 
   const handleMondayFinalConfirm = async () => {
     setActionLoading(true);
-    try {
-      const response = await partyLedgerAPI.updateMondayFinal(selectedParties);
-      if (response.success) {
-        // Update local state
-        setParties(prevParties => 
-          prevParties.map(party => 
-            selectedParties.includes(party.name) 
-              ? { ...party, mondayFinal: 'Yes' }
-              : party
-          )
-        );
-        setSelectedParties([]);
+      try {
+        const response = await partyLedgerAPI.updateMondayFinal(selectedParties);
+        if (response.success) {
+          // Update local state
+      setParties(prevParties => 
+        prevParties.map(party => 
+          selectedParties.includes(party.name) 
+            ? { ...party, mondayFinal: 'Yes' }
+            : party
+        )
+      );
+      setSelectedParties([]);
         setShowMondayFinalModal(false);
-        toast({
-          title: "Success",
-          description: "Monday Final status updated successfully",
-        });
-      } else {
+          toast({
+            title: "Success",
+            description: "Monday Final status updated successfully",
+          });
+        } else {
+          toast({
+            title: "Error",
+            description: response.message || "Failed to update Monday Final status",
+            variant: "destructive"
+          });
+        }
+      } catch (error) {
+        console.error('Error updating Monday Final:', error);
         toast({
           title: "Error",
-          description: response.message || "Failed to update Monday Final status",
+          description: "Failed to update Monday Final status",
           variant: "destructive"
         });
-      }
-    } catch (error) {
-      console.error('Error updating Monday Final:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update Monday Final status",
-        variant: "destructive"
-      });
     } finally {
       setActionLoading(false);
-    }
+      }
   };
 
   const handleDeleteClick = () => {
@@ -146,32 +146,32 @@ const PartyLedger = () => {
 
   const handleDeleteConfirm = async () => {
     setActionLoading(true);
-    try {
-      const response = await partyLedgerAPI.deleteParties(selectedParties);
-      if (response.success) {
+        try {
+          const response = await partyLedgerAPI.deleteParties(selectedParties);
+          if (response.success) {
         setParties(prevParties => 
           prevParties.filter(party => !selectedParties.includes(party.name))
         );
         setSelectedParties([]);
         setShowDeleteModal(false);
-        toast({
-          title: "Success",
-          description: "Parties deleted successfully",
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: response.message || "Failed to delete parties",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      console.error('Error deleting parties:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete parties",
-        variant: "destructive"
-      });
+            toast({
+              title: "Success",
+              description: "Parties deleted successfully",
+            });
+          } else {
+            toast({
+              title: "Error",
+              description: response.message || "Failed to delete parties",
+              variant: "destructive"
+            });
+          }
+        } catch (error) {
+          console.error('Error deleting parties:', error);
+          toast({
+            title: "Error",
+            description: "Failed to delete parties",
+            variant: "destructive"
+          });
     } finally {
       setActionLoading(false);
     }

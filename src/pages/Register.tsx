@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +25,52 @@ const Register = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({});
+
+  // Debounced validation
+  const validateField = useCallback((name: string, value: string) => {
+    const errors: {[key: string]: string} = {};
+    
+    switch (name) {
+      case 'fullname':
+        if (!value.trim()) {
+          errors.fullname = 'Full name is required';
+        } else if (value.trim().length < 2) {
+          errors.fullname = 'Full name must be at least 2 characters';
+        }
+        break;
+      case 'email':
+        if (!value.trim()) {
+          errors.email = 'Email is required';
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+          errors.email = 'Please enter a valid email address';
+        }
+        break;
+      case 'phone':
+        if (!value.trim()) {
+          errors.phone = 'Phone number is required';
+        } else if (!/^\d{10}$/.test(value.replace(/\D/g, ''))) {
+          errors.phone = 'Please enter a valid 10-digit phone number';
+        }
+        break;
+      case 'password':
+        if (!value) {
+          errors.password = 'Password is required';
+        } else if (value.length < 6) {
+          errors.password = 'Password must be at least 6 characters long';
+        }
+        break;
+      case 'confirmPassword':
+        if (!value) {
+          errors.confirmPassword = 'Please confirm your password';
+        } else if (value !== formData.password) {
+          errors.confirmPassword = 'Passwords do not match';
+        }
+        break;
+    }
+    
+    return errors;
+  }, [formData.password]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -32,31 +78,28 @@ const Register = () => {
       ...prev,
       [name]: value
     }));
-    setError(''); // Clear error when user types
+    
+    // Clear general error when user types
+    setError('');
+    
+    // Validate field immediately
+    const fieldErrors = validateField(name, value);
+    setValidationErrors(prev => ({
+      ...prev,
+      ...fieldErrors
+    }));
   };
 
   const validateForm = () => {
-    if (!formData.fullname.trim()) {
-      setError('Full name is required');
-      return false;
-    }
-    if (!formData.email.trim()) {
-      setError('Email is required');
-      return false;
-    }
-    if (!formData.phone.trim()) {
-      setError('Phone number is required');
-      return false;
-    }
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      return false;
-    }
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters long');
-      return false;
-    }
-    return true;
+    const errors: {[key: string]: string} = {};
+    
+    Object.keys(formData).forEach(key => {
+      const fieldErrors = validateField(key, formData[key as keyof typeof formData]);
+      Object.assign(errors, fieldErrors);
+    });
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -71,9 +114,9 @@ const Register = () => {
 
     try {
       const response = await authAPI.register({
-        fullname: formData.fullname,
-        email: formData.email,
-        phone: formData.phone,
+        fullname: formData.fullname.trim(),
+        email: formData.email.trim().toLowerCase(),
+        phone: formData.phone.trim(),
         password: formData.password
       });
       
@@ -99,6 +142,8 @@ const Register = () => {
       setLoading(false);
     }
   };
+
+  const hasErrors = Object.keys(validationErrors).length > 0 || Boolean(error);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -169,11 +214,15 @@ const Register = () => {
                     placeholder="Enter your full name"
                     value={formData.fullname}
                     onChange={handleInputChange}
-                    className="pl-10"
+                    className={`pl-10 ${validationErrors.fullname ? 'border-red-500 focus:border-red-500' : ''}`}
                     autoComplete="name"
                     required
+                    disabled={loading}
                   />
                 </div>
+                {validationErrors.fullname && (
+                  <p className="text-sm text-red-500">{validationErrors.fullname}</p>
+                )}
               </div>
               
               <div className="space-y-2">
@@ -189,11 +238,15 @@ const Register = () => {
                     placeholder="Enter your email"
                     value={formData.email}
                     onChange={handleInputChange}
-                    className="pl-10"
+                    className={`pl-10 ${validationErrors.email ? 'border-red-500 focus:border-red-500' : ''}`}
                     autoComplete="email"
                     required
+                    disabled={loading}
                   />
                 </div>
+                {validationErrors.email && (
+                  <p className="text-sm text-red-500">{validationErrors.email}</p>
+                )}
               </div>
               
               <div className="space-y-2">
@@ -209,11 +262,15 @@ const Register = () => {
                     placeholder="Enter your phone number"
                     value={formData.phone}
                     onChange={handleInputChange}
-                    className="pl-10"
+                    className={`pl-10 ${validationErrors.phone ? 'border-red-500 focus:border-red-500' : ''}`}
                     autoComplete="tel"
                     required
+                    disabled={loading}
                   />
                 </div>
+                {validationErrors.phone && (
+                  <p className="text-sm text-red-500">{validationErrors.phone}</p>
+                )}
               </div>
               
               <div className="space-y-2">
@@ -229,18 +286,23 @@ const Register = () => {
                     placeholder="Create a password"
                     value={formData.password}
                     onChange={handleInputChange}
-                    className="pl-10 pr-10"
+                    className={`pl-10 pr-10 ${validationErrors.password ? 'border-red-500 focus:border-red-500' : ''}`}
                     autoComplete="new-password"
                     required
+                    disabled={loading}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    disabled={loading}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                {validationErrors.password && (
+                  <p className="text-sm text-red-500">{validationErrors.password}</p>
+                )}
               </div>
               
               <div className="space-y-2">
@@ -256,24 +318,29 @@ const Register = () => {
                     placeholder="Confirm your password"
                     value={formData.confirmPassword}
                     onChange={handleInputChange}
-                    className="pl-10 pr-10"
+                    className={`pl-10 pr-10 ${validationErrors.confirmPassword ? 'border-red-500 focus:border-red-500' : ''}`}
                     autoComplete="new-password"
                     required
+                    disabled={loading}
                   />
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    disabled={loading}
                   >
                     {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                {validationErrors.confirmPassword && (
+                  <p className="text-sm text-red-500">{validationErrors.confirmPassword}</p>
+                )}
               </div>
               
               <Button
                 type="submit"
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white mt-6"
-                disabled={loading}
+                disabled={loading || Boolean(hasErrors)}
               >
                 {loading ? (
                   <>
@@ -292,6 +359,7 @@ const Register = () => {
                 <button
                   onClick={() => navigate('/login')}
                   className="text-blue-600 hover:text-blue-700 font-medium"
+                  disabled={loading}
                 >
                   Sign In
                 </button>

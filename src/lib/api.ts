@@ -7,7 +7,7 @@ const getAuthToken = () => {
   return localStorage.getItem('token');
 };
 
-// Generic API helper
+// Generic API helper with timeout and better error handling
 const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> => {
     const url = `${API_BASE_URL}${endpoint}`;
     const token = getAuthToken();
@@ -22,16 +22,29 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
     };
 
   try {
-    const response = await fetch(url, config);
-    const data = await response.json();
+    // Add timeout to fetch request
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
+    const response = await fetch(url, {
+      ...config,
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
+    const data = await response.json();
+    
     if (!response.ok) {
       throw new Error(data.message || 'API request failed');
     }
-
+    
     return data;
-  } catch (error) {
+  } catch (error: any) {
     console.error('API Error:', error);
+    if (error.name === 'AbortError') {
+      throw new Error('Request timeout. Please check your connection and try again.');
+    }
     throw error;
   }
 };

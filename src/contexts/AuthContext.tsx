@@ -12,9 +12,9 @@ interface User {
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  isAuthenticated: boolean;
   login: (token: string, user: User) => void;
   logout: () => void;
+  isAuthenticated: boolean;
   loading: boolean;
 }
 
@@ -37,47 +37,68 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Initialize auth state from localStorage
   useEffect(() => {
-    // Check for existing authentication on app load
-    const storedToken = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
-
-    if (storedToken && storedUser) {
+    const initializeAuth = () => {
       try {
-        const userData = JSON.parse(storedUser);
-        setToken(storedToken);
-        setUser(userData);
+        const storedToken = localStorage.getItem('token');
+        const storedUser = localStorage.getItem('user');
+        
+        if (storedToken && storedUser) {
+          // Quick token validation (check if not expired)
+          const tokenData = JSON.parse(atob(storedToken.split('.')[1]));
+          const currentTime = Date.now() / 1000;
+          
+          if (tokenData.exp > currentTime) {
+            setToken(storedToken);
+            setUser(JSON.parse(storedUser));
+          } else {
+            // Token expired, clear storage
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+          }
+        }
       } catch (error) {
-        console.error('Error parsing stored user data:', error);
-        // Clear invalid data
+        console.error('Error initializing auth:', error);
+        // Clear corrupted data
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+      } finally {
+        setLoading(false);
       }
-    }
-    
-    setLoading(false);
+    };
+
+    initializeAuth();
   }, []);
 
-  const login = (newToken: string, userData: User) => {
-    setToken(newToken);
-    setUser(userData);
-    localStorage.setItem('token', newToken);
-    localStorage.setItem('user', JSON.stringify(userData));
+  const login = (newToken: string, newUser: User) => {
+    try {
+      setToken(newToken);
+      setUser(newUser);
+      localStorage.setItem('token', newToken);
+      localStorage.setItem('user', JSON.stringify(newUser));
+    } catch (error) {
+      console.error('Error saving auth data:', error);
+    }
   };
 
   const logout = () => {
-    setToken(null);
-    setUser(null);
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    try {
+      setToken(null);
+      setUser(null);
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    } catch (error) {
+      console.error('Error clearing auth data:', error);
+    }
   };
 
   const value: AuthContextType = {
     user,
     token,
-    isAuthenticated: !!token && !!user,
     login,
     logout,
+    isAuthenticated: !!token && !!user,
     loading
   };
 

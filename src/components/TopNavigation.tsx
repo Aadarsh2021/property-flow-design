@@ -49,7 +49,7 @@ const TopNavigation = () => {
 
           {/* Navigation Menu - Only show if authenticated */}
           {isAuthenticated && (
-            <div className="flex items-center space-x-8">
+          <div className="flex items-center space-x-8">
               {/* Reports Dropdown */}
               <div className="relative">
                 <button
@@ -122,29 +122,29 @@ const TopNavigation = () => {
               </div>
 
               {/* Settings Dropdown */}
-              <div className="relative">
-                <button
+            <div className="relative">
+              <button
                   onClick={() => toggleDropdown('settings')}
                   className="flex items-center space-x-1 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 px-3 py-2 rounded-md transition-colors"
-                >
+              >
                   <Settings className="w-4 h-4" />
                   <span>Settings</span>
                   <ChevronDown className="w-3 h-3" />
-                </button>
+              </button>
                 {activeDropdown === 'settings' && (
-                  <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50">
-                    <div className="py-1">
-                      <Link
-                        to="/user-settings"
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-                        onClick={() => setActiveDropdown(null)}
-                      >
-                        User Settings
-                      </Link>
-                    </div>
+                <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50">
+                  <div className="py-1">
+                    <Link
+                      to="/user-settings"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                      onClick={() => setActiveDropdown(null)}
+                    >
+                      User Settings
+                    </Link>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+            </div>
             </div>
           )}
 
@@ -156,27 +156,27 @@ const TopNavigation = () => {
                 <div className="bg-gray-100 rounded-full p-2 flex items-center space-x-2">
                   <button className="p-1 hover:bg-gray-200 rounded transition-colors">
                     <Settings className="w-4 h-4 text-gray-600" />
-                  </button>
+              </button>
                   <button className="p-1 hover:bg-gray-200 rounded transition-colors">
                     <BarChart3 className="w-4 h-4 text-gray-600" />
-                  </button>
-                </div>
+                    </button>
+            </div>
 
                 {/* User Profile Dropdown */}
-                <div className="relative">
-                  <button
+            <div className="relative">
+              <button
                     onClick={() => toggleDropdown('user')}
                     className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
-                  >
+              >
                     <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
                       <User className="w-4 h-4 text-white" />
                     </div>
                     <span className="hidden md:block">{user?.fullname || 'User'}</span>
                     <ChevronDown className="w-3 h-3" />
-                  </button>
+              </button>
                   {activeDropdown === 'user' && (
                     <div className="absolute top-full right-0 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50">
-                      <div className="py-1">
+                  <div className="py-1">
                         <div className="px-4 py-2 text-sm text-gray-500 border-b border-gray-100">
                           <div className="font-medium">{user?.fullname}</div>
                           <div className="text-xs">{user?.email}</div>
@@ -188,17 +188,17 @@ const TopNavigation = () => {
                         >
                           Profile Settings
                         </Link>
-                        <button
+                    <button
                           onClick={handleLogout}
                           className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700"
                         >
                           <LogOut className="w-4 h-4 inline mr-2" />
                           Sign Out
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                    </button>
+                  </div>
                 </div>
+              )}
+            </div>
               </>
             ) : (
               // Not Logged In - Show Auth Buttons
@@ -217,7 +217,7 @@ const TopNavigation = () => {
                   <UserPlus className="w-4 h-4" />
                   <span>Create Account</span>
                 </Link>
-              </div>
+          </div>
             )}
           </div>
         </div>

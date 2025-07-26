@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,9 +22,32 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({});
 
   // Get the page user was trying to access
   const from = location.state?.from?.pathname || '/';
+
+  // Validation function
+  const validateField = useCallback((name: string, value: string) => {
+    const errors: {[key: string]: string} = {};
+    
+    switch (name) {
+      case 'email':
+        if (!value.trim()) {
+          errors.email = 'Email is required';
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+          errors.email = 'Please enter a valid email address';
+        }
+        break;
+      case 'password':
+        if (!value) {
+          errors.password = 'Password is required';
+        }
+        break;
+    }
+    
+    return errors;
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -32,16 +55,45 @@ const Login = () => {
       ...prev,
       [name]: value
     }));
-    setError(''); // Clear error when user types
+    
+    // Clear general error when user types
+    setError('');
+    
+    // Validate field immediately
+    const fieldErrors = validateField(name, value);
+    setValidationErrors(prev => ({
+      ...prev,
+      ...fieldErrors
+    }));
+  };
+
+  const validateForm = () => {
+    const errors: {[key: string]: string} = {};
+    
+    Object.keys(formData).forEach(key => {
+      const fieldErrors = validateField(key, formData[key as keyof typeof formData]);
+      Object.assign(errors, fieldErrors);
+    });
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+    
     setLoading(true);
     setError('');
 
     try {
-      const response = await authAPI.login(formData);
+      const response = await authAPI.login({
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password
+      });
       
       if (response.success) {
         // Use AuthContext to handle login
@@ -64,6 +116,8 @@ const Login = () => {
       setLoading(false);
     }
   };
+
+  const hasErrors = Object.keys(validationErrors).length > 0 || Boolean(error);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -134,11 +188,15 @@ const Login = () => {
                     placeholder="Enter your email"
                     value={formData.email}
                     onChange={handleInputChange}
-                    className="pl-10"
+                    className={`pl-10 ${validationErrors.email ? 'border-red-500 focus:border-red-500' : ''}`}
                     autoComplete="email"
                     required
+                    disabled={loading}
                   />
                 </div>
+                {validationErrors.email && (
+                  <p className="text-sm text-red-500">{validationErrors.email}</p>
+                )}
               </div>
               
               <div className="space-y-2">
@@ -154,24 +212,29 @@ const Login = () => {
                     placeholder="Enter your password"
                     value={formData.password}
                     onChange={handleInputChange}
-                    className="pl-10 pr-10"
+                    className={`pl-10 pr-10 ${validationErrors.password ? 'border-red-500 focus:border-red-500' : ''}`}
                     autoComplete="current-password"
                     required
+                    disabled={loading}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    disabled={loading}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                {validationErrors.password && (
+                  <p className="text-sm text-red-500">{validationErrors.password}</p>
+                )}
               </div>
               
               <Button
                 type="submit"
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                disabled={loading}
+                disabled={loading || hasErrors}
               >
                 {loading ? (
                   <>
@@ -190,6 +253,7 @@ const Login = () => {
                 <button
                   onClick={() => navigate('/register')}
                   className="text-blue-600 hover:text-blue-700 font-medium"
+                  disabled={loading}
                 >
                   Create Account
                 </button>

@@ -609,7 +609,7 @@ const AccountLedger = () => {
       
       const totalCredit = parseFloat(currentEntries.reduce((sum, entry) => sum + (entry.credit || 0), 0).toFixed(2));
       const totalDebit = parseFloat(currentEntries.reduce((sum, entry) => sum + Math.abs(entry.debit || 0), 0).toFixed(2));
-      
+
       // Get starting balance
       let startingBalance = 0;
       if (oldRecords.length > 0) {
@@ -632,30 +632,30 @@ const AccountLedger = () => {
       const today = new Date().toLocaleDateString('en-GB');
       const settlementEntry = {
         id: Date.now(),
-        date: today,
+          date: today,
         remarks: `Monday Final Settlement ${today}`,
-        tnsType: 'Monday S...',
+          tnsType: 'Monday S...',
         credit: netBalance > 0 ? netBalance : 0,
         debit: netBalance < 0 ? Math.abs(netBalance) : 0,
-        balance: netBalance,
-        chk: false,
+          balance: netBalance,
+          chk: false,
         ti: '12'
-      };
+        };
 
       // Move current entries to old records
       setOldRecords(prevOldRecords => [...prevOldRecords, ...ledgerEntries]);
-      
+
       // Set new ledger entries with only the settlement
       setLedgerEntries([settlementEntry]);
       
       // Update closing balance
-      setClosingBalance(netBalance);
-      
+        setClosingBalance(netBalance);
+
       setShowMondayFinalModal(false);
-      toast({
+        toast({
         title: "Success",
         description: "Monday Final settlement created successfully",
-      });
+        });
     } catch (error) {
       console.error('Error creating Monday Final settlement:', error);
       toast({
@@ -1427,7 +1427,7 @@ const AccountLedger = () => {
                     size="sm"
                   >
                     <CheckCircle className="w-4 h-4 mr-2" />
-                    Monday Final
+                  Monday Final
                   </Button>
                 )}
                 <button 
