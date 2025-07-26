@@ -2,12 +2,20 @@ import { ApiResponse, NewPartyData, NewParty, Party, LedgerEntry, LedgerEntryInp
 
 const API_BASE_URL = 'https://account-ledger-software-9sys.onrender.com/api';
 
+// Get token from localStorage
+const getAuthToken = () => {
+  return localStorage.getItem('token');
+};
+
 // Generic API helper
 const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> => {
     const url = `${API_BASE_URL}${endpoint}`;
+    const token = getAuthToken();
+    
     const config: RequestInit = {
       headers: {
         'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }),
         ...options.headers,
       },
       ...options,
@@ -16,11 +24,11 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
   try {
     const response = await fetch(url, config);
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'API request failed');
     }
-    
+
     return data;
   } catch (error) {
     console.error('API Error:', error);
@@ -136,34 +144,34 @@ export const finalTrialBalanceAPI = {
 // Authentication API
 export const authAPI = {
   // Login user
-  login: (credentials: { email: string; password: string }) => apiCall<{ token: string; user: any }>('/auth/login', {
+  login: (credentials: { email: string; password: string }) => apiCall<{ token: string; user: any }>('/authentication/login', {
     method: 'POST',
     body: JSON.stringify(credentials),
   }),
 
   // Register user
-  register: (userData: { fullname: string; email: string; phone: string; password: string }) => apiCall<{ user: any }>('/auth/register', {
+  register: (userData: { fullname: string; email: string; phone: string; password: string }) => apiCall<{ user: any; token: string }>('/authentication/register/user', {
     method: 'POST',
     body: JSON.stringify(userData),
   }),
 
   // Get current user profile
-  getProfile: () => apiCall<any>('/auth/profile'),
+  getProfile: () => apiCall<any>('/authentication/profile'),
 
   // Update user profile
-  updateProfile: (userData: Partial<{ fullname: string; email: string; phone: string }>) => apiCall<any>('/auth/profile', {
+  updateProfile: (userData: Partial<{ fullname: string; email: string; phone: string }>) => apiCall<any>('/authentication/profile', {
     method: 'PUT',
     body: JSON.stringify(userData),
   }),
 
   // Change password
-  changePassword: (passwordData: { currentPassword: string; newPassword: string }) => apiCall<{ message: string }>('/auth/change-password', {
+  changePassword: (passwordData: { currentPassword: string; newPassword: string }) => apiCall<{ message: string }>('/authentication/change-password', {
     method: 'PUT',
     body: JSON.stringify(passwordData),
   }),
 
   // Logout user
-  logout: () => apiCall<{ message: string }>('/auth/logout', {
+  logout: () => apiCall<{ message: string }>('/authentication/logout', {
     method: 'POST',
   }),
 };

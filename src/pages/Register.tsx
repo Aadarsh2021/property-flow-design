@@ -7,10 +7,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Eye, EyeOff, Lock, User, Building2, Mail, Phone, Home } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { authAPI } from '@/lib/api';
 
 const Register = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     fullname: '',
     email: '',
@@ -33,6 +36,18 @@ const Register = () => {
   };
 
   const validateForm = () => {
+    if (!formData.fullname.trim()) {
+      setError('Full name is required');
+      return false;
+    }
+    if (!formData.email.trim()) {
+      setError('Email is required');
+      return false;
+    }
+    if (!formData.phone.trim()) {
+      setError('Phone number is required');
+      return false;
+    }
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       return false;
@@ -55,21 +70,31 @@ const Register = () => {
     setError('');
 
     try {
-      // TODO: Replace with actual API call when backend is ready
-      // const response = await authAPI.register(formData);
+      const response = await authAPI.register({
+        fullname: formData.fullname,
+        email: formData.email,
+        phone: formData.phone,
+        password: formData.password
+      });
       
-      // For now, simulate successful registration
-      setTimeout(() => {
+      if (response.success) {
+        // Auto-login after successful registration
+        login(response.data.token, response.data.user);
+        
         toast({
           title: "Registration Successful",
-          description: "Account created successfully! Please sign in.",
+          description: "Account created successfully! Welcome to Account Ledger.",
         });
-        navigate('/login');
-      }, 1000);
+        
+        // Navigate to dashboard
+        navigate('/');
+      } else {
+        setError(response.message || 'Registration failed');
+      }
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Registration error:', error);
-      setError('Registration failed. Please try again.');
+      setError(error.message || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }

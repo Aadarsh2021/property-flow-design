@@ -57,9 +57,9 @@ const Login = () => {
       } else {
         setError(response.message || 'Login failed');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error);
-      setError('Network error. Please try again.');
+      setError(error.message || 'Network error. Please try again.');
     } finally {
       setLoading(false);
     }
