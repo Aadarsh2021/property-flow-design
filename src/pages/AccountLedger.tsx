@@ -92,7 +92,7 @@ const AccountLedger = () => {
       const response = await partyLedgerAPI.getPartyLedger(partyName);
       if (response.success) {
         // Ensure all entries have proper ID fields
-        const processedEntries = response.data.ledgerEntries.map((entry: any, index: number) => ({
+        const processedEntries = response.data.map((entry: any, index: number) => ({
           ...entry,
           id: entry._id || entry.id || `entry-${index}`,
           chk: entry.chk || false
@@ -389,7 +389,8 @@ const AccountLedger = () => {
         remarks: newEntryData.remarks,
         tnsType: newEntryData.tnsType,
         credit: newEntryData.credit,
-        debit: newEntryData.debit
+        debit: newEntryData.debit,
+        ti: newEntryData.ti
       });
 
       if (response.success) {
@@ -540,33 +541,42 @@ const AccountLedger = () => {
       return;
     }
 
-    // Check if current entries contain a Monday Final settlement for today
-    const today = new Date().toLocaleDateString('en-GB');
-    const hasTodaySettlement = ledgerEntries.some(entry => 
-      (entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement')) &&
-      entry.date === today
+    // Check if there are any non-settlement entries to process
+    const currentEntries = ledgerEntries.filter(entry => 
+      !(entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement'))
     );
 
-    if (hasTodaySettlement) {
+    if (currentEntries.length === 0) {
       toast({
         title: "Warning",
-        description: "Monday Final settlement already exists for today. Cannot create another settlement.",
+        description: "No new transactions to settle. All entries are already settled.",
         variant: "destructive"
       });
       return;
     }
 
     // Calculate totals for confirmation
-    const currentEntries = ledgerEntries.filter(entry => 
-      !(entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement'))
-    );
-    
     const totalCredit = parseFloat(currentEntries.reduce((sum, entry) => sum + (entry.credit || 0), 0).toFixed(2));
     const totalDebit = parseFloat(currentEntries.reduce((sum, entry) => sum + Math.abs(entry.debit || 0), 0).toFixed(2));
     
-    // Get starting balance
+    // Get starting balance from the last settlement (including today's settlements)
     let startingBalance = 0;
-    if (oldRecords.length > 0) {
+    
+    // First check current entries for any existing settlements
+    const currentSettlements = ledgerEntries.filter(entry => 
+      entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement')
+    );
+    
+    if (currentSettlements.length > 0) {
+      // Use the latest settlement balance
+      const latestSettlement = currentSettlements.sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeB - timeA; // Newest first
+      })[0];
+      startingBalance = latestSettlement.balance || 0;
+    } else if (oldRecords.length > 0) {
+      // Check old records for the last settlement
       const lastMondayFinal = oldRecords
         .filter(entry => entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement'))
         .sort((a, b) => {
@@ -597,11 +607,6 @@ const AccountLedger = () => {
   const handleMondayFinalConfirm = async () => {
     setActionLoading(true);
     try {
-      // Check if there's already a settlement in current entries
-      const hasMondayFinalSettlement = ledgerEntries.some(entry => 
-        entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement')
-      );
-
       // Calculate totals for confirmation
       const currentEntries = ledgerEntries.filter(entry => 
         !(entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement'))
@@ -610,9 +615,24 @@ const AccountLedger = () => {
       const totalCredit = parseFloat(currentEntries.reduce((sum, entry) => sum + (entry.credit || 0), 0).toFixed(2));
       const totalDebit = parseFloat(currentEntries.reduce((sum, entry) => sum + Math.abs(entry.debit || 0), 0).toFixed(2));
 
-      // Get starting balance
+      // Get starting balance from the last settlement
       let startingBalance = 0;
-      if (oldRecords.length > 0) {
+      
+      // First check current entries for any existing settlements
+      const currentSettlements = ledgerEntries.filter(entry => 
+        entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement')
+      );
+      
+      if (currentSettlements.length > 0) {
+        // Use the latest settlement balance
+        const latestSettlement = currentSettlements.sort((a, b) => {
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return timeB - timeA; // Newest first
+        })[0];
+        startingBalance = latestSettlement.balance || 0;
+      } else if (oldRecords.length > 0) {
+        // Check old records for the last settlement
         const lastMondayFinal = oldRecords
           .filter(entry => entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement'))
           .sort((a, b) => {
@@ -628,34 +648,45 @@ const AccountLedger = () => {
       
       const netBalance = parseFloat((startingBalance + totalCredit - totalDebit).toFixed(2));
 
-      // Create Monday Final settlement entry
+      // Create Monday Final settlement entry with timestamp
       const today = new Date().toLocaleDateString('en-GB');
+      const now = new Date();
+      const timeString = now.toLocaleTimeString('en-GB', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        second: '2-digit'
+      });
+      
       const settlementEntry = {
         id: Date.now(),
-          date: today,
-        remarks: `Monday Final Settlement ${today}`,
-          tnsType: 'Monday S...',
+        date: today,
+        remarks: `Monday Final Settlement ${today} at ${timeString}`,
+        tnsType: 'Monday S...',
         credit: netBalance > 0 ? netBalance : 0,
         debit: netBalance < 0 ? Math.abs(netBalance) : 0,
-          balance: netBalance,
-          chk: false,
-        ti: '12'
-        };
+        balance: netBalance,
+        chk: false,
+        ti: '12',
+        createdAt: now.toISOString() // Add creation timestamp for proper ordering
+      };
 
       // Move current entries to old records
-      setOldRecords(prevOldRecords => [...prevOldRecords, ...ledgerEntries]);
+      setOldRecords(prevOldRecords => [...prevOldRecords, ...currentEntries]);
 
-      // Set new ledger entries with only the settlement
-      setLedgerEntries([settlementEntry]);
+      // Add settlement to current entries (keep existing settlements)
+      const existingSettlements = ledgerEntries.filter(entry => 
+        entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement')
+      );
+      setLedgerEntries([...existingSettlements, settlementEntry]);
       
       // Update closing balance
-        setClosingBalance(netBalance);
+      setClosingBalance(netBalance);
 
       setShowMondayFinalModal(false);
-        toast({
+      toast({
         title: "Success",
-        description: "Monday Final settlement created successfully",
-        });
+        description: `Monday Final settlement created successfully at ${timeString}`,
+      });
     } catch (error) {
       console.error('Error creating Monday Final settlement:', error);
       toast({
@@ -1594,6 +1625,7 @@ const AccountLedger = () => {
                       <li>Move all current entries to Old Records</li>
                       <li>Start fresh with the settlement balance</li>
                       <li>Create a permanent financial record</li>
+                      <li>Add timestamp to settlement for tracking</li>
                     </ul>
                   </div>
                 </div>
@@ -1607,8 +1639,20 @@ const AccountLedger = () => {
                     <ul className="list-disc list-inside space-y-1">
                       <li>Clean ledger with consolidated balance</li>
                       <li>Historical records preserved in Old Records</li>
-                      <li>Ready for new transaction period</li>
+                      <li>Multiple settlements per day allowed</li>
+                      <li>Timestamp tracking for each settlement</li>
+                      <li>Accurate balance continuity</li>
                     </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <Clock className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-blue-800">
+                    <p className="font-semibold mb-1">Multiple Settlements:</p>
+                    <p>You can create multiple Monday Final settlements per day. Each settlement will be timestamped for proper tracking and balance calculation.</p>
                   </div>
                 </div>
               </div>

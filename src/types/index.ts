@@ -77,7 +77,7 @@ export interface LedgerEntry {
   _id?: string;
   date: string;
   remarks: string;
-  tnsType: string;
+  tnsType: 'CR' | 'DR' | 'Monday S...' | string;
   credit: number;
   debit: number;
   balance: number;
@@ -90,9 +90,9 @@ export interface LedgerEntry {
 
 export interface LedgerEntryInput {
   partyName: string;
-  date: string;
+  amount?: number;
   remarks: string;
-  tnsType: string;
+  tnsType: 'CR' | 'DR' | 'Monday S...' | string;
   credit: number;
   debit: number;
   ti: string;
