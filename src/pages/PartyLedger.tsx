@@ -1,12 +1,15 @@
 
 import React, { useState, useEffect } from 'react';
 import TopNavigation from '../components/TopNavigation';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useNavigate } from 'react-router-dom';
 import { partyLedgerAPI, mockData } from '../lib/api';
 import { useToast } from '../hooks/use-toast';
+import { AlertTriangle, CheckCircle, Calendar, Users } from 'lucide-react';
 
 const PartyLedger = () => {
   const navigate = useNavigate();
@@ -17,6 +20,18 @@ const PartyLedger = () => {
   const [selectedParties, setSelectedParties] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [parties, setParties] = useState<any[]>([]);
+  
+  // Monday Final confirmation modal states
+  const [showMondayFinalModal, setShowMondayFinalModal] = useState(false);
+  const [mondayFinalLoading, setMondayFinalLoading] = useState(false);
+  const [mondayFinalDate, setMondayFinalDate] = useState<string>('');
+
+  // Get current date for Monday Final
+  useEffect(() => {
+    const today = new Date();
+    const formattedDate = today.toLocaleDateString('en-GB'); // DD/MM/YYYY format
+    setMondayFinalDate(formattedDate);
+  }, []);
 
   // Fetch parties on component mount
   useEffect(() => {
@@ -76,37 +91,7 @@ const PartyLedger = () => {
 
   const handleMondayFinal = async () => {
     if (selectedParties.length > 0) {
-      try {
-        const response = await partyLedgerAPI.updateMondayFinal(selectedParties);
-        if (response.success) {
-          // Update local state
-      setParties(prevParties => 
-        prevParties.map(party => 
-          selectedParties.includes(party.name) 
-            ? { ...party, mondayFinal: 'Yes' }
-            : party
-        )
-      );
-      setSelectedParties([]);
-          toast({
-            title: "Success",
-            description: "Monday Final status updated successfully",
-          });
-        } else {
-          toast({
-            title: "Error",
-            description: response.message || "Failed to update Monday Final status",
-            variant: "destructive"
-          });
-        }
-      } catch (error) {
-        console.error('Error updating Monday Final:', error);
-        toast({
-          title: "Error",
-          description: "Failed to update Monday Final status",
-          variant: "destructive"
-        });
-      }
+      setShowMondayFinalModal(true);
     } else {
       toast({
         title: "Warning",
@@ -116,43 +101,89 @@ const PartyLedger = () => {
     }
   };
 
-  const handleDelete = async () => {
-    if (selectedParties.length > 0) {
-      const confirmDelete = window.confirm(`Are you sure you want to delete ${selectedParties.length} selected parties?`);
-      if (confirmDelete) {
-        try {
-          const response = await partyLedgerAPI.deleteParties(selectedParties);
-          if (response.success) {
+  const confirmMondayFinal = async () => {
+    setMondayFinalLoading(true);
+    try {
+      const response = await partyLedgerAPI.updateMondayFinal(selectedParties);
+      if (response.success) {
+        // Update local state
         setParties(prevParties => 
-          prevParties.filter(party => !selectedParties.includes(party.name))
+          prevParties.map(party => 
+            selectedParties.includes(party.name) 
+              ? { ...party, mondayFinal: 'Yes' }
+              : party
+          )
         );
         setSelectedParties([]);
-            toast({
-              title: "Success",
-              description: "Parties deleted successfully",
-            });
-          } else {
-            toast({
-              title: "Error",
-              description: response.message || "Failed to delete parties",
-              variant: "destructive"
-            });
-          }
-        } catch (error) {
-          console.error('Error deleting parties:', error);
-          toast({
-            title: "Error",
-            description: "Failed to delete parties",
-            variant: "destructive"
-          });
-        }
+        setShowMondayFinalModal(false);
+        toast({
+          title: "Success",
+          description: `Monday Final status updated successfully for ${selectedParties.length} parties`,
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: response.message || "Failed to update Monday Final status",
+          variant: "destructive"
+        });
       }
+    } catch (error) {
+      console.error('Error updating Monday Final:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update Monday Final status",
+        variant: "destructive"
+      });
+    } finally {
+      setMondayFinalLoading(false);
+    }
+  };
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const handleDelete = async () => {
+    if (selectedParties.length > 0) {
+      setShowDeleteModal(true);
     } else {
       toast({
         title: "Warning",
         description: "Please select parties to delete.",
         variant: "destructive"
       });
+    }
+  };
+
+  const confirmDelete = async () => {
+    setDeleteLoading(true);
+    try {
+      const response = await partyLedgerAPI.deleteParties(selectedParties);
+      if (response.success) {
+        setParties(prevParties => 
+          prevParties.filter(party => !selectedParties.includes(party.name))
+        );
+        setSelectedParties([]);
+        setShowDeleteModal(false);
+        toast({
+          title: "Success",
+          description: `${selectedParties.length} parties deleted successfully`,
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: response.message || "Failed to delete parties",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting parties:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete parties",
+        variant: "destructive"
+      });
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -284,6 +315,149 @@ const PartyLedger = () => {
           </div>
         </div>
       </div>
+
+      {/* Monday Final Confirmation Modal */}
+      <Dialog open={showMondayFinalModal} onOpenChange={setShowMondayFinalModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-blue-600" />
+              Monday Final Confirmation
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <Alert>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Are you sure you want to mark <strong>{selectedParties.length} parties</strong> as Monday Final?
+              </AlertDescription>
+            </Alert>
+
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <Users className="w-4 h-4 text-blue-600" />
+                <span className="font-medium text-blue-900">Selected Parties:</span>
+              </div>
+              <div className="max-h-32 overflow-y-auto">
+                {selectedParties.map((party, index) => (
+                  <div key={index} className="text-sm text-blue-800 py-1">
+                    • {party}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-green-50 p-3 rounded-lg">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-green-600" />
+                <span className="text-sm font-medium text-green-800">
+                  Date: {mondayFinalDate}
+                </span>
+              </div>
+            </div>
+
+            <div className="text-sm text-gray-600">
+              This action will update the Monday Final status for all selected parties. 
+              This cannot be undone easily.
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowMondayFinalModal(false)}
+              disabled={mondayFinalLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmMondayFinal}
+              disabled={mondayFinalLoading}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {mondayFinalLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Updating...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Confirm Monday Final
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="w-5 h-5" />
+              Delete Confirmation
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Are you sure you want to delete <strong>{selectedParties.length} parties</strong>? 
+                This action cannot be undone.
+              </AlertDescription>
+            </Alert>
+
+            <div className="bg-red-50 p-4 rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <Users className="w-4 h-4 text-red-600" />
+                <span className="font-medium text-red-900">Parties to Delete:</span>
+              </div>
+              <div className="max-h-32 overflow-y-auto">
+                {selectedParties.map((party, index) => (
+                  <div key={index} className="text-sm text-red-800 py-1">
+                    • {party}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="text-sm text-gray-600">
+              <strong>Warning:</strong> This will permanently remove all selected parties and their associated data.
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteModal(false)}
+              disabled={deleteLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmDelete}
+              disabled={deleteLoading}
+              variant="destructive"
+            >
+              {deleteLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="w-4 h-4 mr-2" />
+                  Delete Parties
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
