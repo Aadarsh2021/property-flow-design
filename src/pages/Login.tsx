@@ -135,6 +135,7 @@ const Login = () => {
                     value={formData.email}
                     onChange={handleInputChange}
                     className="pl-10"
+                    autoComplete="email"
                     required
                   />
                 </div>
@@ -154,6 +155,7 @@ const Login = () => {
                     value={formData.password}
                     onChange={handleInputChange}
                     className="pl-10 pr-10"
+                    autoComplete="current-password"
                     required
                   />
                   <button

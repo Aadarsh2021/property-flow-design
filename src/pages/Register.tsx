@@ -170,6 +170,7 @@ const Register = () => {
                     value={formData.fullname}
                     onChange={handleInputChange}
                     className="pl-10"
+                    autoComplete="name"
                     required
                   />
                 </div>
@@ -189,6 +190,7 @@ const Register = () => {
                     value={formData.email}
                     onChange={handleInputChange}
                     className="pl-10"
+                    autoComplete="email"
                     required
                   />
                 </div>
@@ -208,6 +210,7 @@ const Register = () => {
                     value={formData.phone}
                     onChange={handleInputChange}
                     className="pl-10"
+                    autoComplete="tel"
                     required
                   />
                 </div>
@@ -227,6 +230,7 @@ const Register = () => {
                     value={formData.password}
                     onChange={handleInputChange}
                     className="pl-10 pr-10"
+                    autoComplete="new-password"
                     required
                   />
                   <button
@@ -253,6 +257,7 @@ const Register = () => {
                     value={formData.confirmPassword}
                     onChange={handleInputChange}
                     className="pl-10 pr-10"
+                    autoComplete="new-password"
                     required
                   />
                   <button
