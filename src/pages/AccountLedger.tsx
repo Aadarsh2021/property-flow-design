@@ -25,14 +25,14 @@ const AccountLedger = () => {
     partyName: '',
     amount: '',
     remarks: '',
-    transactionType: 'CR' as const
+    transactionType: 'CR' as 'CR' | 'DR'
   });
   const [isModifyModalOpen, setIsModifyModalOpen] = useState(false);
   const [selectedEntryForModify, setSelectedEntryForModify] = useState<LedgerEntry | null>(null);
   const [modifyFormData, setModifyFormData] = useState({
     remarks: '',
     amount: '',
-    tnsType: 'CR' as const
+    tnsType: 'CR' as 'CR' | 'DR'
   });
   const [showMondayFinalModal, setShowMondayFinalModal] = useState(false);
   const [mondayFinalData, setMondayFinalData] = useState({
@@ -814,7 +814,7 @@ const AccountLedger = () => {
     setModifyFormData({
       remarks: entry.remarks || '',
       amount: entry.credit ? entry.credit.toString() : Math.abs(entry.debit || 0).toString(),
-      tnsType: entry.tnsType || 'CR'
+      tnsType: (entry.tnsType as 'CR' | 'DR') || 'CR'
     });
     setIsModifyModalOpen(true);
   };
@@ -1362,7 +1362,7 @@ const AccountLedger = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Transaction Type</label>
                       <select
                         value={newEntry.transactionType}
-                        onChange={(e) => setNewEntry({...newEntry, transactionType: e.target.value})}
+                        onChange={(e) => setNewEntry({...newEntry, transactionType: e.target.value as 'CR' | 'DR'})}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="CR">Credit (+)</option>
@@ -1546,7 +1546,7 @@ const AccountLedger = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Tns Type</label>
                     <select
                       value={modifyFormData.tnsType}
-                      onChange={(e) => setModifyFormData({...modifyFormData, tnsType: e.target.value})}
+                      onChange={(e) => setModifyFormData({...modifyFormData, tnsType: e.target.value as 'CR' | 'DR'})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="CR">Credit</option>
