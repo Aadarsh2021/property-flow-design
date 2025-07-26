@@ -93,7 +93,7 @@ JWT_SECRET=your-secret-key
 NODE_ENV=development
 
 # Frontend Configuration (vite.config.ts)
-VITE_API_BASE_URL=http://localhost:5000/api
+VITE_API_BASE_URL=https://account-ledger-software.onrender.com/api
 ```
 
 ## 📖 Usage Guide
