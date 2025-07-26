@@ -133,6 +133,41 @@ export const finalTrialBalanceAPI = {
   }),
 };
 
+// Authentication API
+export const authAPI = {
+  // Login user
+  login: (credentials: { email: string; password: string }) => apiCall<{ token: string; user: any }>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(credentials),
+  }),
+
+  // Register user
+  register: (userData: { fullname: string; email: string; phone: string; password: string }) => apiCall<{ user: any }>('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(userData),
+  }),
+
+  // Get current user profile
+  getProfile: () => apiCall<any>('/auth/profile'),
+
+  // Update user profile
+  updateProfile: (userData: Partial<{ fullname: string; email: string; phone: string }>) => apiCall<any>('/auth/profile', {
+    method: 'PUT',
+    body: JSON.stringify(userData),
+  }),
+
+  // Change password
+  changePassword: (passwordData: { currentPassword: string; newPassword: string }) => apiCall<{ message: string }>('/auth/change-password', {
+    method: 'PUT',
+    body: JSON.stringify(passwordData),
+  }),
+
+  // Logout user
+  logout: () => apiCall<{ message: string }>('/auth/logout', {
+    method: 'POST',
+  }),
+};
+
 // Mock data fallback functions
 export const mockData = {
   // Mock parties for ledger
