@@ -45,11 +45,11 @@ const FinalTrialBalance = () => {
     loadTrialBalance();
   }, [loadTrialBalance]);
 
-  const creditEntries = (trialBalanceData || []).filter(entry => entry.type === 'credit');
-  const debitEntries = (trialBalanceData || []).filter(entry => entry.type === 'debit');
+  const creditEntries = (trialBalanceData || []).filter(entry => entry && entry.type === 'credit');
+  const debitEntries = (trialBalanceData || []).filter(entry => entry && entry.type === 'debit');
 
-  const creditTotal = creditEntries.reduce((sum, entry) => sum + entry.amount, 0);
-  const debitTotal = debitEntries.reduce((sum, entry) => sum + Math.abs(entry.amount), 0);
+  const creditTotal = (creditEntries || []).reduce((sum, entry) => sum + (entry?.amount || 0), 0);
+  const debitTotal = (debitEntries || []).reduce((sum, entry) => sum + Math.abs(entry?.amount || 0), 0);
 
   const handleCheckboxChange = (entryId: string, checked: boolean) => {
     if (checked) {
@@ -77,7 +77,7 @@ const FinalTrialBalance = () => {
         const response = await finalTrialBalanceAPI.getPartyBalance(partyName);
         if (response.success) {
           const partyEntry = response.data;
-          setTrialBalanceData(Array.isArray(partyEntry) ? partyEntry : [partyEntry]);
+          setTrialBalanceData(Array.isArray(partyEntry) ? (partyEntry || []) : (partyEntry ? [partyEntry] : []));
           toast({
             title: "Success",
             description: `Showing data for ${partyName}`,
@@ -189,15 +189,15 @@ const FinalTrialBalance = () => {
                   </div>
                 </div>
                 {creditEntries.slice(0, Math.ceil(creditEntries.length/2)).map((entry, index) => (
-                  <div key={entry.id || `credit-${index}`} className="flex items-center justify-between p-2 border-b border-gray-200">
+                  <div key={entry?.id || `credit-${index}`} className="flex items-center justify-between p-2 border-b border-gray-200">
                     <div className="flex items-center space-x-2">
                       <Checkbox
-                        checked={selectedEntries.includes(entry.id)}
-                        onCheckedChange={(checked) => handleCheckboxChange(entry.id, checked as boolean)}
+                        checked={selectedEntries.includes(entry?.id || '')}
+                        onCheckedChange={(checked) => handleCheckboxChange(entry?.id || '', checked as boolean)}
                       />
-                      <span className="text-sm">{entry.name}</span>
+                      <span className="text-sm">{entry?.name || 'Unknown'}</span>
                     </div>
-                    <span className="text-sm font-medium">{entry.amount.toLocaleString()}</span>
+                    <span className="text-sm font-medium">{(entry?.amount || 0).toLocaleString()}</span>
                   </div>
                 ))}
               </div>
@@ -211,15 +211,15 @@ const FinalTrialBalance = () => {
                   </div>
                 </div>
                 {creditEntries.slice(Math.ceil(creditEntries.length/2)).map((entry, index) => (
-                  <div key={entry.id || `credit-2-${index}`} className="flex items-center justify-between p-2 border-b border-gray-200">
+                  <div key={entry?.id || `credit-2-${index}`} className="flex items-center justify-between p-2 border-b border-gray-200">
                     <div className="flex items-center space-x-2">
                       <Checkbox
-                        checked={selectedEntries.includes(entry.id)}
-                        onCheckedChange={(checked) => handleCheckboxChange(entry.id, checked as boolean)}
+                        checked={selectedEntries.includes(entry?.id || '')}
+                        onCheckedChange={(checked) => handleCheckboxChange(entry?.id || '', checked as boolean)}
                       />
-                      <span className="text-sm">{entry.name}</span>
+                      <span className="text-sm">{entry?.name || 'Unknown'}</span>
                     </div>
-                    <span className="text-sm font-medium">{entry.amount.toLocaleString()}</span>
+                    <span className="text-sm font-medium">{(entry?.amount || 0).toLocaleString()}</span>
                   </div>
                 ))}
               </div>
@@ -229,7 +229,7 @@ const FinalTrialBalance = () => {
                 <div className="bg-red-100 p-2 font-semibold text-center mb-2 rounded">
                   <div className="flex items-center justify-center space-x-2">
                     <Checkbox
-                      checked={debitEntries.slice(0, Math.ceil(debitEntries.length/2)).every(entry => selectedEntries.includes(entry.id))}
+                      checked={debitEntries.slice(0, Math.ceil(debitEntries.length/2)).every(entry => selectedEntries.includes(entry?.id || ''))}
                       onCheckedChange={() => handleSelectAll('debit')}
                     />
                     <span>Name</span>
@@ -237,15 +237,15 @@ const FinalTrialBalance = () => {
                   </div>
                 </div>
                 {debitEntries.slice(0, Math.ceil(debitEntries.length/2)).map((entry, index) => (
-                  <div key={entry.id || `debit-${index}`} className="flex items-center justify-between p-2 border-b border-gray-200">
+                  <div key={entry?.id || `debit-${index}`} className="flex items-center justify-between p-2 border-b border-gray-200">
                     <div className="flex items-center space-x-2">
                       <Checkbox
-                        checked={selectedEntries.includes(entry.id)}
-                        onCheckedChange={(checked) => handleCheckboxChange(entry.id, checked as boolean)}
+                        checked={selectedEntries.includes(entry?.id || '')}
+                        onCheckedChange={(checked) => handleCheckboxChange(entry?.id || '', checked as boolean)}
                       />
-                      <span className="text-sm">{entry.name}</span>
+                      <span className="text-sm">{entry?.name || 'Unknown'}</span>
                     </div>
-                    <span className="text-sm font-medium">{Math.abs(entry.amount).toLocaleString()}</span>
+                    <span className="text-sm font-medium">{Math.abs(entry?.amount || 0).toLocaleString()}</span>
                   </div>
                 ))}
               </div>
@@ -259,15 +259,15 @@ const FinalTrialBalance = () => {
                   </div>
                 </div>
                 {debitEntries.slice(Math.ceil(debitEntries.length/2)).map((entry, index) => (
-                  <div key={entry.id || `debit-2-${index}`} className="flex items-center justify-between p-2 border-b border-gray-200">
+                  <div key={entry?.id || `debit-2-${index}`} className="flex items-center justify-between p-2 border-b border-gray-200">
                     <div className="flex items-center space-x-2">
                       <Checkbox
-                        checked={selectedEntries.includes(entry.id)}
-                        onCheckedChange={(checked) => handleCheckboxChange(entry.id, checked as boolean)}
+                        checked={selectedEntries.includes(entry?.id || '')}
+                        onCheckedChange={(checked) => handleCheckboxChange(entry?.id || '', checked as boolean)}
                       />
-                      <span className="text-sm">{entry.name}</span>
+                      <span className="text-sm">{entry?.name || 'Unknown'}</span>
                     </div>
-                    <span className="text-sm font-medium">{Math.abs(entry.amount).toLocaleString()}</span>
+                    <span className="text-sm font-medium">{Math.abs(entry?.amount || 0).toLocaleString()}</span>
                   </div>
                 ))}
               </div>
