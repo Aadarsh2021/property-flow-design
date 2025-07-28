@@ -228,10 +228,10 @@ const AccountLedger = () => {
     if (showOldRecords) {
       // Handle check all for old records
       setOldRecords(prevRecords => {
-        const allChecked = prevRecords.every(entry => entry.chk);
+        const allChecked = (prevRecords || []).every(entry => entry.chk);
         const newCheckedState = !allChecked;
         
-        const updatedRecords = prevRecords.map(entry => ({ ...entry, chk: newCheckedState }));
+        const updatedRecords = (prevRecords || []).map(entry => ({ ...entry, chk: newCheckedState }));
         
         // Update all old records in backend
         const realRecords = updatedRecords.filter(entry => 
@@ -259,10 +259,10 @@ const AccountLedger = () => {
     } else {
       // Handle check all for current entries
       setLedgerEntries(prevEntries => {
-        const allChecked = prevEntries.every(entry => entry.chk);
+        const allChecked = (prevEntries || []).every(entry => entry.chk);
         const newCheckedState = !allChecked;
         
-        const updatedEntries = prevEntries.map(entry => ({ ...entry, chk: newCheckedState }));
+        const updatedEntries = (prevEntries || []).map(entry => ({ ...entry, chk: newCheckedState }));
         
         // Update all entries in backend - only real entries, not mock data
         const realEntries = updatedEntries.filter(entry => 
@@ -542,7 +542,7 @@ const AccountLedger = () => {
     }
 
     // Check if there are any non-settlement entries to process
-    const currentEntries = ledgerEntries.filter(entry => 
+    const currentEntries = (ledgerEntries || []).filter(entry => 
       !(entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement'))
     );
 
@@ -563,7 +563,7 @@ const AccountLedger = () => {
     let startingBalance = 0;
     
     // First check current entries for any existing settlements
-    const currentSettlements = ledgerEntries.filter(entry => 
+    const currentSettlements = (ledgerEntries || []).filter(entry => 
       entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement')
     );
     
@@ -608,7 +608,7 @@ const AccountLedger = () => {
     setActionLoading(true);
     try {
       // Calculate totals for confirmation
-      const currentEntries = ledgerEntries.filter(entry => 
+      const currentEntries = (ledgerEntries || []).filter(entry => 
         !(entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement'))
       );
       
@@ -619,7 +619,7 @@ const AccountLedger = () => {
       let startingBalance = 0;
       
       // First check current entries for any existing settlements
-      const currentSettlements = ledgerEntries.filter(entry => 
+      const currentSettlements = (ledgerEntries || []).filter(entry => 
         entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement')
       );
       
@@ -709,7 +709,7 @@ const AccountLedger = () => {
       }
 
       // Restore original entries
-      const restoredEntries = originalEntries.filter(entry => 
+      const restoredEntries = (originalEntries || []).filter(entry => 
         !(entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement'))
       );
 
@@ -729,7 +729,7 @@ const AccountLedger = () => {
       
       // Remove from old records
       setOldRecords(prevOldRecords => 
-        prevOldRecords.filter(entry => 
+        (prevOldRecords || []).filter(entry => 
           !originalEntries.some(original => original.id === entry.id)
         )
       );
