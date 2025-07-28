@@ -350,14 +350,8 @@ const Register = () => {
                           formData.password && 
                           formData.confirmPassword;
 
-  // Debug logging
-  console.log('Form State:', {
-    formData,
-    validationErrors,
-    hasErrors,
-    allFieldsFilled,
-    error
-  });
+  // Debug logging (commented out for production)
+  // console.log('Form State:', { formData, validationErrors, hasErrors, allFieldsFilled, error });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
