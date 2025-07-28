@@ -319,7 +319,7 @@ const Register = () => {
                     id="phone"
                     name="phone"
                     type="tel"
-                    placeholder="+91 9310574300"
+                    placeholder="+91 9876543210"
                     value={formData.phone}
                     onChange={handleInputChange}
                     className={`pl-10 ${validationErrors.phone ? 'border-red-500 focus:border-red-500' : ''}`}
@@ -331,7 +331,7 @@ const Register = () => {
                 {validationErrors.phone && (
                   <p className="text-sm text-red-500">{validationErrors.phone}</p>
                 )}
-                <p className="text-xs text-gray-500">Enter with or without +91 prefix (e.g., 9310574300 or +919310574300)</p>
+                <p className="text-xs text-gray-500">Enter with or without +91 prefix (e.g., 9876543210 or +919876543210)</p>
               </div>
               
               <div className="space-y-2">
