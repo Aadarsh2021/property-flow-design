@@ -45,13 +45,14 @@ const Register = () => {
           // Split by spaces and filter out empty strings
           const nameParts = value.trim().split(' ').filter(part => part.length > 0);
           
-          console.log('Name validation debug:', {
-            originalValue: value,
-            trimmedValue: value.trim(),
-            nameParts: nameParts,
-            namePartsLength: nameParts.length,
-            hasShortWords: nameParts.some(word => word.length < 2)
-          });
+          // Debug logging (commented out for production)
+          // console.log('Name validation debug:', {
+          //   originalValue: value,
+          //   trimmedValue: value.trim(),
+          //   nameParts: nameParts,
+          //   namePartsLength: nameParts.length,
+          //   hasShortWords: nameParts.some(word => word.length < 2)
+          // });
           
           if (nameParts.length < 2) {
             errors.fullname = 'Please enter your full name (first and last name)';
@@ -205,6 +206,19 @@ const Register = () => {
         ...fieldErrors,
         ...confirmPasswordErrors
       }));
+    } else if (name === 'fullname') {
+      // Special handling for fullname - clear error if validation passes
+      if (Object.keys(fieldErrors).length === 0) {
+        setValidationErrors(prev => ({
+          ...prev,
+          fullname: ''
+        }));
+      } else {
+        setValidationErrors(prev => ({
+          ...prev,
+          ...fieldErrors
+        }));
+      }
     } else {
       // For other fields, just update validation errors
       setValidationErrors(prev => ({
