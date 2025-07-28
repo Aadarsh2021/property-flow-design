@@ -41,10 +41,23 @@ const Register = () => {
           errors.fullname = 'Full name must be less than 50 characters';
         } else if (!/^[a-zA-Z\s]+$/.test(value.trim())) {
           errors.fullname = 'Full name should only contain letters and spaces';
-        } else if (value.trim().split(' ').length < 2) {
-          errors.fullname = 'Please enter your full name (first and last name)';
-        } else if (value.trim().split(' ').some(word => word.length < 2)) {
-          errors.fullname = 'Each name part must be at least 2 characters';
+        } else {
+          // Split by spaces and filter out empty strings
+          const nameParts = value.trim().split(' ').filter(part => part.length > 0);
+          
+          console.log('Name validation debug:', {
+            originalValue: value,
+            trimmedValue: value.trim(),
+            nameParts: nameParts,
+            namePartsLength: nameParts.length,
+            hasShortWords: nameParts.some(word => word.length < 2)
+          });
+          
+          if (nameParts.length < 2) {
+            errors.fullname = 'Please enter your full name (first and last name)';
+          } else if (nameParts.some(word => word.length < 2)) {
+            errors.fullname = 'Each name part must be at least 2 characters';
+          }
         }
         break;
       case 'email':
