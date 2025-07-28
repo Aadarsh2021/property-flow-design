@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import TopNavigation from '../components/TopNavigation';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
@@ -207,6 +207,9 @@ const PartyLedger = () => {
                 <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden">
                   <DialogHeader>
                     <DialogTitle>Select Party</DialogTitle>
+                    <DialogDescription>
+                      Search and select parties to view their account ledger.
+                    </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4">
                     <input
