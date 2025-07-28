@@ -70,8 +70,6 @@ const Register = () => {
           errors.email = 'Email must be less than 100 characters';
         } else if (value.trim().includes(' ')) {
           errors.email = 'Email cannot contain spaces';
-        } else if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value.trim())) {
-          errors.email = 'Please enter a valid email format (e.g., user@domain.com)';
         }
         break;
       case 'phone':
@@ -212,6 +210,19 @@ const Register = () => {
         setValidationErrors(prev => ({
           ...prev,
           fullname: ''
+        }));
+      } else {
+        setValidationErrors(prev => ({
+          ...prev,
+          ...fieldErrors
+        }));
+      }
+    } else if (name === 'email') {
+      // Special handling for email - clear error if validation passes
+      if (Object.keys(fieldErrors).length === 0) {
+        setValidationErrors(prev => ({
+          ...prev,
+          email: ''
         }));
       } else {
         setValidationErrors(prev => ({
