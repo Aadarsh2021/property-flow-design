@@ -341,7 +341,23 @@ const Register = () => {
     }
   };
 
-  const hasErrors = Object.keys(validationErrors).length > 0 || Boolean(error);
+  const hasErrors = Object.keys(validationErrors).some(key => validationErrors[key] && validationErrors[key].trim() !== '') || Boolean(error);
+  
+  // Check if all required fields are filled
+  const allFieldsFilled = formData.fullname.trim() && 
+                          formData.email.trim() && 
+                          formData.phone.trim() && 
+                          formData.password && 
+                          formData.confirmPassword;
+
+  // Debug logging
+  console.log('Form State:', {
+    formData,
+    validationErrors,
+    hasErrors,
+    allFieldsFilled,
+    error
+  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -539,7 +555,7 @@ const Register = () => {
               <Button
                 type="submit"
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white mt-6"
-                disabled={loading || Boolean(hasErrors)}
+                disabled={loading || Boolean(hasErrors) || !allFieldsFilled}
               >
                 {loading ? (
                   <>
