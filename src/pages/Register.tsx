@@ -118,7 +118,7 @@ const Register = () => {
           errors.password = 'Password must be less than 50 characters';
         } else if (value.includes(' ')) {
           errors.password = 'Password cannot contain spaces';
-        } else if (!/^[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+$/.test(value)) {
+        } else if (!/^[a-zA-Z0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]+$/.test(value)) {
           errors.password = 'Password contains invalid characters';
         } else if (value === value.toLowerCase() && value === value.toUpperCase()) {
           errors.password = 'Password should contain at least one letter';
