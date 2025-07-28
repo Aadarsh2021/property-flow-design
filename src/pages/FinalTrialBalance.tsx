@@ -45,8 +45,8 @@ const FinalTrialBalance = () => {
     loadTrialBalance();
   }, [loadTrialBalance]);
 
-  const creditEntries = trialBalanceData.filter(entry => entry.type === 'credit');
-  const debitEntries = trialBalanceData.filter(entry => entry.type === 'debit');
+  const creditEntries = (trialBalanceData || []).filter(entry => entry.type === 'credit');
+  const debitEntries = (trialBalanceData || []).filter(entry => entry.type === 'debit');
 
   const creditTotal = creditEntries.reduce((sum, entry) => sum + entry.amount, 0);
   const debitTotal = debitEntries.reduce((sum, entry) => sum + Math.abs(entry.amount), 0);

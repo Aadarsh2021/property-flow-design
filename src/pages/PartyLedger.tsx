@@ -56,7 +56,7 @@ const PartyLedger = () => {
     fetchParties();
   }, [fetchParties]);
 
-  const filteredParties = parties.filter(party =>
+  const filteredParties = (parties || []).filter(party =>
     party.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
