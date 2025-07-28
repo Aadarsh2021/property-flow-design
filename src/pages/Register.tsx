@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -66,7 +66,13 @@ const Register = () => {
         } else {
           // Remove all non-digit characters and check if it's a valid Indian phone number
           const cleanPhone = value.replace(/\D/g, '');
-          if (cleanPhone.length === 10) {
+          
+          // Check for minimum length first
+          if (cleanPhone.length < 10) {
+            errors.phone = 'Phone number must be at least 10 digits';
+          } else if (cleanPhone.length > 13) {
+            errors.phone = 'Phone number cannot be more than 13 digits';
+          } else if (cleanPhone.length === 10) {
             // Valid 10-digit number
             if (!/^[6-9]/.test(cleanPhone)) {
               errors.phone = 'Phone number should start with 6, 7, 8, or 9';
@@ -105,7 +111,6 @@ const Register = () => {
         } else if (value === value.toLowerCase() && value === value.toUpperCase()) {
           errors.password = 'Password should contain at least one letter';
         }
-        console.log('Password validation:', { value, length: value.length, errors });
         break;
       case 'confirmPassword':
         if (!value) {
@@ -121,8 +126,32 @@ const Register = () => {
     return errors;
   }, [formData.password]);
 
+  // Clear validation errors when form data changes
+  useEffect(() => {
+    // Clear password error if it's valid
+    if (formData.password && formData.password.length >= 6) {
+      setValidationErrors(prev => ({
+        ...prev,
+        password: ''
+      }));
+    }
+    
+    // Clear phone error if it's valid
+    if (formData.phone) {
+      const cleanPhone = formData.phone.replace(/\D/g, '');
+      if (cleanPhone.length >= 10 && cleanPhone.length <= 13) {
+        setValidationErrors(prev => ({
+          ...prev,
+          phone: ''
+        }));
+      }
+    }
+  }, [formData.password, formData.phone]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    
+    // Update form data first
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -156,7 +185,7 @@ const Register = () => {
         }));
       }
     } else if (name === 'password') {
-      // When password changes, also validate confirm password
+      // When password changes, also validate confirm password with NEW password value
       const confirmPasswordErrors = validateField('confirmPassword', formData.confirmPassword);
       setValidationErrors(prev => ({
         ...prev,
