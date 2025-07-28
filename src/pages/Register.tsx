@@ -71,7 +71,6 @@ const Register = () => {
         } else if (value.length > 50) {
           errors.password = 'Password must be less than 50 characters';
         }
-        console.log('Password validation:', { value, length: value.length, hasError: Object.keys(errors).length > 0 });
         break;
       case 'confirmPassword':
         if (!value) {
@@ -79,7 +78,6 @@ const Register = () => {
         } else if (value !== formData.password) {
           errors.confirmPassword = 'Passwords do not match';
         }
-        console.log('Confirm password validation:', { value, password: formData.password, matches: value === formData.password });
         break;
     }
     
@@ -107,10 +105,17 @@ const Register = () => {
           ...prev,
           confirmPassword: ''
         }));
-      } else {
+      } else if (value) {
+        // Show error only if user has entered something
         setValidationErrors(prev => ({
           ...prev,
-          ...fieldErrors
+          confirmPassword: 'Passwords do not match'
+        }));
+      } else {
+        // Clear error if field is empty
+        setValidationErrors(prev => ({
+          ...prev,
+          confirmPassword: ''
         }));
       }
     } else if (name === 'password') {
@@ -132,10 +137,16 @@ const Register = () => {
   const validateForm = () => {
     const errors: {[key: string]: string} = {};
     
+    // Validate each field
     Object.keys(formData).forEach(key => {
       const fieldErrors = validateField(key, formData[key as keyof typeof formData]);
       Object.assign(errors, fieldErrors);
     });
+    
+    // Special check for password matching
+    if (formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match';
+    }
     
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
