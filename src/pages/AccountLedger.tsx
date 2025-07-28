@@ -500,7 +500,7 @@ const AccountLedger = () => {
 
   // DC Report functionality
   const handleDCReport = () => {
-    const currentEntries = showOldRecords ? oldRecords : ledgerEntries;
+    const currentEntries = showOldRecords ? (oldRecords || []) : (ledgerEntries || []);
     const selectedEntries = currentEntries.filter(entry => entry.chk);
     
     if (selectedEntries.length === 0) {
@@ -756,7 +756,7 @@ const AccountLedger = () => {
 
   // Old Record functionality - Toggle between current and old records
   const handleOldRecord = () => {
-    if (oldRecords.length === 0) {
+    if ((oldRecords || []).length === 0) {
       toast({
         title: "No Old Records",
         description: "No archived records found. Complete a Monday Final settlement first.",
@@ -768,7 +768,7 @@ const AccountLedger = () => {
     
     if (!showOldRecords) {
       // Show old records in proper chronological order (oldest first for display)
-      const sortedOldRecords = [...oldRecords].sort((a, b) => {
+      const sortedOldRecords = [...(oldRecords || [])].sort((a, b) => {
         const dateA = new Date(a.date.split('/').reverse().join('-'));
         const dateB = new Date(b.date.split('/').reverse().join('-'));
         return dateA.getTime() - dateB.getTime(); // Oldest first for display
@@ -788,7 +788,7 @@ const AccountLedger = () => {
 
   // Modify functionality
   const handleModify = () => {
-    const currentEntries = showOldRecords ? oldRecords : ledgerEntries;
+    const currentEntries = showOldRecords ? (oldRecords || []) : (ledgerEntries || []);
     const selectedEntries = currentEntries.filter(entry => entry.chk);
     
     if (selectedEntries.length === 0) {
@@ -983,7 +983,7 @@ const AccountLedger = () => {
 
   // Delete functionality
   const handleDelete = async () => {
-    const currentEntries = showOldRecords ? oldRecords : ledgerEntries;
+    const currentEntries = showOldRecords ? (oldRecords || []) : (ledgerEntries || []);
     const selectedEntries = currentEntries.filter(entry => entry.chk);
     
     if (selectedEntries.length === 0) {
