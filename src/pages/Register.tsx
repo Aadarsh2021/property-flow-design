@@ -49,8 +49,18 @@ const Register = () => {
       case 'phone':
         if (!value.trim()) {
           errors.phone = 'Phone number is required';
-        } else if (!/^\d{10}$/.test(value.replace(/\D/g, ''))) {
-          errors.phone = 'Please enter a valid 10-digit phone number';
+        } else {
+          // Remove all non-digit characters and check if it's a valid Indian phone number
+          const cleanPhone = value.replace(/\D/g, '');
+          if (cleanPhone.length === 10) {
+            // Valid 10-digit number
+          } else if (cleanPhone.length === 12 && cleanPhone.startsWith('91')) {
+            // Valid 12-digit number with country code
+          } else if (cleanPhone.length === 13 && cleanPhone.startsWith('919')) {
+            // Valid 13-digit number with country code
+          } else {
+            errors.phone = 'Please enter a valid 10-digit phone number';
+          }
         }
         break;
       case 'password':
@@ -58,6 +68,8 @@ const Register = () => {
           errors.password = 'Password is required';
         } else if (value.length < 6) {
           errors.password = 'Password must be at least 6 characters long';
+        } else if (value.length > 50) {
+          errors.password = 'Password must be less than 50 characters';
         }
         break;
       case 'confirmPassword':
@@ -113,10 +125,31 @@ const Register = () => {
     setError('');
 
     try {
+      // Format phone number - remove all non-digits and ensure it's 10 digits
+      const cleanPhone = formData.phone.replace(/\D/g, '');
+      let formattedPhone = cleanPhone;
+      
+      // If it's 12 digits and starts with 91, remove the 91
+      if (cleanPhone.length === 12 && cleanPhone.startsWith('91')) {
+        formattedPhone = cleanPhone.substring(2);
+      }
+      // If it's 13 digits and starts with 919, remove the 91
+      else if (cleanPhone.length === 13 && cleanPhone.startsWith('919')) {
+        formattedPhone = cleanPhone.substring(2);
+      }
+      // If it's already 10 digits, use as is
+      else if (cleanPhone.length === 10) {
+        formattedPhone = cleanPhone;
+      }
+      // If it's 11 digits and starts with 0, remove the 0
+      else if (cleanPhone.length === 11 && cleanPhone.startsWith('0')) {
+        formattedPhone = cleanPhone.substring(1);
+      }
+      
       const response = await authAPI.register({
         fullname: formData.fullname.trim(),
         email: formData.email.trim().toLowerCase(),
-        phone: formData.phone.trim(),
+        phone: formattedPhone,
         password: formData.password
       });
       
@@ -259,7 +292,7 @@ const Register = () => {
                     id="phone"
                     name="phone"
                     type="tel"
-                    placeholder="Enter your phone number"
+                    placeholder="+91 9310574300"
                     value={formData.phone}
                     onChange={handleInputChange}
                     className={`pl-10 ${validationErrors.phone ? 'border-red-500 focus:border-red-500' : ''}`}
@@ -271,6 +304,7 @@ const Register = () => {
                 {validationErrors.phone && (
                   <p className="text-sm text-red-500">{validationErrors.phone}</p>
                 )}
+                <p className="text-xs text-gray-500">Enter with or without +91 prefix (e.g., 9310574300 or +919310574300)</p>
               </div>
               
               <div className="space-y-2">
