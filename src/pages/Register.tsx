@@ -27,7 +27,7 @@ const Register = () => {
   const [error, setError] = useState('');
   const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({});
 
-  // Debounced validation
+  // Comprehensive validation system
   const validateField = useCallback((name: string, value: string) => {
     const errors: {[key: string]: string} = {};
     
@@ -37,13 +37,27 @@ const Register = () => {
           errors.fullname = 'Full name is required';
         } else if (value.trim().length < 2) {
           errors.fullname = 'Full name must be at least 2 characters';
+        } else if (value.trim().length > 50) {
+          errors.fullname = 'Full name must be less than 50 characters';
+        } else if (!/^[a-zA-Z\s]+$/.test(value.trim())) {
+          errors.fullname = 'Full name should only contain letters and spaces';
+        } else if (value.trim().split(' ').length < 2) {
+          errors.fullname = 'Please enter your full name (first and last name)';
+        } else if (value.trim().split(' ').some(word => word.length < 2)) {
+          errors.fullname = 'Each name part must be at least 2 characters';
         }
         break;
       case 'email':
         if (!value.trim()) {
           errors.email = 'Email is required';
-        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) {
           errors.email = 'Please enter a valid email address';
+        } else if (value.trim().length > 100) {
+          errors.email = 'Email must be less than 100 characters';
+        } else if (value.trim().includes(' ')) {
+          errors.email = 'Email cannot contain spaces';
+        } else if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value.trim())) {
+          errors.email = 'Please enter a valid email format (e.g., user@domain.com)';
         }
         break;
       case 'phone':
@@ -54,10 +68,24 @@ const Register = () => {
           const cleanPhone = value.replace(/\D/g, '');
           if (cleanPhone.length === 10) {
             // Valid 10-digit number
+            if (!/^[6-9]/.test(cleanPhone)) {
+              errors.phone = 'Phone number should start with 6, 7, 8, or 9';
+            }
           } else if (cleanPhone.length === 12 && cleanPhone.startsWith('91')) {
             // Valid 12-digit number with country code
+            if (!/^91[6-9]/.test(cleanPhone)) {
+              errors.phone = 'Phone number should start with 6, 7, 8, or 9';
+            }
           } else if (cleanPhone.length === 13 && cleanPhone.startsWith('919')) {
             // Valid 13-digit number with country code
+            if (!/^919[6-9]/.test(cleanPhone)) {
+              errors.phone = 'Phone number should start with 6, 7, 8, or 9';
+            }
+          } else if (cleanPhone.length === 11 && cleanPhone.startsWith('0')) {
+            // Valid 11-digit number starting with 0
+            if (!/^0[6-9]/.test(cleanPhone)) {
+              errors.phone = 'Phone number should start with 6, 7, 8, or 9';
+            }
           } else {
             errors.phone = 'Please enter a valid 10-digit phone number';
           }
@@ -70,6 +98,12 @@ const Register = () => {
           errors.password = 'Password must be at least 6 characters long';
         } else if (value.length > 50) {
           errors.password = 'Password must be less than 50 characters';
+        } else if (value.includes(' ')) {
+          errors.password = 'Password cannot contain spaces';
+        } else if (!/^[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+$/.test(value)) {
+          errors.password = 'Password contains invalid characters';
+        } else if (value === value.toLowerCase() && value === value.toUpperCase()) {
+          errors.password = 'Password should contain at least one letter';
         }
         break;
       case 'confirmPassword':
@@ -77,6 +111,8 @@ const Register = () => {
           errors.confirmPassword = 'Please confirm your password';
         } else if (value !== formData.password) {
           errors.confirmPassword = 'Passwords do not match';
+        } else if (value.includes(' ')) {
+          errors.confirmPassword = 'Password cannot contain spaces';
         }
         break;
     }
@@ -127,6 +163,7 @@ const Register = () => {
         ...confirmPasswordErrors
       }));
     } else {
+      // For other fields, just update validation errors
       setValidationErrors(prev => ({
         ...prev,
         ...fieldErrors
@@ -148,6 +185,42 @@ const Register = () => {
       errors.confirmPassword = 'Passwords do not match';
     }
     
+    // Additional validation checks
+    if (formData.password && formData.password.length < 6) {
+      errors.password = 'Password must be at least 6 characters long';
+    }
+    
+    if (formData.phone) {
+      const cleanPhone = formData.phone.replace(/\D/g, '');
+      if (cleanPhone.length < 10 || cleanPhone.length > 13) {
+        errors.phone = 'Please enter a valid 10-digit phone number';
+      }
+    }
+    
+    // Check for duplicate characters in password (security)
+    if (formData.password) {
+      const password = formData.password;
+      if (/(.)\1{2,}/.test(password)) {
+        errors.password = 'Password should not contain repeated characters';
+      }
+    }
+    
+    // Check for sequential numbers in phone
+    if (formData.phone) {
+      const cleanPhone = formData.phone.replace(/\D/g, '');
+      if (/(012|123|234|345|456|567|678|789)/.test(cleanPhone)) {
+        errors.phone = 'Phone number should not contain sequential digits';
+      }
+    }
+    
+    // Check for common patterns in email
+    if (formData.email) {
+      const email = formData.email.toLowerCase();
+      if (email.includes('admin') || email.includes('test') || email.includes('demo')) {
+        errors.email = 'Please use a valid email address';
+      }
+    }
+    
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -156,6 +229,33 @@ const Register = () => {
     e.preventDefault();
     
     if (!validateForm()) {
+      return;
+    }
+
+    // Additional security checks before submission
+    const additionalChecks = [];
+    
+    // Check for common weak passwords
+    const weakPasswords = ['password', '123456', 'qwerty', 'abc123', 'password123'];
+    if (weakPasswords.includes(formData.password.toLowerCase())) {
+      additionalChecks.push('Please choose a stronger password');
+    }
+    
+    // Check for common names
+    const commonNames = ['test', 'demo', 'user', 'admin'];
+    if (commonNames.includes(formData.fullname.toLowerCase())) {
+      additionalChecks.push('Please use your real name');
+    }
+    
+    // Check for disposable email domains
+    const disposableDomains = ['tempmail.com', 'test.com', 'example.com'];
+    const emailDomain = formData.email.split('@')[1];
+    if (disposableDomains.includes(emailDomain)) {
+      additionalChecks.push('Please use a valid email address');
+    }
+    
+    if (additionalChecks.length > 0) {
+      setError(additionalChecks.join('. '));
       return;
     }
 
