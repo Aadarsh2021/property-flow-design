@@ -105,6 +105,7 @@ const Register = () => {
         } else if (value === value.toLowerCase() && value === value.toUpperCase()) {
           errors.password = 'Password should contain at least one letter';
         }
+        console.log('Password validation:', { value, length: value.length, errors });
         break;
       case 'confirmPassword':
         if (!value) {
@@ -185,10 +186,7 @@ const Register = () => {
       errors.confirmPassword = 'Passwords do not match';
     }
     
-    // Additional validation checks
-    if (formData.password && formData.password.length < 6) {
-      errors.password = 'Password must be at least 6 characters long';
-    }
+    // Additional validation checks (password length is already checked in validateField)
     
     if (formData.phone) {
       const cleanPhone = formData.phone.replace(/\D/g, '');
