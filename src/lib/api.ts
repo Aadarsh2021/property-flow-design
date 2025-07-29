@@ -91,8 +91,16 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
       throw new Error('Invalid API response: No response received');
     }
     
-    // Ensure data is always an array for list endpoints
-    if (response.data && !Array.isArray(response.data)) {
+    // Only convert to array for specific endpoints that should return arrays
+    // Login and other single-object endpoints should not be converted
+    const shouldConvertToArray = [
+      '/new-party',
+      '/party-ledger',
+      '/final-trial-balance',
+      '/settings'
+    ].some(path => endpoint.includes(path));
+    
+    if (shouldConvertToArray && response.data && !Array.isArray(response.data)) {
       console.warn('API response data is not an array, converting to array');
       response.data = [response.data] as T;
     }
