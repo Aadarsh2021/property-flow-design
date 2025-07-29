@@ -339,6 +339,9 @@ const PartyLedger = () => {
               <CheckCircle className="w-6 h-6 text-green-600" />
               Monday Final Confirmation
             </AlertDialogTitle>
+            <AlertDialogDescription className="sr-only">
+              Monday Final confirmation dialog for marking parties as settled
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex-1 overflow-y-auto space-y-4 px-1">
             <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
@@ -419,6 +422,9 @@ const PartyLedger = () => {
               <AlertTriangle className="w-6 h-6 text-red-600" />
               Delete Parties Confirmation
             </AlertDialogTitle>
+            <AlertDialogDescription className="sr-only">
+              Delete parties confirmation dialog with permanent deletion warning
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex-1 overflow-y-auto space-y-4 px-1">
             <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">

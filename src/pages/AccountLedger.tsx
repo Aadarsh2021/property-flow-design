@@ -1587,6 +1587,9 @@ const AccountLedger = () => {
               <CheckCircle className="w-5 h-5 text-green-600" />
               Monday Final Settlement Confirmation
             </AlertDialogTitle>
+            <AlertDialogDescription className="sr-only">
+              Monday Final settlement confirmation dialog with transaction summary and warnings
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex-1 overflow-y-auto space-y-4 px-1">
             <div className="bg-blue-50 p-4 rounded-lg">
