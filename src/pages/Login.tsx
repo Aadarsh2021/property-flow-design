@@ -102,8 +102,30 @@ const Login = () => {
 
   // Handle input events (including autofill)
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    handleInputChange(e);
-    handleAutofill(e);
+    const { name, value } = e.target;
+    
+    // Update form data
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    
+    // Clear general error when user types
+    setError('');
+    
+    // Validate field immediately
+    const fieldErrors = validateField(name, value);
+    
+    // Clear validation errors for this field if no errors found
+    setValidationErrors(prev => {
+      const newErrors = { ...prev };
+      if (Object.keys(fieldErrors).length === 0) {
+        delete newErrors[name];
+      } else {
+        newErrors[name] = fieldErrors[name];
+      }
+      return newErrors;
+    });
   };
 
   const validateForm = () => {
@@ -200,6 +222,17 @@ const Login = () => {
   const isFormValid = formData.email.trim() && formData.password && !hasErrors;
   const isButtonDisabled = loading || !isFormValid;
 
+  // Debug logging
+  console.log('Form state:', {
+    email: formData.email,
+    password: formData.password,
+    validationErrors,
+    error,
+    hasErrors,
+    isFormValid,
+    isButtonDisabled
+  });
+
   // Handle autofill on component mount
   useEffect(() => {
     const checkAutofill = () => {
@@ -209,13 +242,29 @@ const Login = () => {
       if (emailInput && emailInput.value) {
         setFormData(prev => ({ ...prev, email: emailInput.value }));
         const fieldErrors = validateField('email', emailInput.value);
-        setValidationErrors(prev => ({ ...prev, ...fieldErrors }));
+        setValidationErrors(prev => {
+          const newErrors = { ...prev };
+          if (Object.keys(fieldErrors).length === 0) {
+            delete newErrors.email;
+          } else {
+            newErrors.email = fieldErrors.email;
+          }
+          return newErrors;
+        });
       }
       
       if (passwordInput && passwordInput.value) {
         setFormData(prev => ({ ...prev, password: passwordInput.value }));
         const fieldErrors = validateField('password', passwordInput.value);
-        setValidationErrors(prev => ({ ...prev, ...fieldErrors }));
+        setValidationErrors(prev => {
+          const newErrors = { ...prev };
+          if (Object.keys(fieldErrors).length === 0) {
+            delete newErrors.password;
+          } else {
+            newErrors.password = fieldErrors.password;
+          }
+          return newErrors;
+        });
       }
     };
 
