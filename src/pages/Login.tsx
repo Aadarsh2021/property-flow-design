@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -77,6 +77,33 @@ const Login = () => {
       ...prev,
       ...fieldErrors
     }));
+  };
+
+  // Handle autofill events
+  const handleAutofill = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    
+    // Update form data
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    
+    // Clear errors
+    setError('');
+    
+    // Validate the field
+    const fieldErrors = validateField(name, value);
+    setValidationErrors(prev => ({
+      ...prev,
+      ...fieldErrors
+    }));
+  };
+
+  // Handle input events (including autofill)
+  const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    handleInputChange(e);
+    handleAutofill(e);
   };
 
   const validateForm = () => {
@@ -173,6 +200,30 @@ const Login = () => {
   const isFormValid = formData.email.trim() && formData.password && !hasErrors;
   const isButtonDisabled = loading || !isFormValid;
 
+  // Handle autofill on component mount
+  useEffect(() => {
+    const checkAutofill = () => {
+      const emailInput = document.getElementById('email') as HTMLInputElement;
+      const passwordInput = document.getElementById('password') as HTMLInputElement;
+      
+      if (emailInput && emailInput.value) {
+        setFormData(prev => ({ ...prev, email: emailInput.value }));
+        const fieldErrors = validateField('email', emailInput.value);
+        setValidationErrors(prev => ({ ...prev, ...fieldErrors }));
+      }
+      
+      if (passwordInput && passwordInput.value) {
+        setFormData(prev => ({ ...prev, password: passwordInput.value }));
+        const fieldErrors = validateField('password', passwordInput.value);
+        setValidationErrors(prev => ({ ...prev, ...fieldErrors }));
+      }
+    };
+
+    // Check after a short delay to allow autofill to complete
+    const timer = setTimeout(checkAutofill, 100);
+    return () => clearTimeout(timer);
+  }, [validateField]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header with Home Navigation */}
@@ -244,7 +295,7 @@ const Login = () => {
                     type="email"
                     placeholder="Enter your email"
                     value={formData.email}
-                    onChange={handleInputChange}
+                    onChange={handleInput}
                     className={`pl-10 ${validationErrors.email ? 'border-red-500 focus:border-red-500' : ''}`}
                     autoComplete="email"
                     required
@@ -268,7 +319,7 @@ const Login = () => {
                     type={showPassword ? 'text' : 'password'}
                     placeholder="Enter your password"
                     value={formData.password}
-                    onChange={handleInputChange}
+                    onChange={handleInput}
                     className={`pl-10 pr-10 ${validationErrors.password ? 'border-red-500 focus:border-red-500' : ''}`}
                     autoComplete="current-password"
                     required
