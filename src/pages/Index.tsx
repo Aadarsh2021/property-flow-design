@@ -126,6 +126,108 @@ const Index = () => {
         ) : (
           // Dashboard - Logged In User
           <>
+            {/* Quick Stats Dashboard */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Total Parties</p>
+                    <p className="text-2xl font-bold text-gray-900">24</p>
+                  </div>
+                  <div className="bg-blue-100 p-3 rounded-lg">
+                    <Users className="w-6 h-6 text-blue-600" />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <span className="text-sm text-green-600 font-medium">+12%</span>
+                  <span className="text-sm text-gray-500 ml-2">from last month</span>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Total Transactions</p>
+                    <p className="text-2xl font-bold text-gray-900">1,234</p>
+                  </div>
+                  <div className="bg-green-100 p-3 rounded-lg">
+                    <BarChart3 className="w-6 h-6 text-green-600" />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <span className="text-sm text-green-600 font-medium">+8%</span>
+                  <span className="text-sm text-gray-500 ml-2">from last week</span>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Total Balance</p>
+                    <p className="text-2xl font-bold text-gray-900">₹2,45,678</p>
+                  </div>
+                  <div className="bg-purple-100 p-3 rounded-lg">
+                    <DollarSign className="w-6 h-6 text-purple-600" />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <span className="text-sm text-green-600 font-medium">+15%</span>
+                  <span className="text-sm text-gray-500 ml-2">from last month</span>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Settlements</p>
+                    <p className="text-2xl font-bold text-gray-900">18</p>
+                  </div>
+                  <div className="bg-orange-100 p-3 rounded-lg">
+                    <FileText className="w-6 h-6 text-orange-600" />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <span className="text-sm text-green-600 font-medium">+5</span>
+                  <span className="text-sm text-gray-500 ml-2">this week</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Recent Activity */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-8">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
+              </div>
+              <div className="p-6">
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">New transaction added to ABC Company</p>
+                      <p className="text-xs text-gray-500">2 minutes ago</p>
+                    </div>
+                    <span className="text-sm text-green-600 font-medium">+₹5,000</span>
+                  </div>
+                  <div className="flex items-center space-x-4">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">Monday Final settlement completed</p>
+                      <p className="text-xs text-gray-500">1 hour ago</p>
+                    </div>
+                    <span className="text-sm text-blue-600 font-medium">Settled</span>
+                  </div>
+                  <div className="flex items-center space-x-4">
+                    <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">New party "XYZ Traders" created</p>
+                      <p className="text-xs text-gray-500">3 hours ago</p>
+                    </div>
+                    <span className="text-sm text-purple-600 font-medium">New</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
           <Link to="/user-settings" className="group">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-all duration-300 hover:scale-105 group-hover:border-blue-300">

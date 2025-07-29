@@ -45,6 +45,40 @@ const AccountLedger = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
+  // Keyboard shortcuts for better UX
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + N for new transaction
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        e.preventDefault();
+        const amountInput = document.getElementById('amount') as HTMLInputElement;
+        if (amountInput) {
+          amountInput.focus();
+        }
+      }
+      
+      // Ctrl/Cmd + S for save/refresh
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        handleRefreshAll();
+      }
+      
+      // Ctrl/Cmd + P for print
+      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+        e.preventDefault();
+        handlePrint();
+      }
+      
+      // Escape to clear form
+      if (e.key === 'Escape') {
+        handleClearForm();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyPress);
+    return () => document.removeEventListener('keydown', handleKeyPress);
+  }, []);
+
   // Load ledger data on component mount
   useEffect(() => {
     if (partyName) {
@@ -1340,9 +1374,8 @@ const AccountLedger = () => {
                       ))}
                     </TableBody>
                   </Table>
-                )
-              )}
-            </div>
+                )}
+              </div>
 
               {/* Entry Form */}
               {!showOldRecords && (
@@ -1378,6 +1411,7 @@ const AccountLedger = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
                     <input
+                      id="amount"
                       type="number"
                         value={newEntry.amount}
                         onChange={(e) => {
@@ -1397,7 +1431,11 @@ const AccountLedger = () => {
                         min="0"
                         step="0.01"
                         required
+                        autoFocus
                     />
+                    <div className="text-xs text-gray-500 mt-1">
+                      💡 Press Ctrl+N to focus amount field
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
@@ -1432,6 +1470,16 @@ const AccountLedger = () => {
                   </div>
                   </form>
                   
+                  {/* Keyboard Shortcuts Help */}
+                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="text-sm font-medium text-blue-800 mb-2">Keyboard Shortcuts:</div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-blue-700">
+                      <div>Ctrl+N: Focus Amount</div>
+                      <div>Ctrl+S: Refresh Data</div>
+                      <div>Ctrl+P: Print Report</div>
+                      <div>Esc: Clear Form</div>
+                    </div>
+                  </div>
                   {/* Transaction Preview */}
                   {newEntry.amount && parseFloat(newEntry.amount) !== 0 && (
                     <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">

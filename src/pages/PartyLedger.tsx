@@ -230,13 +230,45 @@ const PartyLedger = () => {
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4">
-                    <input
-                      type="text"
-                      placeholder="Search parties..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    <div className="flex flex-col md:flex-row gap-4">
+                      <div className="flex-1">
+                        <input
+                          type="text"
+                          placeholder="Search parties by name..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <select 
+                          className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          onChange={(e) => {
+                            const filter = e.target.value;
+                            if (filter === 'all') {
+                              setSearchTerm('');
+                            } else if (filter === 'settled') {
+                              setSearchTerm('settled');
+                            } else if (filter === 'unsettled') {
+                              setSearchTerm('unsettled');
+                            }
+                          }}
+                        >
+                          <option value="all">All Parties</option>
+                          <option value="settled">Settled Only</option>
+                          <option value="unsettled">Unsettled Only</option>
+                        </select>
+                        <button
+                          onClick={() => setSearchTerm('')}
+                          className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      Showing {filteredParties.length} of {parties.length} parties
+                    </div>
                     <div className="overflow-y-auto max-h-96">
                       {loading ? (
                         <div className="text-center py-4">Loading parties...</div>
