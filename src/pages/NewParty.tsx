@@ -488,20 +488,31 @@ const NewParty = () => {
                 ))}
               </div>
             </div>
-
-            {/* Action Buttons positioned in bottom right */}
-            <div className="absolute bottom-4 right-4 flex space-x-2">
+            
+            {/* Action Buttons - Centered at form end */}
+            <div className="flex justify-center space-x-4 mt-8 pt-6 border-t border-gray-200">
               <button
                 type="submit"
                 disabled={loading}
-                className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
+                className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 font-medium"
               >
-                {loading ? 'Saving...' : 'Save Party'}
+                {loading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline mr-2"></div>
+                    Saving...
+                  </>
+                ) : (
+                  'Save Party'
+                )}
               </button>
               <button
                 type="button"
-                onClick={handleExit}
-                className="px-4 py-2 bg-orange-600 text-white text-sm rounded hover:bg-orange-700 transition-colors"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleExit();
+                }}
+                className="px-6 py-3 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors font-medium"
               >
                 Exit
               </button>
