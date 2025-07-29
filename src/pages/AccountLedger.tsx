@@ -172,7 +172,7 @@ const AccountLedger = () => {
           
           // Find the entry for backend update
           const entry = updatedRecords.find(e => e.id === id);
-          if (entry && !entry.id.toString().startsWith('entry-')) {
+          if (entry && entry.id && !entry.id.toString().startsWith('entry-')) {
             // Update backend asynchronously
             const idString = typeof id === 'string' ? id : id.toString();
             partyLedgerAPI.updateEntry(idString, { chk: checked }).catch(error => {
@@ -202,14 +202,14 @@ const AccountLedger = () => {
           
           // Find the entry for backend update
           const entry = updatedEntries.find(e => e.id === id);
-          if (entry && !entry.id.toString().startsWith('entry-')) {
+          if (entry && entry.id && !entry.id.toString().startsWith('entry-')) {
             // Update backend asynchronously
             const idString = typeof id === 'string' ? id : id.toString();
             partyLedgerAPI.updateEntry(idString, { chk: checked }).catch(error => {
               console.error('Error updating entry in backend:', error);
               // Revert local state if backend update fails
-    setLedgerEntries(prevEntries =>
-      prevEntries.map(entry =>
+              setLedgerEntries(prevEntries =>
+                prevEntries.map(entry =>
                   entry.id === id ? { ...entry, chk: !checked } : entry
                 )
               );
@@ -245,7 +245,7 @@ const AccountLedger = () => {
         
         // Update all old records in backend
         const realRecords = updatedRecords.filter(entry => 
-          entry.id && !entry.id.toString().startsWith('entry-')
+          entry.id && entry.id.toString && !entry.id.toString().startsWith('entry-')
         );
         
         if (realRecords.length > 0) {
@@ -276,7 +276,7 @@ const AccountLedger = () => {
         
         // Update all entries in backend - only real entries, not mock data
         const realEntries = updatedEntries.filter(entry => 
-          entry.id && !entry.id.toString().startsWith('entry-')
+          entry.id && entry.id.toString && !entry.id.toString().startsWith('entry-')
         );
         
         if (realEntries.length > 0) {
