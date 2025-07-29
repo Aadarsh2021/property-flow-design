@@ -1173,41 +1173,20 @@ const AccountLedger = () => {
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                   <div className="text-sm font-medium text-green-700">Total Credit</div>
                   <div className="text-2xl font-bold text-green-600">
-                    {(() => {
-                      const totalCredit = (showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => {
-                        console.log('Debug - entry:', entry);
-                        console.log('Debug - entry.credit:', entry.credit, 'type:', typeof entry.credit);
-                        return sum + (entry.credit || 0);
-                      }, 0);
-                      console.log('Debug - ledgerEntries:', ledgerEntries);
-                      console.log('Debug - totalCredit calculation:', totalCredit);
-                      return parseFloat(totalCredit.toFixed(2)).toLocaleString();
-                    })()}
+                    {parseFloat((showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => sum + (entry.credit || 0), 0).toFixed(2)).toLocaleString()}
                   </div>
                 </div>
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                   <div className="text-sm font-medium text-red-700">Total Debit</div>
                   <div className="text-2xl font-bold text-red-600">
-                    {(() => {
-                      const totalDebit = (showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => {
-                        console.log('Debug - entry.debit:', entry.debit, 'type:', typeof entry.debit);
-                        return sum + Math.abs(entry.debit || 0);
-                      }, 0);
-                      console.log('Debug - totalDebit calculation:', totalDebit);
-                      return parseFloat(totalDebit.toFixed(2)).toLocaleString();
-                    })()}
+                    {parseFloat((showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => sum + Math.abs(entry.debit || 0), 0).toFixed(2)).toLocaleString()}
                   </div>
                 </div>
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <div className="text-sm font-medium text-blue-700">Calculated Balance</div>
                   <div className="text-2xl font-bold text-blue-600">
-                    {(() => {
-                      const totalCredit = (showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => sum + (entry.credit || 0), 0);
-                      const totalDebit = (showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => sum + Math.abs(entry.debit || 0), 0);
-                      const calculatedBalance = totalCredit - totalDebit;
-                      console.log('Debug - calculatedBalance:', calculatedBalance);
-                      return parseFloat(calculatedBalance.toFixed(2)).toLocaleString();
-                    })()}
+                    {parseFloat(((showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => sum + (entry.credit || 0), 0) - 
+                      (showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => sum + Math.abs(entry.debit || 0), 0)).toFixed(2)).toLocaleString()}
                   </div>
                 </div>
                 <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
@@ -1237,7 +1216,10 @@ const AccountLedger = () => {
                         <div key={i} className="h-12 bg-gray-100 rounded mb-2"></div>
                       ))}
                     </div>
-                    <div className="text-center text-gray-500">Loading ledger data...</div>
+                    <div className="text-center text-gray-500">
+                      <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                      Loading ledger data...
+                    </div>
                   </div>
                 ) : showOldRecords ? (
                   // Show Old Records
@@ -1290,7 +1272,7 @@ const AccountLedger = () => {
                               <TableCell className="text-red-600 font-medium">
                                 {entry.debit ? Math.abs(entry.debit).toLocaleString() : ''}
                               </TableCell>
-                              <TableCell className="text-blue-600 font-medium">
+                              <TableCell className={`font-semibold ${entry.balance < 0 ? 'text-red-600' : ''}`}>
                                 {entry.balance ? entry.balance.toLocaleString() : ''}
                               </TableCell>
                               <TableCell className="text-center">
@@ -1306,63 +1288,61 @@ const AccountLedger = () => {
                       </Table>
                     </div>
                   )
+                ) : ledgerEntries.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="text-gray-400 text-6xl mb-4">📊</div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No ledger entries found</h3>
+                    <p className="text-gray-500">Add your first transaction to get started.</p>
+                  </div>
                 ) : (
-                  // Show Current Entries
-                  ledgerEntries.length === 0 ? (
-                    <div className="text-center py-12">
-                      <div className="text-gray-400 text-6xl mb-4">📊</div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No ledger entries found</h3>
-                      <p className="text-gray-500">Start by adding a new entry using the form on the right.</p>
-                    </div>
-                  ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-blue-50">
-                      <TableHead className="font-semibold">Date</TableHead>
-                      <TableHead className="font-semibold">Remarks</TableHead>
-                      <TableHead className="font-semibold">Tns Type</TableHead>
-                      <TableHead className="font-semibold text-right">Credit</TableHead>
-                      <TableHead className="font-semibold text-right">Debit</TableHead>
-                      <TableHead className="font-semibold text-right">Balance</TableHead>
-                      <TableHead className="font-semibold text-center">Chk</TableHead>
-                      <TableHead className="font-semibold">Ti</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {ledgerEntries.map((entry, index) => (
-                      <TableRow key={entry.id || `entry-${index}`} className={entry.chk ? 'bg-blue-100' : ''}>
-                        <TableCell>{entry.date}</TableCell>
-                        <TableCell className={entry.remarks === 'AQC' ? 'bg-blue-200 font-semibold' : ''}>
-                          {entry.remarks}
-                        </TableCell>
-                        <TableCell>
-                          <span className={`px-2 py-1 rounded text-sm ${
-                            entry.tnsType === 'CR' ? 'bg-green-100 text-green-800' : 
-                            entry.tnsType === 'DR' ? 'bg-red-100 text-red-800' : 
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {entry.tnsType}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right">{entry.credit || ''}</TableCell>
-                        <TableCell className="text-right">{entry.debit || ''}</TableCell>
-                        <TableCell className={`text-right font-semibold ${entry.balance < 0 ? 'text-red-600' : ''}`}>
-                          {entry.balance}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Checkbox
-                            checked={entry.chk}
-                            onCheckedChange={(checked) => handleCheckboxChange(entry.id, checked as boolean)}
-                          />
-                        </TableCell>
-                        <TableCell>{entry.ti}</TableCell>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="font-semibold">Date</TableHead>
+                        <TableHead className="font-semibold">Remarks</TableHead>
+                        <TableHead className="font-semibold">Tns Type</TableHead>
+                        <TableHead className="font-semibold text-right">Credit</TableHead>
+                        <TableHead className="font-semibold text-right">Debit</TableHead>
+                        <TableHead className="font-semibold text-right">Balance</TableHead>
+                        <TableHead className="font-semibold text-center">Chk</TableHead>
+                        <TableHead className="font-semibold">Ti</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                  )
-                )}
-              </div>
+                    </TableHeader>
+                    <TableBody>
+                      {ledgerEntries.map((entry, index) => (
+                        <TableRow key={entry.id || `entry-${index}`} className={entry.chk ? 'bg-blue-100' : ''}>
+                          <TableCell>{entry.date}</TableCell>
+                          <TableCell className={entry.remarks === 'AQC' ? 'bg-blue-200 font-semibold' : ''}>
+                            {entry.remarks}
+                          </TableCell>
+                          <TableCell>
+                            <span className={`px-2 py-1 rounded text-sm ${
+                              entry.tnsType === 'CR' ? 'bg-green-100 text-green-800' : 
+                              entry.tnsType === 'DR' ? 'bg-red-100 text-red-800' : 
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {entry.tnsType}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right">{entry.credit || ''}</TableCell>
+                          <TableCell className="text-right">{entry.debit || ''}</TableCell>
+                          <TableCell className={`text-right font-semibold ${entry.balance < 0 ? 'text-red-600' : ''}`}>
+                            {entry.balance}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Checkbox
+                              checked={entry.chk}
+                              onCheckedChange={(checked) => handleCheckboxChange(entry.id, checked as boolean)}
+                            />
+                          </TableCell>
+                          <TableCell>{entry.ti}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )
+              )}
+            </div>
 
               {/* Entry Form */}
               {!showOldRecords && (
