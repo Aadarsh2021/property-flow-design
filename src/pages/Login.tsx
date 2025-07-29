@@ -37,13 +37,25 @@ const Login = () => {
       case 'email':
         if (!value.trim()) {
           errors.email = 'Email is required';
+        } else if (value.trim().length > 100) {
+          errors.email = 'Email cannot be more than 100 characters';
+        } else if (value.includes(' ')) {
+          errors.email = 'Email cannot contain spaces';
         } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
           errors.email = 'Please enter a valid email address';
+        } else if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value)) {
+          errors.email = 'Please enter a valid email format';
         }
         break;
       case 'password':
         if (!value) {
           errors.password = 'Password is required';
+        } else if (value.length < 1) {
+          errors.password = 'Password cannot be empty';
+        } else if (value.length > 50) {
+          errors.password = 'Password cannot be more than 50 characters';
+        } else if (value.includes(' ')) {
+          errors.password = 'Password cannot contain spaces';
         }
         break;
     }
@@ -85,6 +97,30 @@ const Login = () => {
     e.preventDefault();
     
     if (!validateForm()) {
+      toast({
+        title: "Validation Error",
+        description: "Please fix the errors before submitting.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Additional validation before API call
+    const email = formData.email.trim().toLowerCase();
+    const password = formData.password;
+
+    if (!email || !password) {
+      setError('Please fill in all required fields');
+      return;
+    }
+
+    if (email.length > 100) {
+      setError('Email is too long');
+      return;
+    }
+
+    if (password.length > 50) {
+      setError('Password is too long');
       return;
     }
     
@@ -95,8 +131,8 @@ const Login = () => {
 
     try {
       const response = await authAPI.login({
-        email: formData.email.trim().toLowerCase(),
-        password: formData.password
+        email: email,
+        password: password
       });
       
       if (response.success) {
@@ -123,6 +159,8 @@ const Login = () => {
         setError('Please check your internet connection and try again.');
       } else if (error.message.includes('Backend server is not responding')) {
         setError('Server is currently unavailable. Please try again later.');
+      } else if (error.message.includes('Invalid credentials') || error.message.includes('User not found')) {
+        setError('Invalid email or password. Please check your credentials.');
       } else {
         setError(error.message || 'Network error. Please try again.');
       }
@@ -134,6 +172,8 @@ const Login = () => {
   };
 
   const hasErrors = Object.keys(validationErrors).length > 0 || Boolean(error);
+  const isFormValid = formData.email.trim() && formData.password && !hasErrors;
+  const isButtonDisabled = loading || !isFormValid;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -253,7 +293,7 @@ const Login = () => {
               <Button
                 type="submit"
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                disabled={loading || hasErrors}
+                disabled={isButtonDisabled}
               >
                 {loading ? (
                   <>

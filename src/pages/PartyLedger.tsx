@@ -11,11 +11,13 @@ import { Calendar, CheckCircle, AlertTriangle, Users, Clock } from 'lucide-react
 import { useNavigate } from 'react-router-dom';
 import { partyLedgerAPI, mockData } from '../lib/api';
 import { useToast } from '../hooks/use-toast';
+import { useAuth } from '../contexts/AuthContext';
 import { Party } from '../types';
 
 const PartyLedger = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { isAuthenticated, user } = useAuth();
   const [selectedParty, setSelectedParty] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -26,21 +28,46 @@ const PartyLedger = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
+  // Check authentication on component mount
+  useEffect(() => {
+    if (!isAuthenticated) {
+      console.log('🔒 User not authenticated, redirecting to login');
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to access Party Ledger.",
+        variant: "destructive"
+      });
+      navigate('/login');
+      return;
+    }
+    
+    console.log('✅ User authenticated:', user);
+  }, [isAuthenticated, user, navigate, toast]);
+
   const fetchParties = useCallback(async () => {
     setLoading(true);
     try {
+      console.log('🔍 Fetching parties from API...');
       const response = await partyLedgerAPI.getAllParties();
+      console.log('📡 API Response:', response);
+      
       if (response.success) {
+        console.log('✅ API Success - Parties data:', response.data);
         setParties(response.data || []);
       } else {
+        console.log('❌ API Failed - Using mock data');
         // Fallback to mock data if API fails
-        setParties(mockData.getMockParties() as Party[]);
+        const mockParties = mockData.getMockParties() as Party[];
+        console.log('📋 Mock parties:', mockParties);
+        setParties(mockParties);
         console.warn('Using mock data due to API failure');
       }
     } catch (error) {
-      console.error('Error fetching parties:', error);
+      console.error('💥 Error fetching parties:', error);
       // Use mock data as fallback
-      setParties(mockData.getMockParties() as Party[]);
+      const mockParties = mockData.getMockParties() as Party[];
+      console.log('📋 Using mock data as fallback:', mockParties);
+      setParties(mockParties);
       toast({
         title: "Warning",
         description: "Using offline data. Some features may be limited.",
@@ -48,6 +75,7 @@ const PartyLedger = () => {
       });
     } finally {
       setLoading(false);
+      console.log('🏁 Loading completed. Current parties state:', parties);
     }
   }, [toast]);
 
