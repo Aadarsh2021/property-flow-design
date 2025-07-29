@@ -1174,7 +1174,11 @@ const AccountLedger = () => {
                   <div className="text-sm font-medium text-green-700">Total Credit</div>
                   <div className="text-2xl font-bold text-green-600">
                     {(() => {
-                      const totalCredit = (showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => sum + (entry.credit || 0), 0);
+                      const totalCredit = (showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => {
+                        console.log('Debug - entry:', entry);
+                        console.log('Debug - entry.credit:', entry.credit, 'type:', typeof entry.credit);
+                        return sum + (entry.credit || 0);
+                      }, 0);
                       console.log('Debug - ledgerEntries:', ledgerEntries);
                       console.log('Debug - totalCredit calculation:', totalCredit);
                       return parseFloat(totalCredit.toFixed(2)).toLocaleString();
@@ -1185,7 +1189,10 @@ const AccountLedger = () => {
                   <div className="text-sm font-medium text-red-700">Total Debit</div>
                   <div className="text-2xl font-bold text-red-600">
                     {(() => {
-                      const totalDebit = (showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => sum + Math.abs(entry.debit || 0), 0);
+                      const totalDebit = (showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => {
+                        console.log('Debug - entry.debit:', entry.debit, 'type:', typeof entry.debit);
+                        return sum + Math.abs(entry.debit || 0);
+                      }, 0);
                       console.log('Debug - totalDebit calculation:', totalDebit);
                       return parseFloat(totalDebit.toFixed(2)).toLocaleString();
                     })()}
