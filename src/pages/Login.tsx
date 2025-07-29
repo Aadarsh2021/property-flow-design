@@ -41,10 +41,8 @@ const Login = () => {
           errors.email = 'Email cannot be more than 100 characters';
         } else if (value.includes(' ')) {
           errors.email = 'Email cannot contain spaces';
-        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-          errors.email = 'Please enter a valid email address';
         } else if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value)) {
-          errors.email = 'Please enter a valid email format';
+          errors.email = 'Please enter a valid email address';
         }
         break;
       case 'password':
