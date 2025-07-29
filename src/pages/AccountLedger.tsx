@@ -1581,89 +1581,89 @@ const AccountLedger = () => {
 
       {/* Monday Final Confirmation Modal */}
       <AlertDialog open={showMondayFinalModal} onOpenChange={setShowMondayFinalModal}>
-        <AlertDialogContent className="max-w-2xl">
-          <AlertDialogHeader>
+        <AlertDialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+          <AlertDialogHeader className="flex-shrink-0 pb-4">
             <AlertDialogTitle className="flex items-center gap-2">
               <CheckCircle className="w-5 h-5 text-green-600" />
               Monday Final Settlement Confirmation
             </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-4">
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <div className="flex items-center gap-2 mb-3">
-                  <Calculator className="w-5 h-5 text-blue-600" />
-                  <span className="font-semibold text-blue-800">Settlement Summary</span>
-                </div>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Transactions:</span>
-                    <span className="font-medium">{mondayFinalData.transactionCount}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Total Credit:</span>
-                    <span className="font-medium text-green-600">₹{mondayFinalData.totalCredit.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Total Debit:</span>
-                    <span className="font-medium text-red-600">₹{mondayFinalData.totalDebit.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Starting Balance:</span>
-                    <span className="font-medium">₹{mondayFinalData.startingBalance.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between col-span-2 border-t pt-2">
-                    <span className="text-gray-800 font-semibold">Final Balance:</span>
-                    <span className={`font-bold text-lg ${mondayFinalData.finalBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      ₹{mondayFinalData.finalBalance.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-yellow-50 p-4 rounded-lg">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-yellow-800">
-                    <p className="font-semibold mb-2">⚠️ WARNING: This action cannot be easily undone!</p>
-                    <p className="mb-3">This will:</p>
-                    <ul className="list-disc list-inside space-y-1">
-                      <li>Consolidate all current entries into one settlement</li>
-                      <li>Move all current entries to Old Records</li>
-                      <li>Start fresh with the settlement balance</li>
-                      <li>Create a permanent financial record</li>
-                      <li>Add timestamp to settlement for tracking</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-green-50 p-4 rounded-lg">
-                <div className="flex items-start gap-2">
-                  <TrendingUp className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-green-800">
-                    <p className="font-semibold mb-1">Benefits:</p>
-                    <ul className="list-disc list-inside space-y-1">
-                      <li>Clean ledger with consolidated balance</li>
-                      <li>Historical records preserved in Old Records</li>
-                      <li>Multiple settlements per day allowed</li>
-                      <li>Timestamp tracking for each settlement</li>
-                      <li>Accurate balance continuity</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <div className="flex items-start gap-2">
-                  <Clock className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-blue-800">
-                    <p className="font-semibold mb-1">Multiple Settlements:</p>
-                    <p>You can create multiple Monday Final settlements per day. Each settlement will be timestamped for proper tracking and balance calculation.</p>
-                  </div>
-                </div>
-              </div>
-            </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <div className="flex-1 overflow-y-auto space-y-4 px-1">
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <div className="flex items-center gap-2 mb-3">
+                <Calculator className="w-5 h-5 text-blue-600" />
+                <span className="font-semibold text-blue-800">Settlement Summary</span>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Transactions:</span>
+                  <span className="font-medium">{mondayFinalData.transactionCount}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Total Credit:</span>
+                  <span className="font-medium text-green-600">₹{mondayFinalData.totalCredit.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Total Debit:</span>
+                  <span className="font-medium text-red-600">₹{mondayFinalData.totalDebit.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Starting Balance:</span>
+                  <span className="font-medium">₹{mondayFinalData.startingBalance.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between col-span-2 border-t pt-2">
+                  <span className="text-gray-800 font-semibold">Final Balance:</span>
+                  <span className={`font-bold text-lg ${mondayFinalData.finalBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    ₹{mondayFinalData.finalBalance.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-yellow-50 p-4 rounded-lg">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-yellow-800">
+                  <p className="font-semibold mb-2">⚠️ WARNING: This action cannot be easily undone!</p>
+                  <p className="mb-3">This will:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>Consolidate all current entries into one settlement</li>
+                    <li>Move all current entries to Old Records</li>
+                    <li>Start fresh with the settlement balance</li>
+                    <li>Create a permanent financial record</li>
+                    <li>Add timestamp to settlement for tracking</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-green-50 p-4 rounded-lg">
+              <div className="flex items-start gap-2">
+                <TrendingUp className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-green-800">
+                  <p className="font-semibold mb-1">Benefits:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>Clean ledger with consolidated balance</li>
+                    <li>Historical records preserved in Old Records</li>
+                    <li>Multiple settlements per day allowed</li>
+                    <li>Timestamp tracking for each settlement</li>
+                    <li>Accurate balance continuity</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <div className="flex items-start gap-2">
+                <Clock className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-blue-800">
+                  <p className="font-semibold mb-1">Multiple Settlements:</p>
+                  <p>You can create multiple Monday Final settlements per day. Each settlement will be timestamped for proper tracking and balance calculation.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <AlertDialogFooter className="flex-shrink-0 border-t pt-4 mt-4 bg-white">
             <AlertDialogCancel disabled={actionLoading}>
               Cancel
             </AlertDialogCancel>
@@ -1680,7 +1680,7 @@ const AccountLedger = () => {
               ) : (
                 <>
                   <CheckCircle className="w-4 h-4 mr-2" />
-                  Create Monday Final Settlement
+                  Confirm Settlement
                 </>
               )}
             </AlertDialogAction>
