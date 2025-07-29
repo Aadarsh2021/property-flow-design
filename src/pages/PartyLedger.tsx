@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import TopNavigation from '../components/TopNavigation';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
@@ -20,7 +20,6 @@ const PartyLedger = () => {
   const { isAuthenticated, user } = useAuth();
   const [selectedParty, setSelectedParty] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedParties, setSelectedParties] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [parties, setParties] = useState<Party[]>([]);
@@ -115,7 +114,6 @@ const PartyLedger = () => {
 
   const handlePartySelect = (partyName: string) => {
     setSelectedParty(partyName);
-    setIsDialogOpen(false);
     navigate(`/account-ledger/${encodeURIComponent(partyName)}`);
   };
 
