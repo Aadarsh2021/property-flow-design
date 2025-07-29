@@ -74,6 +74,44 @@ const PartyLedger = () => {
     fetchParties();
   }, [fetchParties]);
 
+  // Keyboard shortcuts for better UX
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + F to focus search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        setIsDialogOpen(true);
+        // Focus search input after dialog opens
+        setTimeout(() => {
+          const searchInput = document.querySelector('input[placeholder="Search parties by name..."]') as HTMLInputElement;
+          if (searchInput) {
+            searchInput.focus();
+          }
+        }, 100);
+      }
+      
+      // Ctrl/Cmd + R to refresh
+      if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+        e.preventDefault();
+        fetchParties();
+      }
+      
+      // Ctrl/Cmd + N to add new party
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        e.preventDefault();
+        navigate('/new-party');
+      }
+      
+      // Escape to close dialog
+      if (e.key === 'Escape' && isDialogOpen) {
+        setIsDialogOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyPress);
+    return () => document.removeEventListener('keydown', handleKeyPress);
+  }, [isDialogOpen, navigate, fetchParties]);
+
   const filteredParties = (parties || []).filter(party =>
     party.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -203,42 +241,149 @@ const PartyLedger = () => {
     <div className="min-h-screen bg-gray-50">
       <TopNavigation />
       <div className="max-w-6xl mx-auto px-4 py-6">
+        {/* Header with Quick Stats */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Party Account Ledger</h1>
+              <p className="text-gray-600">Manage and view party transactions</p>
+            </div>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => navigate('/new-party')}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium flex items-center"
+              >
+                <Users className="w-4 h-4 mr-2" />
+                Add New Party
+              </button>
+              <button
+                onClick={fetchParties}
+                disabled={loading}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium flex items-center disabled:opacity-50"
+              >
+                {loading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Refreshing...
+                  </>
+                ) : (
+                  <>
+                    <Clock className="w-4 h-4 mr-2" />
+                    Refresh
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+          
+          {/* Quick Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Total Parties</p>
+                  <p className="text-2xl font-bold text-gray-900">{parties.length}</p>
+                </div>
+                <div className="bg-blue-100 p-2 rounded-lg">
+                  <Users className="w-5 h-5 text-blue-600" />
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Settled</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    {parties.filter(p => p.mondayFinal === 'Yes').length}
+                  </p>
+                </div>
+                <div className="bg-green-100 p-2 rounded-lg">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Unsettled</p>
+                  <p className="text-2xl font-bold text-red-600">
+                    {parties.filter(p => p.mondayFinal === 'No').length}
+                  </p>
+                </div>
+                <div className="bg-red-100 p-2 rounded-lg">
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Selected</p>
+                  <p className="text-2xl font-bold text-purple-600">{selectedParties.length}</p>
+                </div>
+                <div className="bg-purple-100 p-2 rounded-lg">
+                  <Calendar className="w-5 h-5 text-purple-600" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
           <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 rounded-t-lg">
-            <h2 className="text-xl font-semibold">Party A/C. Ledger</h2>
+            <h2 className="text-xl font-semibold">Party Selection</h2>
           </div>
           
           <div className="p-6">
+            {/* Enhanced Search and Selection */}
             <div className="flex items-center space-x-4 mb-6">
               <label className="text-sm font-medium text-gray-700">Party Name</label>
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
-                  <input
-                    type="text"
-                    value={selectedParty}
-                    placeholder="001-AR RTGS"
-                    readOnly
-                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer bg-white"
-                    onClick={() => setIsDialogOpen(true)}
-                  />
+                  <div className="flex-1 relative">
+                    <input
+                      type="text"
+                      value={selectedParty}
+                      placeholder="Click to select party or search..."
+                      readOnly
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer bg-white"
+                      onClick={() => setIsDialogOpen(true)}
+                    />
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                      <Users className="w-4 h-4" />
+                    </div>
+                  </div>
                 </DialogTrigger>
-                <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden">
+                
+                <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden">
                   <DialogHeader>
-                    <DialogTitle>Select Party</DialogTitle>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Users className="w-5 h-5" />
+                      Select Party
+                    </DialogTitle>
                     <DialogDescription>
-                      Search and select parties to view their account ledger.
+                      Search and select parties to view their account ledger. You can also perform bulk actions on selected parties.
                     </DialogDescription>
                   </DialogHeader>
+                  
                   <div className="space-y-4">
+                    {/* Enhanced Search Bar */}
                     <div className="flex flex-col md:flex-row gap-4">
-                      <div className="flex-1">
+                      <div className="flex-1 relative">
                         <input
                           type="text"
                           placeholder="Search parties by name..."
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 pl-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          autoFocus
                         />
+                        <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                          <Users className="w-4 h-4" />
+                        </div>
                       </div>
                       <div className="flex gap-2">
                         <select 
@@ -266,98 +411,176 @@ const PartyLedger = () => {
                         </button>
                       </div>
                     </div>
-                    <div className="text-sm text-gray-600">
-                      Showing {filteredParties.length} of {parties.length} parties
-                    </div>
-                    <div className="overflow-y-auto max-h-96">
-                      {loading ? (
-                        <div className="text-center py-4">Loading parties...</div>
-                      ) : (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>
-                              <Checkbox
-                                checked={selectedParties.length === filteredParties.length && filteredParties.length > 0}
-                                onCheckedChange={handleSelectAll}
-                              />
-                            </TableHead>
-                            <TableHead>Party Name</TableHead>
-                            <TableHead>Monday Final</TableHead>
-                            <TableHead>Select</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {filteredParties.map((party, index) => (
-                            <TableRow 
-                              key={party.name || `party-${index}`} 
-                              className={party.mondayFinal === 'Yes' ? 'bg-green-50' : 'bg-red-50'}
-                            >
-                              <TableCell>
-                                <Checkbox
-                                  checked={selectedParties.includes(party.name)}
-                                  onCheckedChange={(checked) => handleCheckboxChange(party.name, checked as boolean)}
-                                />
-                              </TableCell>
-                              <TableCell className="font-medium">{party.name}</TableCell>
-                              <TableCell>
-                                <span className={`px-2 py-1 rounded text-sm ${
-                                  party.mondayFinal === 'Yes' 
-                                    ? 'bg-green-200 text-green-800' 
-                                    : 'bg-red-200 text-red-800'
-                                }`}>
-                                  {party.mondayFinal}
-                                </span>
-                              </TableCell>
-                              <TableCell>
-                                <input
-                                  type="radio"
-                                  name="selectedParty"
-                                  onChange={() => handlePartySelect(party.name)}
-                                  className="cursor-pointer"
-                                />
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                    
+                    {/* Results Counter */}
+                    <div className="flex items-center justify-between text-sm text-gray-600">
+                      <span>Showing {filteredParties.length} of {parties.length} parties</span>
+                      {searchTerm && (
+                        <span className="text-blue-600">
+                          Search: "{searchTerm}"
+                        </span>
                       )}
                     </div>
+                    
+                    {/* Enhanced Table */}
+                    <div className="overflow-y-auto max-h-96 border border-gray-200 rounded-md">
+                      {loading ? (
+                        <div className="text-center py-8">
+                          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                          <p className="text-gray-600">Loading parties...</p>
+                        </div>
+                      ) : filteredParties.length === 0 ? (
+                        <div className="text-center py-8">
+                          <Users className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                          <p className="text-gray-600">No parties found</p>
+                          {searchTerm && (
+                            <p className="text-sm text-gray-500">Try adjusting your search terms</p>
+                          )}
+                        </div>
+                      ) : (
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-gray-50">
+                              <TableHead className="w-12">
+                                <Checkbox
+                                  checked={selectedParties.length === filteredParties.length && filteredParties.length > 0}
+                                  onCheckedChange={handleSelectAll}
+                                />
+                              </TableHead>
+                              <TableHead className="font-semibold">Party Name</TableHead>
+                              <TableHead className="font-semibold">Status</TableHead>
+                              <TableHead className="font-semibold text-center">Select</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {filteredParties.map((party, index) => (
+                              <TableRow 
+                                key={party.name || `party-${index}`} 
+                                className={`hover:bg-gray-50 transition-colors ${
+                                  party.mondayFinal === 'Yes' ? 'bg-green-50' : 'bg-red-50'
+                                }`}
+                              >
+                                <TableCell>
+                                  <Checkbox
+                                    checked={selectedParties.includes(party.name)}
+                                    onCheckedChange={(checked) => handleCheckboxChange(party.name, checked as boolean)}
+                                  />
+                                </TableCell>
+                                <TableCell className="font-medium cursor-pointer" onClick={() => handlePartySelect(party.name)}>
+                                  <div className="flex items-center gap-2">
+                                    <span>{party.name}</span>
+                                    <Badge variant="outline" className="text-xs">
+                                      {party.mondayFinal === 'Yes' ? 'Settled' : 'Unsettled'}
+                                    </Badge>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <span className={`px-2 py-1 rounded text-sm font-medium ${
+                                    party.mondayFinal === 'Yes' 
+                                      ? 'bg-green-200 text-green-800' 
+                                      : 'bg-red-200 text-red-800'
+                                  }`}>
+                                    {party.mondayFinal === 'Yes' ? (
+                                      <span className="flex items-center gap-1">
+                                        <CheckCircle className="w-3 h-3" />
+                                        Settled
+                                      </span>
+                                    ) : (
+                                      <span className="flex items-center gap-1">
+                                        <AlertTriangle className="w-3 h-3" />
+                                        Unsettled
+                                      </span>
+                                    )}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <button
+                                    onClick={() => handlePartySelect(party.name)}
+                                    className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm"
+                                  >
+                                    View Ledger
+                                  </button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )}
+                    </div>
+                    
+                    {/* Enhanced Selection Actions */}
                     {selectedParties.length > 0 && (
-                      <div className="flex justify-between items-center bg-blue-50 p-3 rounded-md">
-                        <span className="text-sm font-medium text-blue-700">
-                          {selectedParties.length} parties selected
-                        </span>
+                      <div className="flex justify-between items-center bg-blue-50 p-4 rounded-md border border-blue-200">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-5 h-5 text-blue-600" />
+                          <span className="text-sm font-medium text-blue-700">
+                            {selectedParties.length} parties selected
+                          </span>
+                        </div>
                         <div className="flex space-x-2">
                           <Button
                             onClick={handleMondayFinalClick}
-                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                            className="bg-green-600 hover:bg-green-700 text-white"
                             size="sm"
+                            disabled={actionLoading}
                           >
-                            <CheckCircle className="w-4 h-4 mr-2" />
-                            Monday Final
+                            {actionLoading ? (
+                              <>
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                                Processing...
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="w-4 h-4 mr-2" />
+                                Monday Final
+                              </>
+                            )}
                           </Button>
                           <Button
                             onClick={handleDeleteClick}
                             className="bg-red-600 hover:bg-red-700 text-white"
                             size="sm"
+                            disabled={actionLoading}
                           >
-                            <AlertTriangle className="w-4 h-4 mr-2" />
-                            Delete Selected
+                            {actionLoading ? (
+                              <>
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                                Processing...
+                              </>
+                            ) : (
+                              <>
+                                <AlertTriangle className="w-4 h-4 mr-2" />
+                                Delete Selected
+                              </>
+                            )}
                           </Button>
                         </div>
                       </div>
                     )}
+                    
+                    {/* Keyboard Shortcuts Help */}
+                    <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                      <div className="text-sm font-medium text-gray-800 mb-2">Keyboard Shortcuts:</div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-gray-600">
+                        <div>Ctrl+F: Search Parties</div>
+                        <div>Ctrl+R: Refresh Data</div>
+                        <div>Ctrl+N: Add New Party</div>
+                        <div>Esc: Close Dialog</div>
+                      </div>
+                    </div>
                   </div>
                 </DialogContent>
               </Dialog>
               
-              <Button
-                onClick={handleExit}
-                className="bg-orange-600 hover:bg-orange-700 text-white"
-              >
-                Exit
-              </Button>
+              {/* Quick Actions */}
+              <div className="flex items-center space-x-3">
+                <Button
+                  onClick={handleExit}
+                  className="bg-orange-600 hover:bg-orange-700 text-white"
+                >
+                  Exit
+                </Button>
+              </div>
             </div>
           </div>
         </div>
