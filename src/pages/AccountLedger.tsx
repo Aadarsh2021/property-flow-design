@@ -24,8 +24,7 @@ const AccountLedger = () => {
   const [newEntry, setNewEntry] = useState({
     partyName: '',
     amount: '',
-    remarks: '',
-    transactionType: 'CR' as 'CR' | 'DR'
+    remarks: ''
   });
   const [isModifyModalOpen, setIsModifyModalOpen] = useState(false);
   const [selectedEntryForModify, setSelectedEntryForModify] = useState<LedgerEntry | null>(null);
@@ -373,7 +372,8 @@ const AccountLedger = () => {
       const newAmount = parseFloat(newEntry.amount);
       
       // Determine if it's credit or debit based on transaction type
-      const isCredit = newEntry.transactionType === 'CR';
+      const amount = parseFloat(newEntry.amount);
+    const isCredit = amount >= 0;
       const finalAmount = isCredit ? Math.abs(newAmount) : -Math.abs(newAmount);
       
       // Calculate new balance starting from the last Monday Final Final settlement
@@ -410,7 +410,7 @@ const AccountLedger = () => {
         partyName: decodeURIComponent(partyName || ''),
         date: new Date().toLocaleDateString('en-GB'),
         remarks: generateRemarks(),
-        tnsType: newEntry.transactionType,
+        tnsType: isCredit ? 'CR' : 'DR',
         credit: isCredit ? Math.abs(newAmount) : 0,
         debit: isCredit ? 0 : -Math.abs(newAmount),
         balance: newBalance,
@@ -447,7 +447,7 @@ const AccountLedger = () => {
         });
         
         // Clear form and show success message
-        setNewEntry({ partyName: '', amount: '', remarks: '', transactionType: 'CR' });
+        setNewEntry({ partyName: '', amount: '', remarks: '' });
         toast({
           title: "✅ Transaction Added Successfully",
           description: `${isCredit ? 'Credit' : 'Debit'} entry of ${Math.abs(newAmount).toLocaleString()} added. New balance: ${newBalance.toLocaleString()}`,
@@ -498,7 +498,7 @@ const AccountLedger = () => {
 
   // Clear form function
   const handleClearForm = () => {
-    setNewEntry({ partyName: '', amount: '', remarks: '', transactionType: 'CR' });
+    setNewEntry({ partyName: '', amount: '', remarks: '' });
     // Re-fill party name
     if (partyName) {
       setNewEntry(prev => ({
@@ -1397,27 +1397,17 @@ const AccountLedger = () => {
                         required
                     />
                   </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Transaction Type</label>
-                      <select
-                        value={newEntry.transactionType}
-                        onChange={(e) => setNewEntry({...newEntry, transactionType: e.target.value as 'CR' | 'DR'})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="CR">Credit (+)</option>
-                        <option value="DR">Debit (-)</option>
-                      </select>
-                    </div>
+                    
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount (+ for Credit, - for Debit)</label>
                     <input
                       id="amount"
                       type="number"
                         value={newEntry.amount}
                         onChange={(e) => {
                           const value = e.target.value;
-                          // Allow empty string, numbers, and decimal point
-                          if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                          // Allow empty string, numbers, decimal point, and minus sign
+                          if (value === '' || /^-?\d*\.?\d*$/.test(value)) {
                             setNewEntry({...newEntry, amount: value});
                           }
                         }}
@@ -1427,14 +1417,13 @@ const AccountLedger = () => {
                           }
                         }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter amount"
-                        min="0"
+                      placeholder="Enter amount (+ for credit, - for debit)"
                         step="0.01"
                         required
                         autoFocus
                     />
                     <div className="text-xs text-gray-500 mt-1">
-                      💡 Press Ctrl+N to focus amount field
+                      💡 Use + for Credit, - for Debit | Press Ctrl+N to focus amount field
                     </div>
                   </div>
                   <div>
@@ -1485,10 +1474,10 @@ const AccountLedger = () => {
                     <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                       <div className="text-sm font-medium text-blue-800 mb-1">Transaction Preview:</div>
                       <div className="text-sm text-blue-700">
-                        <span className="font-medium">Type:</span> {newEntry.transactionType === 'CR' ? 'Credit' : 'Debit'} | 
+                                                <span className="font-medium">Type:</span> {parseFloat(newEntry.amount) >= 0 ? 'Credit' : 'Debit'} |
                         <span className="font-medium"> Amount:</span> {Math.abs(parseFloat(newEntry.amount)).toLocaleString()} | 
                         <span className="font-medium"> Remarks:</span> {generateRemarks()} | 
-                        <span className="font-medium"> New Balance:</span> {(closingBalance + (newEntry.transactionType === 'CR' ? Math.abs(parseFloat(newEntry.amount)) : -Math.abs(parseFloat(newEntry.amount)))).toLocaleString()}
+                        <span className="font-medium"> New Balance:</span> {(closingBalance + parseFloat(newEntry.amount)).toLocaleString()}
                 </div>
               </div>
                   )}
