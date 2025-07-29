@@ -222,17 +222,6 @@ const Login = () => {
   const isFormValid = formData.email.trim() && formData.password && !hasErrors;
   const isButtonDisabled = loading || !isFormValid;
 
-  // Debug logging
-  console.log('Form state:', {
-    email: formData.email,
-    password: formData.password,
-    validationErrors,
-    error,
-    hasErrors,
-    isFormValid,
-    isButtonDisabled
-  });
-
   // Handle autofill on component mount
   useEffect(() => {
     const checkAutofill = () => {

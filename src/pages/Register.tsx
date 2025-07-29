@@ -35,29 +35,19 @@ const Register = () => {
       case 'fullname':
         if (!value.trim()) {
           errors.fullname = 'Full name is required';
-        } else if (value.trim().length < 2) {
-          errors.fullname = 'Full name must be at least 2 characters';
-        } else if (value.trim().length > 50) {
-          errors.fullname = 'Full name must be less than 50 characters';
-        } else if (!/^[a-zA-Z\s]+$/.test(value.trim())) {
-          errors.fullname = 'Full name should only contain letters and spaces';
         } else {
-          // Split by spaces and filter out empty strings
+          // Enhanced name validation
           const nameParts = value.trim().split(' ').filter(part => part.length > 0);
-          
-          // Debug logging (commented out for production)
-          // console.log('Name validation debug:', {
-          //   originalValue: value,
-          //   trimmedValue: value.trim(),
-          //   nameParts: nameParts,
-          //   namePartsLength: nameParts.length,
-          //   hasShortWords: nameParts.some(word => word.length < 2)
-          // });
           
           if (nameParts.length < 2) {
             errors.fullname = 'Please enter your full name (first and last name)';
-          } else if (nameParts.some(word => word.length < 2)) {
-            errors.fullname = 'Each name part must be at least 2 characters';
+          } else {
+            for (const part of nameParts) {
+              if (part.length < 2) {
+                errors.fullname = 'Each name part must be at least 2 characters';
+                break;
+              }
+            }
           }
         }
         break;
@@ -387,9 +377,6 @@ const Register = () => {
                           formData.phone.trim() && 
                           formData.password && 
                           formData.confirmPassword;
-
-  // Debug logging (commented out for production)
-  // console.log('Form State:', { formData, validationErrors, hasErrors, allFieldsFilled, error });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">

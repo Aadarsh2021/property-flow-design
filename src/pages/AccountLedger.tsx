@@ -375,14 +375,6 @@ const AccountLedger = () => {
         createdAt: new Date().toISOString() // Add creation timestamp for proper ordering
       };
 
-      console.log('Adding new entry:', {
-        startingBalance,
-        finalAmount,
-        newBalance,
-        isCredit,
-        newAmount
-      });
-
       const response = await partyLedgerAPI.addEntry({
         partyName: decodeURIComponent(partyName || ''),
         amount: finalAmount,
@@ -520,8 +512,6 @@ const AccountLedger = () => {
       totalDebit: selectedEntries.reduce((sum, entry) => sum + Math.abs(entry.debit || 0), 0),
       generatedAt: new Date().toLocaleString()
     };
-    
-    console.log('DC Report Data:', reportData);
     
     // For now, just show a toast with report summary
     toast({
