@@ -43,6 +43,7 @@ const AccountLedger = () => {
     finalBalance: 0
   });
   const [actionLoading, setActionLoading] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // Load ledger data on component mount
   useEffect(() => {
@@ -985,47 +986,52 @@ const AccountLedger = () => {
       return;
     }
 
-    const confirmed = window.confirm(
-      `Are you sure you want to delete ${selectedEntries.length} selected entry(ies)?`
-    );
+    setShowDeleteModal(true);
+  };
 
-    if (confirmed) {
-      try {
-        // Delete entries from backend
-        const deletePromises = selectedEntries
-          .filter(entry => entry.id && !entry.id.toString().startsWith('entry-'))
-          .map(entry => {
-            const idString = typeof entry.id === 'string' ? entry.id : entry.id.toString();
-            return partyLedgerAPI.deleteEntry(idString);
-          });
-
-        await Promise.all(deletePromises);
-
-        // Update local state
-        if (showOldRecords) {
-          setOldRecords(prevRecords => {
-            const updatedRecords = prevRecords.filter(entry => !entry.chk);
-            return recalculateBalances(updatedRecords);
-          });
-        } else {
-          setLedgerEntries(prevEntries => {
-            const updatedEntries = prevEntries.filter(entry => !entry.chk);
-            return recalculateBalances(updatedEntries);
-          });
-        }
-
-        toast({
-          title: "Success",
-          description: `${selectedEntries.length} entry(ies) deleted successfully`,
+  const handleDeleteConfirm = async () => {
+    const currentEntries = showOldRecords ? (oldRecords || []) : (ledgerEntries || []);
+    const selectedEntries = currentEntries.filter(entry => entry.chk);
+    
+    setActionLoading(true);
+    try {
+      // Delete entries from backend
+      const deletePromises = selectedEntries
+        .filter(entry => entry.id && !entry.id.toString().startsWith('entry-'))
+        .map(entry => {
+          const idString = typeof entry.id === 'string' ? entry.id : entry.id.toString();
+          return partyLedgerAPI.deleteEntry(idString);
         });
-      } catch (error) {
-        console.error('Error deleting entries:', error);
-        toast({
-          title: "Error",
-          description: "Failed to delete entries",
-          variant: "destructive"
+
+      await Promise.all(deletePromises);
+
+      // Update local state
+      if (showOldRecords) {
+        setOldRecords(prevRecords => {
+          const updatedRecords = prevRecords.filter(entry => !entry.chk);
+          return recalculateBalances(updatedRecords);
+        });
+      } else {
+        setLedgerEntries(prevEntries => {
+          const updatedEntries = prevEntries.filter(entry => !entry.chk);
+          return recalculateBalances(updatedEntries);
         });
       }
+
+      setShowDeleteModal(false);
+      toast({
+        title: "Success",
+        description: `${selectedEntries.length} entry(ies) deleted successfully`,
+      });
+    } catch (error) {
+      console.error('Error deleting entries:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete entries",
+        variant: "destructive"
+      });
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -1666,6 +1672,40 @@ const AccountLedger = () => {
                 <>
                   <CheckCircle className="w-4 h-4 mr-2" />
                   Create Monday Final Settlement
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Confirmation Modal */}
+      <AlertDialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-semibold text-gray-900">Confirm Deletion</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-gray-700">
+              Are you sure you want to delete {showOldRecords ? oldRecords.filter(entry => entry.chk).length : ledgerEntries.filter(entry => entry.chk).length} selected entry(ies)? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowDeleteModal(false)} disabled={actionLoading}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={actionLoading}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {actionLoading ? (
+                <>
+                  <Clock className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="w-4 h-4 mr-2" />
+                  Delete
                 </>
               )}
             </AlertDialogAction>
