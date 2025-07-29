@@ -333,57 +333,57 @@ const PartyLedger = () => {
 
       {/* Monday Final Confirmation Modal */}
       <AlertDialog open={showMondayFinalModal} onOpenChange={setShowMondayFinalModal}>
-        <AlertDialogContent className="max-w-lg">
-          <AlertDialogHeader>
+        <AlertDialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <AlertDialogHeader className="sticky top-0 bg-white z-10 pb-4">
             <AlertDialogTitle className="flex items-center gap-2 text-lg">
               <CheckCircle className="w-6 h-6 text-green-600" />
               Monday Final Confirmation
             </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-4">
-              <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-                <Users className="w-4 h-4" />
-                <span className="font-medium">{selectedParties.length} parties selected</span>
-                <span className="text-gray-400">•</span>
-                <span className="text-xs text-gray-500">
-                  {selectedParties.length === 1 ? 'party' : 'parties'}
-                </span>
-              </div>
-              
-              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                <div className="flex items-start gap-3">
-                  <CheckCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-blue-800">
-                    <p className="font-semibold mb-2">What will happen?</p>
-                    <p className="mb-3">
-                      These parties will be marked as <strong>Monday Final</strong> with status "Yes". 
-                      This indicates they have been settled for the current period.
-                    </p>
-                    <ul className="list-disc list-inside space-y-1 text-blue-700">
-                      <li>Status will be updated to "Yes"</li>
-                      <li>Parties will be marked as settled</li>
-                      <li>Action will be logged in the system</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-yellow-800">
-                    <p className="font-semibold mb-2">Important Considerations:</p>
-                    <ul className="list-disc list-inside space-y-1 text-yellow-700">
-                      <li>This will affect financial calculations</li>
-                      <li>Parties will be marked as settled</li>
-                      <li>Action will be logged in the system</li>
-                      <li>This action cannot be easily undone</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="gap-3">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+              <Users className="w-4 h-4" />
+              <span className="font-medium">{selectedParties.length} parties selected</span>
+              <span className="text-gray-400">•</span>
+              <span className="text-xs text-gray-500">
+                {selectedParties.length === 1 ? 'party' : 'parties'}
+              </span>
+            </div>
+            
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+              <div className="flex items-start gap-3">
+                <CheckCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-blue-800">
+                  <p className="font-semibold mb-2">What will happen?</p>
+                  <p className="mb-3">
+                    These parties will be marked as <strong>Monday Final</strong> with status "Yes". 
+                    This indicates they have been settled for the current period.
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 text-blue-700">
+                    <li>Status will be updated to "Yes"</li>
+                    <li>Parties will be marked as settled</li>
+                    <li>Action will be logged in the system</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-yellow-800">
+                  <p className="font-semibold mb-2">Important Considerations:</p>
+                  <ul className="list-disc list-inside space-y-1 text-yellow-700">
+                    <li>This will affect financial calculations</li>
+                    <li>Parties will be marked as settled</li>
+                    <li>Action will be logged in the system</li>
+                    <li>This action cannot be easily undone</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+          <AlertDialogFooter className="sticky bottom-0 bg-white border-t pt-4 mt-6">
             <AlertDialogCancel 
               disabled={actionLoading}
               className="border-gray-300 text-gray-700 hover:bg-gray-50"
@@ -413,57 +413,57 @@ const PartyLedger = () => {
 
       {/* Delete Confirmation Modal */}
       <AlertDialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
-        <AlertDialogContent className="max-w-lg">
-          <AlertDialogHeader>
+        <AlertDialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <AlertDialogHeader className="sticky top-0 bg-white z-10 pb-4">
             <AlertDialogTitle className="flex items-center gap-2 text-lg">
               <AlertTriangle className="w-6 h-6 text-red-600" />
               Delete Parties Confirmation
             </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-4">
-              <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-                <Users className="w-4 h-4" />
-                <span className="font-medium">{selectedParties.length} parties selected</span>
-                <span className="text-gray-400">•</span>
-                <span className="text-xs text-gray-500">
-                  {selectedParties.length === 1 ? 'party' : 'parties'}
-                </span>
-              </div>
-              
-              <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-red-800">
-                    <p className="font-semibold mb-2">What will happen?</p>
-                    <p className="mb-3">
-                      These parties will be <strong>permanently deleted</strong> from the system. 
-                      All associated data and transactions will be removed.
-                    </p>
-                    <ul className="list-disc list-inside space-y-1 text-red-700">
-                      <li>All party data will be permanently removed</li>
-                      <li>Associated transactions will be deleted</li>
-                      <li>This action cannot be reversed</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-yellow-800">
-                    <p className="font-semibold mb-2">Warning:</p>
-                    <ul className="list-disc list-inside space-y-1 text-yellow-700">
-                      <li>This action cannot be undone</li>
-                      <li>All data will be permanently lost</li>
-                      <li>No recovery option available</li>
-                      <li>Please ensure you have backups if needed</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="gap-3">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+              <Users className="w-4 h-4" />
+              <span className="font-medium">{selectedParties.length} parties selected</span>
+              <span className="text-gray-400">•</span>
+              <span className="text-xs text-gray-500">
+                {selectedParties.length === 1 ? 'party' : 'parties'}
+              </span>
+            </div>
+            
+            <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-red-800">
+                  <p className="font-semibold mb-2">What will happen?</p>
+                  <p className="mb-3">
+                    These parties will be <strong>permanently deleted</strong> from the system. 
+                    All associated data and transactions will be removed.
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 text-red-700">
+                    <li>All party data will be permanently removed</li>
+                    <li>Associated transactions will be deleted</li>
+                    <li>This action cannot be reversed</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-yellow-800">
+                  <p className="font-semibold mb-2">Warning:</p>
+                  <ul className="list-disc list-inside space-y-1 text-yellow-700">
+                    <li>This action cannot be undone</li>
+                    <li>All data will be permanently lost</li>
+                    <li>No recovery option available</li>
+                    <li>Please ensure you have backups if needed</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+          <AlertDialogFooter className="sticky bottom-0 bg-white border-t pt-4 mt-6">
             <AlertDialogCancel 
               disabled={actionLoading}
               className="border-gray-300 text-gray-700 hover:bg-gray-50"
