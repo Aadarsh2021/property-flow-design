@@ -333,14 +333,14 @@ const PartyLedger = () => {
 
       {/* Monday Final Confirmation Modal */}
       <AlertDialog open={showMondayFinalModal} onOpenChange={setShowMondayFinalModal}>
-        <AlertDialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <AlertDialogHeader className="sticky top-0 bg-white z-10 pb-4">
+        <AlertDialogContent className="max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
+          <AlertDialogHeader className="flex-shrink-0 pb-4">
             <AlertDialogTitle className="flex items-center gap-2 text-lg">
               <CheckCircle className="w-6 h-6 text-green-600" />
               Monday Final Confirmation
             </AlertDialogTitle>
           </AlertDialogHeader>
-          <div className="space-y-4">
+          <div className="flex-1 overflow-y-auto space-y-4 px-1">
             <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
               <Users className="w-4 h-4" />
               <span className="font-medium">{selectedParties.length} parties selected</span>
@@ -383,7 +383,7 @@ const PartyLedger = () => {
               </div>
             </div>
           </div>
-          <AlertDialogFooter className="sticky bottom-0 bg-white border-t pt-4 mt-6">
+          <AlertDialogFooter className="flex-shrink-0 border-t pt-4 mt-4 bg-white">
             <AlertDialogCancel 
               disabled={actionLoading}
               className="border-gray-300 text-gray-700 hover:bg-gray-50"
@@ -413,14 +413,14 @@ const PartyLedger = () => {
 
       {/* Delete Confirmation Modal */}
       <AlertDialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
-        <AlertDialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <AlertDialogHeader className="sticky top-0 bg-white z-10 pb-4">
+        <AlertDialogContent className="max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
+          <AlertDialogHeader className="flex-shrink-0 pb-4">
             <AlertDialogTitle className="flex items-center gap-2 text-lg">
               <AlertTriangle className="w-6 h-6 text-red-600" />
               Delete Parties Confirmation
             </AlertDialogTitle>
           </AlertDialogHeader>
-          <div className="space-y-4">
+          <div className="flex-1 overflow-y-auto space-y-4 px-1">
             <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
               <Users className="w-4 h-4" />
               <span className="font-medium">{selectedParties.length} parties selected</span>
@@ -463,7 +463,7 @@ const PartyLedger = () => {
               </div>
             </div>
           </div>
-          <AlertDialogFooter className="sticky bottom-0 bg-white border-t pt-4 mt-6">
+          <AlertDialogFooter className="flex-shrink-0 border-t pt-4 mt-4 bg-white">
             <AlertDialogCancel 
               disabled={actionLoading}
               className="border-gray-300 text-gray-700 hover:bg-gray-50"
