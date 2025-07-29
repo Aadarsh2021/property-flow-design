@@ -91,7 +91,9 @@ const AccountLedger = () => {
     setLoading(true);
     try {
       const response = await partyLedgerAPI.getPartyLedger(partyName);
-      if (response.success) {
+      
+      // Check if response is valid and has data
+      if (response && response.success && response.data && Array.isArray(response.data)) {
         // Ensure all entries have proper ID fields
         const processedEntries = response.data.map((entry: any, index: number) => ({
           ...entry,
@@ -123,11 +125,17 @@ const AccountLedger = () => {
           setClosingBalance(recalculatedEntries[recalculatedEntries.length - 1].balance);
         }
       } else {
-        // Fallback to mock data if API fails
+        // Fallback to mock data if API response is invalid
+        console.warn('Invalid API response format, using mock data');
         const mockEntries = mockData.getMockLedgerEntries();
         const recalculatedMockEntries = recalculateBalances(mockEntries);
         setLedgerEntries(recalculatedMockEntries);
-        console.warn('Using mock data due to API failure');
+        
+        toast({
+          title: "Warning",
+          description: "Using offline data. Some features may be limited.",
+          variant: "destructive"
+        });
       }
     } catch (error) {
       console.error('Error loading ledger data:', error);
@@ -135,6 +143,7 @@ const AccountLedger = () => {
       const mockEntries = mockData.getMockLedgerEntries();
       const recalculatedMockEntries = recalculateBalances(mockEntries);
       setLedgerEntries(recalculatedMockEntries);
+      
       toast({
         title: "Warning",
         description: "Using offline data. Some features may be limited.",

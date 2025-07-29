@@ -84,7 +84,20 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
     };
 
   try {
-    return await retryRequest<ApiResponse<T>>(url, config);
+    const response = await retryRequest<ApiResponse<T>>(url, config);
+    
+    // Ensure response has proper structure
+    if (!response) {
+      throw new Error('Invalid API response: No response received');
+    }
+    
+    // Ensure data is always an array for list endpoints
+    if (response.data && !Array.isArray(response.data)) {
+      console.warn('API response data is not an array, converting to array');
+      response.data = [response.data] as T;
+    }
+    
+    return response;
   } catch (error: any) {
     console.error('API Error:', error);
     throw error;
