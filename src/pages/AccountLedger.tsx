@@ -45,9 +45,10 @@ const AccountLedger = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedEntries, setSelectedEntries] = useState<(string | number)[]>([]);
 
-  // Calculate summary values
-  const totalCredit = (ledgerEntries || []).reduce((sum, entry) => sum + (entry.credit || 0), 0);
-  const totalDebit = (ledgerEntries || []).reduce((sum, entry) => sum + Math.abs(entry.debit || 0), 0);
+  // Calculate summary values based on current view
+  const currentEntries = showOldRecords ? (oldRecords || []) : (ledgerEntries || []);
+  const totalCredit = currentEntries.reduce((sum, entry) => sum + (entry.credit || 0), 0);
+  const totalDebit = currentEntries.reduce((sum, entry) => sum + Math.abs(entry.debit || 0), 0);
   const calculatedBalance = totalCredit - totalDebit;
 
   // Keyboard shortcuts for better UX
@@ -1264,7 +1265,7 @@ const AccountLedger = () => {
                     <div>
                       <p className="text-sm font-medium text-purple-600">Total Entries</p>
                       <p className="text-2xl font-bold text-purple-900">
-                        {ledgerEntries.length}
+                        {currentEntries.length}
                       </p>
                     </div>
                     <div className="bg-purple-100 p-3 rounded-lg">
@@ -1277,7 +1278,19 @@ const AccountLedger = () => {
               {/* Ledger Table */}
               <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
                 <div className="bg-gray-50 px-6 py-3 border-b border-gray-200">
-                  <h3 className="text-lg font-semibold text-gray-900">Transaction Ledger</h3>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      {showOldRecords ? 'Archived Records' : 'Transaction Ledger'}
+                    </h3>
+                    {showOldRecords && (
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm text-gray-600">📋 Viewing archived records</span>
+                        <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+                          {oldRecords.length} entries
+                        </Badge>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <Table>
@@ -1293,36 +1306,101 @@ const AccountLedger = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {(ledgerEntries || []).map((entry, index) => (
-                        <TableRow key={entry.id || index} className="hover:bg-gray-50">
-                          <TableCell className="font-medium">{entry.date}</TableCell>
-                          <TableCell className="max-w-xs truncate" title={entry.remarks || ''}>
-                            {entry.remarks || ''}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={entry.tnsType === 'CR' ? 'default' : 'secondary'}>
-                              {entry.tnsType}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-medium text-green-600">
-                            {entry.credit ? entry.credit.toLocaleString() : ''}
-                          </TableCell>
-                          <TableCell className="text-right font-medium text-red-600">
-                            {entry.debit ? Math.abs(entry.debit).toLocaleString() : ''}
-                          </TableCell>
-                          <TableCell className="text-right font-medium text-blue-600">
-                            {entry.balance ? entry.balance.toLocaleString() : ''}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Checkbox
-                              checked={selectedEntries.includes(entry.id || index)}
-                              onCheckedChange={(checked) => 
-                                handleCheckboxChange(entry.id || index, checked as boolean)
-                              }
-                            />
+                      {loading ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center py-8">
+                            <div className="flex items-center justify-center space-x-2">
+                              <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                              <span>Loading ledger data...</span>
+                            </div>
                           </TableCell>
                         </TableRow>
-                      ))}
+                      ) : showOldRecords ? (
+                        // Show Old Records
+                        oldRecords.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center py-8">
+                              <div className="text-gray-500">
+                                <div className="text-6xl mb-4">📋</div>
+                                <p className="text-lg font-medium">No archived records found</p>
+                                <p className="text-sm">Complete a Monday Final settlement to archive transactions.</p>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          oldRecords.map((entry, index) => (
+                            <TableRow key={`old-${index}`} className="hover:bg-gray-50 bg-gray-50">
+                              <TableCell className="font-medium text-gray-600">{entry.date}</TableCell>
+                              <TableCell className="max-w-xs truncate text-gray-600" title={entry.remarks || ''}>
+                                {entry.remarks || ''}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="secondary" className="bg-gray-100 text-gray-800">
+                                  {entry.tnsType}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right font-medium text-green-600">
+                                {entry.credit ? entry.credit.toLocaleString() : ''}
+                              </TableCell>
+                              <TableCell className="text-right font-medium text-red-600">
+                                {entry.debit ? Math.abs(entry.debit).toLocaleString() : ''}
+                              </TableCell>
+                              <TableCell className="text-right font-medium text-blue-600">
+                                {entry.balance ? entry.balance.toLocaleString() : ''}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Checkbox
+                                  checked={selectedEntries.includes(entry.id || index)}
+                                  onCheckedChange={(checked) => 
+                                    handleCheckboxChange(entry.id || index, checked as boolean)
+                                  }
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )
+                      ) : ledgerEntries.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center py-8">
+                            <div className="text-gray-500">
+                              <div className="text-6xl mb-4">📊</div>
+                              <p className="text-lg font-medium">No ledger entries found</p>
+                              <p className="text-sm">Add your first transaction to get started.</p>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        (ledgerEntries || []).map((entry, index) => (
+                          <TableRow key={entry.id || index} className="hover:bg-gray-50">
+                            <TableCell className="font-medium">{entry.date}</TableCell>
+                            <TableCell className="max-w-xs truncate" title={entry.remarks || ''}>
+                              {entry.remarks || ''}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={entry.tnsType === 'CR' ? 'default' : 'secondary'}>
+                                {entry.tnsType}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-medium text-green-600">
+                              {entry.credit ? entry.credit.toLocaleString() : ''}
+                            </TableCell>
+                            <TableCell className="text-right font-medium text-red-600">
+                              {entry.debit ? Math.abs(entry.debit).toLocaleString() : ''}
+                            </TableCell>
+                            <TableCell className="text-right font-medium text-blue-600">
+                              {entry.balance ? entry.balance.toLocaleString() : ''}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Checkbox
+                                checked={selectedEntries.includes(entry.id || index)}
+                                onCheckedChange={(checked) => 
+                                  handleCheckboxChange(entry.id || index, checked as boolean)
+                                }
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
                     </TableBody>
                   </Table>
                 </div>
@@ -1500,6 +1578,218 @@ const AccountLedger = () => {
           </div>
         </div>
       </div>
+
+      {/* Modify Modal */}
+      {isModifyModalOpen && selectedEntryForModify && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-50">
+          <div className="relative p-8 border w-96 shadow-lg rounded-md bg-white">
+            <div className="text-center">
+              <h3 className="text-lg font-semibold leading-6 text-gray-900">Modify Entry</h3>
+              <div className="mt-2 px-7 py-3">
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
+                    <input
+                      type="text"
+                      value={modifyFormData.remarks}
+                      onChange={(e) => setModifyFormData({...modifyFormData, remarks: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+                    <input
+                      type="number"
+                      value={modifyFormData.amount}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                          setModifyFormData({...modifyFormData, amount: value});
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Enter amount"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Tns Type</label>
+                    <select
+                      value={modifyFormData.tnsType}
+                      onChange={(e) => setModifyFormData({...modifyFormData, tnsType: e.target.value as 'CR' | 'DR'})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="CR">Credit</option>
+                      <option value="DR">Debit</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div className="items-center px-4 py-3">
+                <button
+                  onClick={handleModifySubmit}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors font-medium"
+                >
+                  Save Changes
+                </button>
+                <button
+                  onClick={handleModifyCancel}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Monday Final Confirmation Modal */}
+      <AlertDialog open={showMondayFinalModal} onOpenChange={setShowMondayFinalModal}>
+        <AlertDialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+          <AlertDialogHeader className="flex-shrink-0 pb-4">
+            <AlertDialogTitle className="flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              Monday Final Settlement Confirmation
+            </AlertDialogTitle>
+            <AlertDialogDescription className="sr-only">
+              Monday Final settlement confirmation dialog with transaction summary and warnings
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex-1 overflow-y-auto space-y-4 px-1">
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <div className="flex items-center gap-2 mb-3">
+                <Calculator className="w-5 h-5 text-blue-600" />
+                <span className="font-semibold text-blue-800">Settlement Summary</span>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Transactions:</span>
+                  <span className="font-medium">{mondayFinalData.transactionCount}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Total Credit:</span>
+                  <span className="font-medium text-green-600">₹{mondayFinalData.totalCredit.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Total Debit:</span>
+                  <span className="font-medium text-red-600">₹{mondayFinalData.totalDebit.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Starting Balance:</span>
+                  <span className="font-medium">₹{mondayFinalData.startingBalance.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between col-span-2 border-t pt-2">
+                  <span className="text-gray-800 font-semibold">Final Balance:</span>
+                  <span className={`font-bold text-lg ${mondayFinalData.finalBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    ₹{mondayFinalData.finalBalance.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-yellow-50 p-4 rounded-lg">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-yellow-800">
+                  <p className="font-semibold mb-2">⚠️ WARNING: This action cannot be easily undone!</p>
+                  <p className="mb-3">This will:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>Consolidate all current entries into one settlement</li>
+                    <li>Move all current entries to Old Records</li>
+                    <li>Start fresh with the settlement balance</li>
+                    <li>Create a permanent financial record</li>
+                    <li>Add timestamp to settlement for tracking</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-green-50 p-4 rounded-lg">
+              <div className="flex items-start gap-2">
+                <TrendingUp className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-green-800">
+                  <p className="font-semibold mb-1">Benefits:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>Clean ledger with consolidated balance</li>
+                    <li>Historical records preserved in Old Records</li>
+                    <li>Multiple settlements per day allowed</li>
+                    <li>Timestamp tracking for each settlement</li>
+                    <li>Accurate balance continuity</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <div className="flex items-start gap-2">
+                <Clock className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-blue-800">
+                  <p className="font-semibold mb-1">Multiple Settlements:</p>
+                  <p>You can create multiple Monday Final settlements per day. Each settlement will be timestamped for proper tracking and balance calculation.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <AlertDialogFooter className="flex-shrink-0 border-t pt-4 mt-4 bg-white">
+            <AlertDialogCancel disabled={actionLoading}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleMondayFinalConfirm}
+              disabled={actionLoading}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              {actionLoading ? (
+                <>
+                  <Clock className="w-4 h-4 mr-2 animate-spin" />
+                  Creating Settlement...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Confirm Settlement
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Confirmation Modal */}
+      <AlertDialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-semibold text-gray-900">Confirm Deletion</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-gray-700">
+              Are you sure you want to delete {selectedEntries.length} selected entry(ies)? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowDeleteModal(false)} disabled={actionLoading}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={actionLoading}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {actionLoading ? (
+                <>
+                  <Clock className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="w-4 h-4 mr-2" />
+                  Delete
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
