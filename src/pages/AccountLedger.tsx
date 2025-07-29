@@ -1173,20 +1173,34 @@ const AccountLedger = () => {
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                   <div className="text-sm font-medium text-green-700">Total Credit</div>
                   <div className="text-2xl font-bold text-green-600">
-                    {parseFloat((showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => sum + (entry.credit || 0), 0).toFixed(2)).toLocaleString()}
+                    {(() => {
+                      const totalCredit = (showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => sum + (entry.credit || 0), 0);
+                      console.log('Debug - ledgerEntries:', ledgerEntries);
+                      console.log('Debug - totalCredit calculation:', totalCredit);
+                      return parseFloat(totalCredit.toFixed(2)).toLocaleString();
+                    })()}
                   </div>
                 </div>
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                   <div className="text-sm font-medium text-red-700">Total Debit</div>
                   <div className="text-2xl font-bold text-red-600">
-                    {parseFloat((showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => sum + Math.abs(entry.debit || 0), 0).toFixed(2)).toLocaleString()}
+                    {(() => {
+                      const totalDebit = (showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => sum + Math.abs(entry.debit || 0), 0);
+                      console.log('Debug - totalDebit calculation:', totalDebit);
+                      return parseFloat(totalDebit.toFixed(2)).toLocaleString();
+                    })()}
                   </div>
                 </div>
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <div className="text-sm font-medium text-blue-700">Calculated Balance</div>
                   <div className="text-2xl font-bold text-blue-600">
-                    {parseFloat(((showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => sum + (entry.credit || 0), 0) - 
-                      (showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => sum + Math.abs(entry.debit || 0), 0)).toFixed(2)).toLocaleString()}
+                    {(() => {
+                      const totalCredit = (showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => sum + (entry.credit || 0), 0);
+                      const totalDebit = (showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => sum + Math.abs(entry.debit || 0), 0);
+                      const calculatedBalance = totalCredit - totalDebit;
+                      console.log('Debug - calculatedBalance:', calculatedBalance);
+                      return parseFloat(calculatedBalance.toFixed(2)).toLocaleString();
+                    })()}
                   </div>
                 </div>
                 <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
