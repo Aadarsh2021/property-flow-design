@@ -95,9 +95,10 @@ const PartyLedger = () => {
         fetchParties();
       }
       
-      // Ctrl/Cmd + N to add new party
+      // Ctrl/Cmd + N to add new party (prevent new browser tab)
       if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
         e.preventDefault();
+        e.stopPropagation();
         navigate('/new-party');
       }
       
@@ -245,7 +246,11 @@ const PartyLedger = () => {
             </div>
             <div className="flex items-center space-x-3">
               <button
-                onClick={() => navigate('/new-party')}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  navigate('/new-party');
+                }}
                 className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium flex items-center"
               >
                 <Users className="w-4 h-4 mr-2" />
@@ -462,7 +467,11 @@ const PartyLedger = () => {
                           </TableCell>
                           <TableCell className="text-center">
                             <button
-                              onClick={() => handlePartySelect(party.name)}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handlePartySelect(party.name);
+                              }}
                               className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm"
                             >
                               View Ledger
@@ -539,7 +548,11 @@ const PartyLedger = () => {
               {/* Exit Button */}
               <div className="flex justify-end">
                 <Button
-                  onClick={handleExit}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleExit();
+                  }}
                   className="bg-orange-600 hover:bg-orange-700 text-white"
                 >
                   Exit
