@@ -43,6 +43,12 @@ const AccountLedger = () => {
   });
   const [actionLoading, setActionLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedEntries, setSelectedEntries] = useState<(string | number)[]>([]);
+
+  // Calculate summary values
+  const totalCredit = (ledgerEntries || []).reduce((sum, entry) => sum + (entry.credit || 0), 0);
+  const totalDebit = (ledgerEntries || []).reduce((sum, entry) => sum + Math.abs(entry.debit || 0), 0);
+  const calculatedBalance = totalCredit - totalDebit;
 
   // Keyboard shortcuts for better UX
   useEffect(() => {
@@ -1173,595 +1179,327 @@ const AccountLedger = () => {
     <div className="min-h-screen bg-gray-50">
       <TopNavigation />
       <div className="max-w-7xl mx-auto px-4 py-6">
+        {/* Main Container */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 rounded-t-lg flex justify-between items-center">
-            <h2 className="text-xl font-semibold">Account Ledger</h2>
-            <button
-              onClick={handleRefreshAll}
-              disabled={loading}
-              className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors font-medium disabled:opacity-50"
-            >
-              {loading ? 'Refreshing...' : 'Refresh All'}
-            </button>
-          </div>
-          
-          <div className="flex">
-            {/* Left Container - Main Data */}
-            <div className="flex-1 p-6">
-              {/* Party Info Header */}
-              <div className="flex justify-between items-center mb-6">
-                <div className="flex items-center space-x-4">
-                  <span className="text-sm font-medium text-gray-700">Party Name</span>
-                  <span className="font-semibold text-lg">{decodeURIComponent(partyName || '001-AR RTGS')}</span>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <span className="text-sm font-medium text-gray-700">Closing Balance :</span>
-                  <span className={`font-bold text-lg ${closingBalance < 0 ? 'text-red-600' : 'text-blue-600'}`}>
-                    {closingBalance.toLocaleString()}
-                  </span>
+          {/* Header Section */}
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 rounded-t-lg">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-2xl font-bold">SHUBH LABH 1011 - [Account Ledger]</h1>
+                <div className="flex items-center space-x-6 mt-2">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-medium">Party Name:</span>
+                    <span className="font-semibold">{decodeURIComponent(partyName || '001-AR RTGS')}</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-medium">Closing Balance:</span>
+                    <span className={`font-bold ${closingBalance < 0 ? 'text-red-200' : 'text-green-200'}`}>
+                      {closingBalance.toLocaleString()}
+                    </span>
+                  </div>
                 </div>
               </div>
-
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={handleRefreshAll}
+                  disabled={loading}
+                  className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors font-medium disabled:opacity-50 flex items-center"
+                >
+                  {loading ? 'Refreshing...' : 'Refresh All'}
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          {/* Main Content Area */}
+          <div className="flex">
+            {/* Left Side - Ledger Table */}
+            <div className="flex-1 p-6">
               {/* Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <div className="text-sm font-medium text-green-700">Total Credit</div>
-                  <div className="text-2xl font-bold text-green-600">
-                    {parseFloat((showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => sum + (entry.credit || 0), 0).toFixed(2)).toLocaleString()}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-green-600">Total Credit</p>
+                      <p className="text-2xl font-bold text-green-900">
+                        {totalCredit.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="bg-green-100 p-3 rounded-lg">
+                      <TrendingUp className="w-6 h-6 text-green-600" />
+                    </div>
                   </div>
                 </div>
+                
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <div className="text-sm font-medium text-red-700">Total Debit</div>
-                  <div className="text-2xl font-bold text-red-600">
-                    {parseFloat((showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => sum + Math.abs(entry.debit || 0), 0).toFixed(2)).toLocaleString()}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-red-600">Total Debit</p>
+                      <p className="text-2xl font-bold text-red-900">
+                        {totalDebit.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="bg-red-100 p-3 rounded-lg">
+                      <DollarSign className="w-6 h-6 text-red-600" />
+                    </div>
                   </div>
                 </div>
+                
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="text-sm font-medium text-blue-700">Calculated Balance</div>
-                  <div className="text-2xl font-bold text-blue-600">
-                    {parseFloat(((showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => sum + (entry.credit || 0), 0) - 
-                      (showOldRecords ? oldRecords : ledgerEntries).reduce((sum, entry) => sum + Math.abs(entry.debit || 0), 0)).toFixed(2)).toLocaleString()}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-blue-600">Calculated Balance</p>
+                      <p className="text-2xl font-bold text-blue-900">
+                        {calculatedBalance.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="bg-blue-100 p-3 rounded-lg">
+                      <Calculator className="w-6 h-6 text-blue-600" />
+                    </div>
                   </div>
                 </div>
+                
                 <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                  <div className="text-sm font-medium text-purple-700">Total Entries</div>
-                  <div className="text-2xl font-bold text-purple-600">
-                    {showOldRecords ? oldRecords.length : ledgerEntries.length}
-                  </div>
-                </div>
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <div className="text-sm font-medium text-gray-700">Selected</div>
-                  <div className="text-2xl font-bold text-gray-600">
-                    {showOldRecords 
-                      ? oldRecords.filter(entry => entry.chk).length
-                      : ledgerEntries.filter(entry => entry.chk).length
-                    }
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-purple-600">Total Entries</p>
+                      <p className="text-2xl font-bold text-purple-900">
+                        {ledgerEntries.length}
+                      </p>
+                    </div>
+                    <div className="bg-purple-100 p-3 rounded-lg">
+                      <Clock className="w-6 h-6 text-purple-600" />
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Ledger Table */}
-              <div className="overflow-x-auto mb-6">
-                {loading ? (
-                  <div className="space-y-4">
-                    <div className="animate-pulse">
-                      <div className="h-10 bg-gray-200 rounded mb-4"></div>
-                      {[1, 2, 3, 4, 5].map((i) => (
-                        <div key={i} className="h-12 bg-gray-100 rounded mb-2"></div>
-                      ))}
-                    </div>
-                    <div className="text-center text-gray-500">
-                      <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                      Loading ledger data...
-                    </div>
-                  </div>
-                ) : showOldRecords ? (
-                  // Show Old Records
-                  oldRecords.length === 0 ? (
-                    <div className="text-center py-12">
-                      <div className="text-gray-400 text-6xl mb-4">📋</div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No archived records found</h3>
-                      <p className="text-gray-500">Complete a Monday Final settlement to archive transactions.</p>
-                    </div>
-                  ) : (
-                    <div>
-                      <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-yellow-600">📋</span>
-                            <span className="text-sm font-medium text-yellow-800">
-                              Viewing Archived Records ({oldRecords.length} entries)
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Date</TableHead>
-                            <TableHead>Remarks</TableHead>
-                            <TableHead>Tns Type</TableHead>
-                            <TableHead>Credit</TableHead>
-                            <TableHead>Debit</TableHead>
-                            <TableHead>Balance</TableHead>
-                            <TableHead>Chk</TableHead>
-                            <TableHead>Ti</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {oldRecords
-                            .sort((a, b) => {
-                              const dateA = new Date(a.date.split('/').reverse().join('-'));
-                              const dateB = new Date(b.date.split('/').reverse().join('-'));
-                              return dateA.getTime() - dateB.getTime(); // Oldest first for display
-                            })
-                            .map((entry, index) => (
-                            <TableRow key={`old-${index}`} className={`bg-gray-50 ${entry.chk ? 'bg-blue-100' : ''}`}>
-                              <TableCell className="text-gray-600">{entry.date}</TableCell>
-                              <TableCell className="text-gray-600">{entry.remarks}</TableCell>
-                              <TableCell className="text-gray-600">{entry.tnsType}</TableCell>
-                              <TableCell className="text-green-600 font-medium">
-                                {entry.credit ? entry.credit.toLocaleString() : ''}
-                              </TableCell>
-                              <TableCell className="text-red-600 font-medium">
-                                {entry.debit ? Math.abs(entry.debit).toLocaleString() : ''}
-                              </TableCell>
-                              <TableCell className={`font-semibold ${entry.balance < 0 ? 'text-red-600' : ''}`}>
-                                {entry.balance ? entry.balance.toLocaleString() : ''}
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <Checkbox
-                                  checked={entry.chk}
-                                  onCheckedChange={(checked) => handleCheckboxChange(entry.id, checked as boolean)}
-                                />
-                              </TableCell>
-                              <TableCell className="text-gray-600">{entry.ti}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )
-                ) : ledgerEntries.length === 0 ? (
-                  <div className="text-center py-12">
-                    <div className="text-gray-400 text-6xl mb-4">📊</div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No ledger entries found</h3>
-                    <p className="text-gray-500">Add your first transaction to get started.</p>
-                  </div>
-                ) : (
+              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <div className="bg-gray-50 px-6 py-3 border-b border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900">Transaction Ledger</h3>
+                </div>
+                <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead className="font-semibold">Date</TableHead>
-                        <TableHead className="font-semibold">Remarks</TableHead>
-                        <TableHead className="font-semibold">Tns Type</TableHead>
-                        <TableHead className="font-semibold text-right">Credit</TableHead>
-                        <TableHead className="font-semibold text-right">Debit</TableHead>
-                        <TableHead className="font-semibold text-right">Balance</TableHead>
-                        <TableHead className="font-semibold text-center">Chk</TableHead>
-                        <TableHead className="font-semibold">Ti</TableHead>
+                      <TableRow className="bg-gray-50">
+                        <TableHead className="font-semibold text-gray-700">Date</TableHead>
+                        <TableHead className="font-semibold text-gray-700">Remarks</TableHead>
+                        <TableHead className="font-semibold text-gray-700">Tns Type</TableHead>
+                        <TableHead className="font-semibold text-gray-700 text-right">Credit</TableHead>
+                        <TableHead className="font-semibold text-gray-700 text-right">Debit</TableHead>
+                        <TableHead className="font-semibold text-gray-700 text-right">Balance</TableHead>
+                        <TableHead className="font-semibold text-gray-700 text-center">Chk Ti</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {ledgerEntries.map((entry, index) => (
-                        <TableRow key={entry.id || `entry-${index}`} className={entry.chk ? 'bg-blue-100' : ''}>
-                          <TableCell>{entry.date}</TableCell>
-                          <TableCell className={entry.remarks === 'AQC' ? 'bg-blue-200 font-semibold' : ''}>
-                            {entry.remarks}
+                      {(ledgerEntries || []).map((entry, index) => (
+                        <TableRow key={entry.id || index} className="hover:bg-gray-50">
+                          <TableCell className="font-medium">{entry.date}</TableCell>
+                          <TableCell className="max-w-xs truncate" title={entry.remarks || ''}>
+                            {entry.remarks || ''}
                           </TableCell>
                           <TableCell>
-                            <span className={`px-2 py-1 rounded text-sm ${
-                              entry.tnsType === 'CR' ? 'bg-green-100 text-green-800' : 
-                              entry.tnsType === 'DR' ? 'bg-red-100 text-red-800' : 
-                              'bg-gray-100 text-gray-800'
-                            }`}>
+                            <Badge variant={entry.tnsType === 'CR' ? 'default' : 'secondary'}>
                               {entry.tnsType}
-                            </span>
+                            </Badge>
                           </TableCell>
-                          <TableCell className="text-right">{entry.credit || ''}</TableCell>
-                          <TableCell className="text-right">{entry.debit || ''}</TableCell>
-                          <TableCell className={`text-right font-semibold ${entry.balance < 0 ? 'text-red-600' : ''}`}>
-                            {entry.balance}
+                          <TableCell className="text-right font-medium text-green-600">
+                            {entry.credit ? entry.credit.toLocaleString() : ''}
+                          </TableCell>
+                          <TableCell className="text-right font-medium text-red-600">
+                            {entry.debit ? Math.abs(entry.debit).toLocaleString() : ''}
+                          </TableCell>
+                          <TableCell className="text-right font-medium text-blue-600">
+                            {entry.balance ? entry.balance.toLocaleString() : ''}
                           </TableCell>
                           <TableCell className="text-center">
                             <Checkbox
-                              checked={entry.chk}
-                              onCheckedChange={(checked) => handleCheckboxChange(entry.id, checked as boolean)}
+                              checked={selectedEntries.includes(entry.id || index)}
+                              onCheckedChange={(checked) => 
+                                handleCheckboxChange(entry.id || index, checked as boolean)
+                              }
                             />
                           </TableCell>
-                          <TableCell>{entry.ti}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
-                )}
-              </div>
-
-              {/* Entry Form */}
-              {!showOldRecords && (
-              <div className="border-t pt-6">
-                  <div className="mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Add New Transaction</h3>
-                    <p className="text-sm text-gray-600">Enter transaction details below</p>
-                  </div>
-                  
-                  <form onSubmit={handleFormSubmit} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Party Name</label>
-                    <input
-                      type="text"
-                      value={newEntry.partyName}
-                      onChange={(e) => setNewEntry({...newEntry, partyName: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter party name"
-                        required
-                    />
-                  </div>
-                    
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount (+ for Credit, - for Debit)</label>
-                    <input
-                      id="amount"
-                      type="number"
-                        value={newEntry.amount}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          // Allow empty string, numbers, decimal point, and minus sign
-                          if (value === '' || /^-?\d*\.?\d*$/.test(value)) {
-                            setNewEntry({...newEntry, amount: value});
-                          }
-                        }}
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter') {
-                            handleFormSubmit(e as React.FormEvent);
-                          }
-                        }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter amount (+ for credit, - for debit)"
-                        step="0.01"
-                        required
-                        autoFocus
-                    />
-                    <div className="text-xs text-gray-500 mt-1">
-                      💡 Use + for Credit, - for Debit | Press Ctrl+N to focus amount field
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
-                    <input
-                      type="text"
-                      value={newEntry.remarks}
-                      onChange={(e) => setNewEntry({...newEntry, remarks: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter remarks (optional)"
-                    />
-                    {newEntry.partyName && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        Preview: {generateRemarks()}
-                      </div>
-                    )}
-                  </div>
-                    <div className="flex flex-col space-y-2">
-                    <button
-                        type="submit"
-                        disabled={loading || !newEntry.partyName || !newEntry.amount || parseFloat(newEntry.amount) === 0}
-                        className="w-full px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {loading ? 'Adding...' : 'Add Transaction'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleClearForm}
-                        className="w-full px-6 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors font-medium"
-                      >
-                        Clear Form
-                    </button>
-                  </div>
-                  </form>
-                  
-                  {/* Keyboard Shortcuts Help */}
-                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <div className="text-sm font-medium text-blue-800 mb-2">Keyboard Shortcuts:</div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-blue-700">
-                      <div>Ctrl+N: Focus Amount</div>
-                      <div>Ctrl+S: Refresh Data</div>
-                      <div>Ctrl+P: Print Report</div>
-                      <div>Esc: Clear Form</div>
-                    </div>
-                  </div>
-                  {/* Transaction Preview */}
-                  {newEntry.amount && parseFloat(newEntry.amount) !== 0 && (
-                    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                      <div className="text-sm font-medium text-blue-800 mb-1">Transaction Preview:</div>
-                      <div className="text-sm text-blue-700">
-                                                <span className="font-medium">Type:</span> {parseFloat(newEntry.amount) >= 0 ? 'Credit' : 'Debit'} |
-                        <span className="font-medium"> Amount:</span> {Math.abs(parseFloat(newEntry.amount)).toLocaleString()} | 
-                        <span className="font-medium"> Remarks:</span> {generateRemarks()} | 
-                        <span className="font-medium"> New Balance:</span> {(closingBalance + parseFloat(newEntry.amount)).toLocaleString()}
                 </div>
               </div>
-                  )}
-                </div>
-              )}
             </div>
 
             {/* Right Sidebar - Action Buttons */}
-            <div className="w-48 bg-gray-50 border-l border-gray-200 p-4">
-              <div className="flex flex-col space-y-2">
-                <button 
+            <div className="w-80 bg-gray-50 p-6 border-l border-gray-200">
+              <div className="space-y-3">
+                <Button
+                  onClick={handleRefreshAll}
+                  disabled={loading}
+                  className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+                >
+                  {loading ? 'Refreshing...' : 'Refresh All'}
+                </Button>
+                
+                <Button
                   onClick={handleDCReport}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium text-sm"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                 >
                   DC Report
-                </button>
-                {!showOldRecords && (
-                  <Button 
-                    onClick={handleMondayFinalClick}
-                    className="bg-green-600 hover:bg-green-700 text-white"
-                    size="sm"
-                  >
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                  Monday Final
-                  </Button>
-                )}
-                <button 
-                  onClick={handleOldRecord}
-                  className={`px-4 py-2 rounded-md transition-colors font-medium text-sm ${
-                    showOldRecords 
-                      ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                      : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
-                  }`}
+                </Button>
+                
+                <Button
+                  onClick={handleMondayFinalClick}
+                  disabled={actionLoading}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white"
                 >
-                  {showOldRecords ? 'Current' : 'Old Record'}
-                </button>
-                <button 
+                  {actionLoading ? 'Processing...' : 'Monday Final'}
+                </Button>
+                
+                <Button
+                  onClick={handleOldRecord}
+                  className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                >
+                  Old Record
+                </Button>
+                
+                <Button
                   onClick={handleModify}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium text-sm"
+                  disabled={selectedEntries.length !== 1}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
                 >
                   Modify
-                </button>
-                <button 
+                </Button>
+                
+                <Button
                   onClick={handleDelete}
-                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors font-medium text-sm"
+                  disabled={selectedEntries.length === 0}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
                 >
                   Delete
-                </button>
-                <button 
+                </Button>
+                
+                <Button
                   onClick={handlePrint}
-                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors font-medium text-sm"
+                  className="w-full bg-gray-600 hover:bg-gray-700 text-white"
                 >
                   Print
-                </button>
-                <button
+                </Button>
+                
+                <Button
                   onClick={handleCheckAll}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors font-medium text-sm"
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
                 >
                   Check All
-                </button>
-                <button
+                </Button>
+                
+                <Button
                   onClick={handleExit}
-                  className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors font-medium text-sm"
+                  className="w-full bg-brown-600 hover:bg-brown-700 text-white"
                 >
                   Exit
-                </button>
+                </Button>
               </div>
+              
+              {/* Keyboard Shortcuts Help */}
+              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="text-sm font-medium text-blue-800 mb-2">Keyboard Shortcuts:</div>
+                <div className="grid grid-cols-1 gap-1 text-xs text-blue-700">
+                  <div>Ctrl+N: Focus Amount</div>
+                  <div>Ctrl+S: Refresh Data</div>
+                  <div>Ctrl+P: Print Report</div>
+                  <div>Esc: Clear Form</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Input Form */}
+          <div className="border-t border-gray-200 p-6 bg-gray-50">
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Transaction</h3>
+              <form onSubmit={handleFormSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Party Name</label>
+                  <input
+                    type="text"
+                    value={newEntry.partyName}
+                    onChange={(e) => setNewEntry({...newEntry, partyName: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter party name"
+                    readOnly
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount (+ for Credit, - for Debit)</label>
+                  <input
+                    id="amount"
+                    type="number"
+                    value={newEntry.amount}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '' || /^-?\d*\.?\d*$/.test(value)) {
+                        setNewEntry({...newEntry, amount: value});
+                      }
+                    }}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        handleFormSubmit(e as React.FormEvent);
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter amount (+ for credit, - for debit)"
+                    step="0.01"
+                    required
+                    autoFocus
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
+                  <input
+                    type="text"
+                    value={newEntry.remarks}
+                    onChange={(e) => setNewEntry({...newEntry, remarks: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter remarks (optional)"
+                  />
+                </div>
+                
+                <div className="flex items-end space-x-2">
+                  <Button
+                    type="submit"
+                    disabled={loading || !newEntry.partyName || !newEntry.amount || parseFloat(newEntry.amount) === 0}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+                  >
+                    {loading ? 'Adding...' : 'OK'}
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleClearForm}
+                    className="px-4 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300"
+                  >
+                    Clear
+                  </Button>
+                </div>
+              </form>
+              
+              {/* Transaction Preview */}
+              {newEntry.amount && parseFloat(newEntry.amount) !== 0 && (
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="text-sm font-medium text-blue-800 mb-1">Transaction Preview:</div>
+                  <div className="text-sm text-blue-700">
+                    <span className="font-medium">Type:</span> {parseFloat(newEntry.amount) >= 0 ? 'Credit' : 'Debit'} |
+                    <span className="font-medium"> Amount:</span> {Math.abs(parseFloat(newEntry.amount)).toLocaleString()} |
+                    <span className="font-medium"> Remarks:</span> {generateRemarks()} |
+                    <span className="font-medium"> New Balance:</span> {(closingBalance + parseFloat(newEntry.amount)).toLocaleString()}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
-
-      {/* Modify Modal */}
-      {isModifyModalOpen && selectedEntryForModify && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative p-8 border w-96 shadow-lg rounded-md bg-white">
-            <div className="text-center">
-              <h3 className="text-lg font-semibold leading-6 text-gray-900">Modify Entry</h3>
-              <div className="mt-2 px-7 py-3">
-                <div className="grid grid-cols-1 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
-                    <input
-                      type="text"
-                      value={modifyFormData.remarks}
-                      onChange={(e) => setModifyFormData({...modifyFormData, remarks: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
-                    <input
-                      type="number"
-                      value={modifyFormData.amount}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        // Allow empty string, numbers, and decimal point
-                        if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                          setModifyFormData({...modifyFormData, amount: value});
-                        }
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter amount"
-                      min="0"
-                      step="0.01"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Tns Type</label>
-                    <select
-                      value={modifyFormData.tnsType}
-                      onChange={(e) => setModifyFormData({...modifyFormData, tnsType: e.target.value as 'CR' | 'DR'})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="CR">Credit</option>
-                      <option value="DR">Debit</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-              <div className="items-center px-4 py-3">
-                <button
-                  onClick={handleModifySubmit}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors font-medium"
-                >
-                  Save Changes
-                </button>
-                <button
-                  onClick={handleModifyCancel}
-                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors font-medium"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Monday Final Confirmation Modal */}
-      <AlertDialog open={showMondayFinalModal} onOpenChange={setShowMondayFinalModal}>
-        <AlertDialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-          <AlertDialogHeader className="flex-shrink-0 pb-4">
-            <AlertDialogTitle className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-green-600" />
-              Monday Final Settlement Confirmation
-            </AlertDialogTitle>
-            <AlertDialogDescription className="sr-only">
-              Monday Final settlement confirmation dialog with transaction summary and warnings
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="flex-1 overflow-y-auto space-y-4 px-1">
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <div className="flex items-center gap-2 mb-3">
-                <Calculator className="w-5 h-5 text-blue-600" />
-                <span className="font-semibold text-blue-800">Settlement Summary</span>
-              </div>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Transactions:</span>
-                  <span className="font-medium">{mondayFinalData.transactionCount}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Total Credit:</span>
-                  <span className="font-medium text-green-600">₹{mondayFinalData.totalCredit.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Total Debit:</span>
-                  <span className="font-medium text-red-600">₹{mondayFinalData.totalDebit.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Starting Balance:</span>
-                  <span className="font-medium">₹{mondayFinalData.startingBalance.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between col-span-2 border-t pt-2">
-                  <span className="text-gray-800 font-semibold">Final Balance:</span>
-                  <span className={`font-bold text-lg ${mondayFinalData.finalBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    ₹{mondayFinalData.finalBalance.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-yellow-50 p-4 rounded-lg">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-yellow-800">
-                  <p className="font-semibold mb-2">⚠️ WARNING: This action cannot be easily undone!</p>
-                  <p className="mb-3">This will:</p>
-                  <ul className="list-disc list-inside space-y-1">
-                    <li>Consolidate all current entries into one settlement</li>
-                    <li>Move all current entries to Old Records</li>
-                    <li>Start fresh with the settlement balance</li>
-                    <li>Create a permanent financial record</li>
-                    <li>Add timestamp to settlement for tracking</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-green-50 p-4 rounded-lg">
-              <div className="flex items-start gap-2">
-                <TrendingUp className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-green-800">
-                  <p className="font-semibold mb-1">Benefits:</p>
-                  <ul className="list-disc list-inside space-y-1">
-                    <li>Clean ledger with consolidated balance</li>
-                    <li>Historical records preserved in Old Records</li>
-                    <li>Multiple settlements per day allowed</li>
-                    <li>Timestamp tracking for each settlement</li>
-                    <li>Accurate balance continuity</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <div className="flex items-start gap-2">
-                <Clock className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-blue-800">
-                  <p className="font-semibold mb-1">Multiple Settlements:</p>
-                  <p>You can create multiple Monday Final settlements per day. Each settlement will be timestamped for proper tracking and balance calculation.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-          <AlertDialogFooter className="flex-shrink-0 border-t pt-4 mt-4 bg-white">
-            <AlertDialogCancel disabled={actionLoading}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleMondayFinalConfirm}
-              disabled={actionLoading}
-              className="bg-green-600 hover:bg-green-700 text-white"
-            >
-              {actionLoading ? (
-                <>
-                  <Clock className="w-4 h-4 mr-2 animate-spin" />
-                  Creating Settlement...
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="w-4 h-4 mr-2" />
-                  Confirm Settlement
-                </>
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Delete Confirmation Modal */}
-      <AlertDialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
-        <AlertDialogContent className="max-w-sm">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-semibold text-gray-900">Confirm Deletion</AlertDialogTitle>
-            <AlertDialogDescription className="text-sm text-gray-700">
-              Are you sure you want to delete {showOldRecords ? oldRecords.filter(entry => entry.chk).length : ledgerEntries.filter(entry => entry.chk).length} selected entry(ies)? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setShowDeleteModal(false)} disabled={actionLoading}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteConfirm}
-              disabled={actionLoading}
-              className="bg-red-600 hover:bg-red-700 text-white"
-            >
-              {actionLoading ? (
-                <>
-                  <Clock className="w-4 h-4 mr-2 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                <>
-                  <AlertTriangle className="w-4 h-4 mr-2" />
-                  Delete
-                </>
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 };
