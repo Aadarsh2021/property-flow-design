@@ -347,7 +347,7 @@ const AccountLedger = () => {
       
       // First check if there's a Monday Final Final settlement in current entries
       const mondayFinalSettlement = ledgerEntries.find(entry => 
-        entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement')
+        entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement'))
       );
       
       if (mondayFinalSettlement) {
@@ -357,7 +357,7 @@ const AccountLedger = () => {
         // Check old records for the last settlement
         if (oldRecords.length > 0) {
           const lastSettlement = oldRecords
-            .filter(entry => entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement'))
+            .filter(entry => entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement')))
             .sort((a, b) => {
               const dateA = new Date(a.date.split('/').reverse().join('-'));
               const dateB = new Date(b.date.split('/').reverse().join('-'));
@@ -400,11 +400,11 @@ const AccountLedger = () => {
         setLedgerEntries(prevEntries => {
           // Keep Monday Final Final settlement and add new entry
           const mondayFinalEntry = prevEntries.find(entry => 
-            entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement')
+            entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement'))
           );
           
           const otherEntries = prevEntries.filter(entry => 
-            !(entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement'))
+            !(entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement')))
           );
           
           // Add new entry and recalculate all balances from scratch
@@ -543,7 +543,7 @@ const AccountLedger = () => {
 
     // Check if there are any non-settlement entries to process
     const currentEntries = (ledgerEntries || []).filter(entry => 
-      !(entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement'))
+      !(entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement')))
     );
 
     if (currentEntries.length === 0) {
@@ -564,7 +564,7 @@ const AccountLedger = () => {
     
     // First check current entries for any existing settlements
     const currentSettlements = (ledgerEntries || []).filter(entry => 
-      entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement')
+      entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement'))
     );
     
     if (currentSettlements.length > 0) {
@@ -578,7 +578,7 @@ const AccountLedger = () => {
     } else if (oldRecords.length > 0) {
       // Check old records for the last settlement
       const lastMondayFinal = oldRecords
-        .filter(entry => entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement'))
+        .filter(entry => entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement')))
         .sort((a, b) => {
           const dateA = new Date(a.date.split('/').reverse().join('-'));
           const dateB = new Date(b.date.split('/').reverse().join('-'));
@@ -609,7 +609,7 @@ const AccountLedger = () => {
     try {
       // Calculate totals for confirmation
       const currentEntries = (ledgerEntries || []).filter(entry => 
-        !(entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement'))
+        !(entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement')))
       );
       
       const totalCredit = parseFloat(currentEntries.reduce((sum, entry) => sum + (entry.credit || 0), 0).toFixed(2));
@@ -620,7 +620,7 @@ const AccountLedger = () => {
       
       // First check current entries for any existing settlements
       const currentSettlements = (ledgerEntries || []).filter(entry => 
-        entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement')
+        entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement'))
       );
       
       if (currentSettlements.length > 0) {
@@ -634,7 +634,7 @@ const AccountLedger = () => {
       } else if (oldRecords.length > 0) {
         // Check old records for the last settlement
         const lastMondayFinal = oldRecords
-          .filter(entry => entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement'))
+          .filter(entry => entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement')))
           .sort((a, b) => {
             const dateA = new Date(a.date.split('/').reverse().join('-'));
             const dateB = new Date(b.date.split('/').reverse().join('-'));
@@ -675,7 +675,7 @@ const AccountLedger = () => {
 
       // Add settlement to current entries (keep existing settlements)
       const existingSettlements = ledgerEntries.filter(entry => 
-        entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement')
+        entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement'))
       );
       setLedgerEntries([...existingSettlements, settlementEntry]);
       
@@ -710,7 +710,7 @@ const AccountLedger = () => {
 
       // Restore original entries
       const restoredEntries = (originalEntries || []).filter(entry => 
-        !(entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement'))
+        !(entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement')))
       );
 
       // Update entries back to normal status
@@ -844,7 +844,7 @@ const AccountLedger = () => {
     // Find Monday Final settlement to get starting balance
     let startingBalance = 0;
     const mondayFinalSettlement = sortedEntries.find(entry => 
-      entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement')
+      entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement'))
     );
     
     if (mondayFinalSettlement) {
@@ -855,7 +855,7 @@ const AccountLedger = () => {
     let runningBalance = startingBalance;
     const recalculatedEntries = sortedEntries.map(entry => {
       // Skip balance calculation for Monday Final settlement (keep its original balance)
-      if (entry.tnsType === 'Monday S...' || entry.remarks.includes('Monday Final Settlement')) {
+      if (entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement'))) {
         return {
           ...entry,
           balance: entry.balance || runningBalance
