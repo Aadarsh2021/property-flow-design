@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -70,7 +70,7 @@ const AccountLedger = () => {
         
         if (Array.isArray(response.data)) {
           // Data is array format - extract the first element
-          const dataObject = response.data[0] || {};
+          const dataObject = response.data[0] || {} as any;
           console.log('Extracted data object:', dataObject);
           
           entries = dataObject.ledgerEntries || [];
@@ -85,16 +85,17 @@ const AccountLedger = () => {
           mondayFinalData = dataObject.mondayFinalData;
         } else if (response.data && typeof response.data === 'object') {
           // Data is object format (new format)
-          entries = response.data.ledgerEntries || [];
-          summary = response.data.summary || {
+          const dataObj = response.data as any;
+          entries = dataObj.ledgerEntries || [];
+          summary = dataObj.summary || {
             totalCredit: entries.reduce((sum, entry) => sum + (entry.credit || 0), 0),
             totalDebit: entries.reduce((sum, entry) => sum + (entry.debit || 0), 0),
             calculatedBalance: entries.reduce((sum, entry) => sum + (entry.balance || 0), 0),
             totalEntries: entries.length
           };
-          oldRecords = response.data.oldRecords || [];
-          closingBalance = response.data.closingBalance || 0;
-          mondayFinalData = response.data.mondayFinalData;
+          oldRecords = dataObj.oldRecords || [];
+          closingBalance = dataObj.closingBalance || 0;
+          mondayFinalData = dataObj.mondayFinalData;
         }
         
         console.log('Final entries:', entries);
@@ -245,9 +246,10 @@ const AccountLedger = () => {
     try {
       const response = await partyLedgerAPI.updateEntry(editingEntry._id, {
         remarks: editingEntry.remarks,
-        amount: editingEntry.credit || editingEntry.debit,
+        credit: editingEntry.tnsType === 'CR' ? (editingEntry.credit || editingEntry.debit || 0) : 0,
+        debit: editingEntry.tnsType === 'DR' ? (editingEntry.credit || editingEntry.debit || 0) : 0,
         tnsType: editingEntry.tnsType
-      });
+      } as any);
 
       if (response.success) {
         await loadLedgerData();
