@@ -826,9 +826,23 @@ const AccountLedger = () => {
                 </Button>
                 <Button
               onClick={() => setShowMondayFinalModal(true)}
-                  disabled={actionLoading}
+                  disabled={actionLoading || !ledgerData?.ledgerEntries.some(entry => 
+                entry.tnsType !== 'Monday Settlement' && 
+                (!ledgerData.ledgerEntries.some(mf => mf.tnsType === 'Monday Settlement') || 
+                 new Date(entry.date) > new Date(ledgerData.ledgerEntries
+                   .filter(e => e.tnsType === 'Monday Settlement')
+                   .sort((a, b) => new Date(b.date) - new Date(a.date))[0]?.date || '1970-01-01'))
+              )}
               variant="outline"
-              className="w-full bg-white hover:bg-gray-100 text-sm py-2"
+              className={`w-full text-sm py-2 ${
+                !ledgerData?.ledgerEntries.some(entry => 
+                  entry.tnsType !== 'Monday Settlement' && 
+                  (!ledgerData.ledgerEntries.some(mf => mf.tnsType === 'Monday Settlement') || 
+                   new Date(entry.date) > new Date(ledgerData.ledgerEntries
+                     .filter(e => e.tnsType === 'Monday Settlement')
+                     .sort((a, b) => new Date(b.date) - new Date(a.date))[0]?.date || '1970-01-01'))
+                ) ? 'bg-gray-300 cursor-not-allowed' : 'bg-white hover:bg-gray-100'
+              }`}
                 >
               Monday Final
                 </Button>
