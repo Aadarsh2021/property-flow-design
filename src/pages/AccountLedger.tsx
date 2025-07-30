@@ -159,12 +159,12 @@ const AccountLedger = () => {
       return;
     }
 
-    // Validate amount is positive
+    // Validate amount is not zero
     const amount = parseFloat(newEntry.amount);
-    if (isNaN(amount) || amount <= 0) {
+    if (isNaN(amount) || amount === 0) {
       toast({
         title: "Validation Error",
-        description: "Amount must be a positive number",
+        description: "Amount cannot be zero",
         variant: "destructive"
       });
       return;
@@ -174,13 +174,17 @@ const AccountLedger = () => {
     try {
       const currentDate = new Date().toLocaleDateString('en-GB'); // DD/MM/YYYY format
       
+      // Determine transaction type based on amount sign
+      const tnsType = amount > 0 ? 'CR' : 'DR';
+      const absoluteAmount = Math.abs(amount);
+      
       const entryData = {
         partyName,
-        amount,
+        amount: absoluteAmount, // Send positive amount to backend
         remarks: newEntry.remarks,
-        tnsType: newEntry.tnsType,
-        credit: newEntry.tnsType === 'CR' ? amount : 0,
-        debit: newEntry.tnsType === 'DR' ? amount : 0,
+        tnsType,
+        credit: tnsType === 'CR' ? absoluteAmount : 0,
+        debit: tnsType === 'DR' ? absoluteAmount : 0,
         date: currentDate,
         ti: `${Date.now()}:`
       };
