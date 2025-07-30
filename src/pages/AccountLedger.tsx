@@ -54,11 +54,11 @@ const AccountLedger = () => {
       console.log('Backend response:', response);
       
       if (response.success) {
-        // Convert array to expected format
-        const entries = Array.isArray(response.data) ? response.data : [];
+        // Extract ledgerEntries from the response object
+        const entries = response.data?.ledgerEntries || [];
         console.log('Processed entries:', entries);
         
-        const summary = {
+        const summary = response.data?.summary || {
           totalCredit: entries.reduce((sum, entry) => sum + (entry.credit || 0), 0),
           totalDebit: entries.reduce((sum, entry) => sum + (entry.debit || 0), 0),
           calculatedBalance: entries.reduce((sum, entry) => sum + (entry.balance || 0), 0),
@@ -69,10 +69,10 @@ const AccountLedger = () => {
         
         setLedgerData({
           ledgerEntries: entries,
-          oldRecords: entries.filter(entry => entry.tnsType === 'Monday S...'),
-          closingBalance: summary.calculatedBalance,
+          oldRecords: response.data?.oldRecords || [],
+          closingBalance: response.data?.closingBalance || 0,
           summary,
-          mondayFinalData: {
+          mondayFinalData: response.data?.mondayFinalData || {
             transactionCount: entries.filter(entry => entry.tnsType === 'Monday S...').length,
             totalCredit: summary.totalCredit,
             totalDebit: summary.totalDebit,

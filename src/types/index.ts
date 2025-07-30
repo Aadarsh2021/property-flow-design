@@ -12,6 +12,30 @@ export interface ApiResponse<T = unknown> {
   };
 }
 
+// Ledger Data Types
+export interface LedgerSummary {
+  totalCredit: number;
+  totalDebit: number;
+  calculatedBalance: number;
+  totalEntries: number;
+}
+
+export interface MondayFinalData {
+  transactionCount: number;
+  totalCredit: number;
+  totalDebit: number;
+  startingBalance: number;
+  finalBalance: number;
+}
+
+export interface LedgerData {
+  ledgerEntries: LedgerEntry[];
+  oldRecords: LedgerEntry[];
+  closingBalance: number;
+  summary: LedgerSummary;
+  mondayFinalData: MondayFinalData;
+}
+
 // New Party Types
 export interface SelfLD {
   M: string;
