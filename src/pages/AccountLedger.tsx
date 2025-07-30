@@ -81,17 +81,16 @@ const AccountLedger = () => {
    * Fetches ledger entries for the current party and processes the response
    * to handle both array and object data formats from the backend.
    */
-  const loadLedgerData = async () => {
+  const loadLedgerData = async (showLoading = true) => {
     if (!partyName) return;
     
-    setLoading(true);
+    if (showLoading) {
+      setLoading(true);
+    }
+    
     try {
       // Fetch ledger data from backend
       const response = await partyLedgerAPI.getPartyLedger(partyName);
-      console.log('Backend response:', response);
-      console.log('Response data type:', typeof response.data);
-      console.log('Response data:', response.data);
-      console.log('Is response.data an array?', Array.isArray(response.data));
       
       if (response.success) {
         // Initialize data variables
@@ -105,7 +104,6 @@ const AccountLedger = () => {
         if (Array.isArray(response.data)) {
           // Backend returns data wrapped in array - extract first element
           const dataObject = response.data[0] || {} as any;
-          console.log('Extracted data object:', dataObject);
           
           entries = dataObject.ledgerEntries || [];
           summary = dataObject.summary || {
@@ -131,9 +129,6 @@ const AccountLedger = () => {
           closingBalance = dataObj.closingBalance || 0;
           mondayFinalData = dataObj.mondayFinalData;
         }
-        
-        console.log('Final entries:', entries);
-        console.log('Final summary:', summary);
         
         // Update ledger data state
         setLedgerData({
@@ -167,13 +162,15 @@ const AccountLedger = () => {
         variant: "destructive"
       });
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   };
 
   // Load data when component mounts or partyName changes
   useEffect(() => {
-    loadLedgerData();
+    loadLedgerData(true); // Show loading spinner for initial load
   }, [partyName]);
 
   /**
@@ -274,9 +271,8 @@ const AccountLedger = () => {
       console.log('Add entry response:', response);
 
       if (response.success) {
-        console.log('Entry added successfully, reloading data...');
-        // Reload ledger data to get updated state
-        await loadLedgerData();
+        // Reload ledger data without showing loading spinner
+        await loadLedgerData(false);
 
         // Clear form for next entry
         setNewEntry({
@@ -327,7 +323,6 @@ const AccountLedger = () => {
       return;
     }
     
-    console.log('Modifying entry:', editingEntry);
     setActionLoading(true);
     try {
       // Prepare update data based on transaction type
@@ -337,11 +332,9 @@ const AccountLedger = () => {
         debit: editingEntry.tnsType === 'DR' ? (editingEntry.credit || editingEntry.debit || 0) : 0,
         tnsType: editingEntry.tnsType
       } as any);
-
-      console.log('Modify response:', response);
       if (response.success) {
-        // Reload data and close modal on success
-        await loadLedgerData();
+        // Reload data without showing loading spinner
+        await loadLedgerData(false);
         setEditingEntry(null);
         setShowModifyModal(false);
         toast({
@@ -388,7 +381,6 @@ const AccountLedger = () => {
       return;
     }
 
-    console.log('Deleting entries:', selectedEntries);
     setActionLoading(true);
     
     try {
@@ -399,7 +391,6 @@ const AccountLedger = () => {
       for (const entry of selectedEntries) {
         try {
           const response = await partyLedgerAPI.deleteEntry(entry._id);
-          console.log(`Delete response for ${entry._id}:`, response);
           
           if (response.success) {
             successCount++;
@@ -413,8 +404,8 @@ const AccountLedger = () => {
         }
       }
 
-      // Reload data and close modal
-      await loadLedgerData();
+      // Reload data without showing loading spinner
+      await loadLedgerData(false);
       setEntryToDelete(null);
       setShowDeleteModal(false);
       
@@ -475,8 +466,8 @@ const AccountLedger = () => {
       const response = await partyLedgerAPI.updateMondayFinal([partyName!]);
       
       if (response.success) {
-        // Reload ledger data to get updated state
-        await loadLedgerData();
+        // Reload ledger data without showing loading spinner
+        await loadLedgerData(false);
         
         toast({
           title: "Monday Final Settlement",
@@ -514,10 +505,10 @@ const AccountLedger = () => {
   /**
    * Handle refresh functionality
    * 
-   * Reloads ledger data from backend
+   * Reloads ledger data from backend with loading indicator
    */
   const handleRefresh = () => {
-    loadLedgerData();
+    loadLedgerData(true); // Show loading spinner for manual refresh
   };
 
   /**
@@ -770,10 +761,6 @@ const AccountLedger = () => {
                 <Button
               onClick={() => {
                 const selectedEntry = currentEntries?.find(entry => entry.chk);
-                console.log('=== MODIFY BUTTON CLICKED ===');
-                console.log('Current entries:', currentEntries);
-                console.log('Selected entry for modify:', selectedEntry);
-                console.log('Selected entry _id:', selectedEntry?._id);
                 if (selectedEntry) {
                   setEditingEntry(selectedEntry);
                   setShowModifyModal(true);
@@ -793,10 +780,6 @@ const AccountLedger = () => {
                 <Button
               onClick={() => {
                 const selectedEntries = currentEntries?.filter(entry => entry.chk) || [];
-                console.log('=== DELETE BUTTON CLICKED ===');
-                console.log('Current entries:', currentEntries);
-                console.log('Selected entries for delete:', selectedEntries);
-                console.log('Number of selected entries:', selectedEntries.length);
                 if (selectedEntries.length > 0) {
                   setEntryToDelete(selectedEntries[0]); // For modal display, we'll handle multiple in the function
                   setShowDeleteModal(true);
