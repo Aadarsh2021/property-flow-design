@@ -489,17 +489,6 @@ const AccountLedger = () => {
    */
   const handleMondayFinal = async () => {
     if (!ledgerData) return;
-
-    // Get all selected entries
-    const selectedEntries = ledgerData.ledgerEntries.filter(entry => entry.chk);
-    if (selectedEntries.length === 0) {
-      toast({
-        title: "No Entries Selected",
-        description: "Please select entries for Monday Final settlement",
-        variant: "destructive"
-      });
-      return;
-    }
     
     setActionLoading(true);
     try {
@@ -864,19 +853,85 @@ const AccountLedger = () => {
 
       {/* Monday Final Modal */}
       <AlertDialog open={showMondayFinalModal} onOpenChange={setShowMondayFinalModal}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-4xl">
           <AlertDialogHeader>
             <AlertDialogTitle>Monday Final Settlement</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to create a Monday Final settlement for the selected entries?
-              This action cannot be undone.
+              {(() => {
+                // Find the last Monday Final settlement
+                const lastMondayFinal = ledgerData?.ledgerEntries
+                  .filter(entry => entry.tnsType === 'Monday Settlement')
+                  .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+
+                // Get entries to settle (from last Monday Final to current, excluding Monday Final entries)
+                let entriesToSettle = [];
+                if (lastMondayFinal) {
+                  // Get entries after the last Monday Final
+                  entriesToSettle = ledgerData?.ledgerEntries.filter(entry => 
+                    new Date(entry.date) > new Date(lastMondayFinal.date) && 
+                    entry.tnsType !== 'Monday Settlement'
+                  ) || [];
+                } else {
+                  // If no previous Monday Final, settle all non-Monday Final entries
+                  entriesToSettle = ledgerData?.ledgerEntries.filter(entry => 
+                    entry.tnsType !== 'Monday Settlement'
+                  ) || [];
+                }
+
+                const totalCredit = entriesToSettle.filter(e => e.tnsType === 'CR').reduce((sum, e) => sum + (e.credit || 0), 0);
+                const totalDebit = entriesToSettle.filter(e => e.tnsType === 'DR').reduce((sum, e) => sum + (e.debit || 0), 0);
+                const netAmount = totalCredit - totalDebit;
+                
+                return (
+                  <div className="space-y-4">
+                    <p>Are you sure you want to create a Monday Final settlement for all transactions since the last settlement?</p>
+                    
+                    {entriesToSettle.length > 0 ? (
+                      <div className="bg-gray-50 p-4 rounded-md">
+                        <p className="text-sm font-medium mb-2">Settlement Summary:</p>
+                        <p className="text-sm">• Entries to Settle: {entriesToSettle.length}</p>
+                        <p className="text-sm">• Total Credit: ₹{totalCredit.toFixed(2)}</p>
+                        <p className="text-sm">• Total Debit: ₹{totalDebit.toFixed(2)}</p>
+                        <p className="text-sm font-semibold">• Net Amount: ₹{netAmount.toFixed(2)}</p>
+                        
+                        <div className="mt-4 max-h-60 overflow-y-auto">
+                          <p className="text-sm font-medium mb-2">Transactions to be settled:</p>
+                          <div className="space-y-1">
+                            {entriesToSettle.map((entry, index) => (
+                              <div key={index} className="text-xs bg-white p-2 rounded border">
+                                <span className="font-medium">{entry.date.split('T')[0]}</span> - 
+                                <span className={entry.tnsType === 'CR' ? 'text-green-600' : 'text-red-600'}>
+                                  {entry.tnsType === 'CR' ? ' +' : ' -'}₹{entry.tnsType === 'CR' ? entry.credit : entry.debit}
+                                </span>
+                                {entry.remarks && <span className="text-gray-600"> - {entry.remarks}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-yellow-50 p-3 rounded-md">
+                        <p className="text-sm text-yellow-800">No new transactions to settle since the last Monday Final.</p>
+                      </div>
+                    )}
+                    
+                    <p className="text-xs text-gray-600">This action cannot be undone.</p>
+                  </div>
+                );
+              })()}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleMondayFinal}
-              disabled={actionLoading}
+              disabled={actionLoading || !ledgerData?.ledgerEntries.some(entry => 
+                entry.tnsType !== 'Monday Settlement' && 
+                (!ledgerData.ledgerEntries.some(mf => mf.tnsType === 'Monday Settlement') || 
+                 new Date(entry.date) > new Date(ledgerData.ledgerEntries
+                   .filter(e => e.tnsType === 'Monday Settlement')
+                   .sort((a, b) => new Date(b.date) - new Date(a.date))[0]?.date || '1970-01-01'))
+              )}
               className="bg-orange-600 hover:bg-orange-700"
             >
               {actionLoading ? 'Processing...' : 'Confirm Settlement'}
