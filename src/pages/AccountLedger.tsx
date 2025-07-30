@@ -224,16 +224,33 @@ const AccountLedger = () => {
   const handleCheckboxChange = async (id: string | number, checked: boolean) => {
     if (!ledgerData) return;
 
-    // Update the specific entry's checkbox state
-    const updatedEntries = ledgerData.ledgerEntries.map(entry => 
-      entry._id === id ? { ...entry, chk: checked } : entry
-    );
+    if (showOldRecords) {
+      // Update old records
+      const updatedOldRecords = ledgerData.oldRecords.map(entry => 
+        entry._id === id ? { ...entry, chk: checked } : entry
+      );
+      
+      // Update Monday Final entries in ledger entries
+      const updatedLedgerEntries = ledgerData.ledgerEntries.map(entry => 
+        entry._id === id && entry.tnsType === 'Monday Settlement' ? { ...entry, chk: checked } : entry
+      );
 
-    // Update ledger data with new checkbox states
-    setLedgerData({
-      ...ledgerData,
-      ledgerEntries: updatedEntries
-    });
+      setLedgerData({
+        ...ledgerData,
+        oldRecords: updatedOldRecords,
+        ledgerEntries: updatedLedgerEntries
+      });
+    } else {
+      // Update current ledger entries
+      const updatedEntries = ledgerData.ledgerEntries.map(entry => 
+        entry._id === id ? { ...entry, chk: checked } : entry
+      );
+
+      setLedgerData({
+        ...ledgerData,
+        ledgerEntries: updatedEntries
+      });
+    }
   };
 
   /**
@@ -245,20 +262,49 @@ const AccountLedger = () => {
   const handleCheckAll = () => {
     if (!ledgerData) return;
 
+    // Get the appropriate entries based on current view
+    const entriesToToggle = showOldRecords 
+      ? [...ledgerData.oldRecords, ...ledgerData.ledgerEntries.filter(entry => entry.tnsType === 'Monday Settlement')]
+      : ledgerData.ledgerEntries;
+
     // Check if all entries are currently checked
-    const allChecked = ledgerData.ledgerEntries.every(entry => entry.chk);
+    const allChecked = entriesToToggle.every(entry => entry.chk);
     
     // Toggle all entries to the opposite state
-    const updatedEntries = ledgerData.ledgerEntries.map(entry => ({
+    const updatedEntries = entriesToToggle.map(entry => ({
       ...entry,
       chk: !allChecked
     }));
 
     // Update ledger data with new checkbox states
-    setLedgerData({
-      ...ledgerData,
-      ledgerEntries: updatedEntries
-    });
+    if (showOldRecords) {
+      // Update old records
+      const updatedOldRecords = ledgerData.oldRecords.map(entry => {
+        const updatedEntry = updatedEntries.find(e => e._id === entry._id);
+        return updatedEntry || entry;
+      });
+      
+      // Update Monday Final entries in ledger entries
+      const updatedLedgerEntries = ledgerData.ledgerEntries.map(entry => {
+        if (entry.tnsType === 'Monday Settlement') {
+          const updatedEntry = updatedEntries.find(e => e._id === entry._id);
+          return updatedEntry || entry;
+        }
+        return entry;
+      });
+
+      setLedgerData({
+        ...ledgerData,
+        oldRecords: updatedOldRecords,
+        ledgerEntries: updatedLedgerEntries
+      });
+    } else {
+      // Update current ledger entries
+      setLedgerData({
+        ...ledgerData,
+        ledgerEntries: updatedEntries
+      });
+    }
   };
 
   /**
@@ -607,6 +653,11 @@ const AccountLedger = () => {
 
   // Determine which entries to display (current or old records)
   const currentEntries = showOldRecords ? ledgerData.oldRecords : ledgerData.ledgerEntries;
+  
+  // When showing old records, also include Monday Final settlements
+  const displayEntries = showOldRecords 
+    ? [...ledgerData.oldRecords, ...ledgerData.ledgerEntries.filter(entry => entry.tnsType === 'Monday Settlement')]
+    : currentEntries;
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -667,8 +718,8 @@ const AccountLedger = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {currentEntries && currentEntries.length > 0 ? (
-                    currentEntries.map((entry) => {
+                  {displayEntries && displayEntries.length > 0 ? (
+                    displayEntries.map((entry) => {
                       return (
                         <tr key={entry._id} className="hover:bg-gray-50">
                         <td className="border border-gray-300 px-2 py-1">{entry.date}</td>
@@ -784,13 +835,17 @@ const AccountLedger = () => {
                 <Button
               onClick={() => setShowOldRecords(!showOldRecords)}
               variant="outline"
-              className="w-full bg-white hover:bg-gray-100 text-sm py-2"
+              className={`w-full text-sm py-2 ${
+                showOldRecords 
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                  : 'bg-white hover:bg-gray-100'
+              }`}
                 >
-                  Old Record
+                  {showOldRecords ? 'Current Records' : 'Old Records'}
                 </Button>
                 <Button
               onClick={() => {
-                const selectedEntry = currentEntries?.find(entry => entry.chk);
+                const selectedEntry = displayEntries?.find(entry => entry.chk);
                 if (selectedEntry) {
                   setEditingEntry(selectedEntry);
                   setShowModifyModal(true);
@@ -809,7 +864,7 @@ const AccountLedger = () => {
                 </Button>
                 <Button
               onClick={() => {
-                const selectedEntries = currentEntries?.filter(entry => entry.chk) || [];
+                const selectedEntries = displayEntries?.filter(entry => entry.chk) || [];
                 if (selectedEntries.length > 0) {
                   setEntryToDelete(selectedEntries[0]); // For modal display, we'll handle multiple in the function
                   setShowDeleteModal(true);
