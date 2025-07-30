@@ -85,7 +85,7 @@ const AccountLedger = () => {
     if (!partyName) return;
     
     if (showLoading) {
-      setLoading(true);
+    setLoading(true);
     }
     
     try {
@@ -147,10 +147,10 @@ const AccountLedger = () => {
       } else {
         // Handle API error response
         console.error('API Error:', response.message);
-        toast({
-          title: "Error",
+              toast({
+                title: "Error",
           description: response.message || "Failed to load ledger data",
-          variant: "destructive"
+                variant: "destructive"
         });
       }
     } catch (error: any) {
@@ -337,16 +337,16 @@ const AccountLedger = () => {
         await loadLedgerData(false);
         setEditingEntry(null);
         setShowModifyModal(false);
-        toast({
-          title: "Success",
+      toast({
+        title: "Success",
           description: "Entry modified successfully"
-        });
+      });
       } else {
-        toast({
-          title: "Error",
+      toast({
+        title: "Error",
           description: response.message || "Failed to modify entry",
-          variant: "destructive"
-        });
+        variant: "destructive"
+      });
       }
     } catch (error: any) {
       console.error('Modify entry error:', error);
@@ -380,7 +380,7 @@ const AccountLedger = () => {
       });
       return;
     }
-
+    
     setActionLoading(true);
     
     try {
@@ -422,11 +422,11 @@ const AccountLedger = () => {
           variant: "destructive"
         });
       } else {
-        toast({
-          title: "Error",
+      toast({
+        title: "Error",
           description: "Failed to delete any entries",
-          variant: "destructive"
-        });
+        variant: "destructive"
+      });
       }
     } catch (error: any) {
       console.error('Delete entries error:', error);
@@ -528,7 +528,7 @@ const AccountLedger = () => {
         {/* Desktop Application Header */}
         <div className="bg-blue-800 text-white p-2">
           <h1 className="text-lg font-bold">Account Ledger</h1>
-        </div>
+            </div>
         {/* Menu Bar */}
         <div className="bg-gray-200 p-1">
           <div className="flex space-x-4 text-sm">
@@ -536,28 +536,28 @@ const AccountLedger = () => {
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Create</span>
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Data Entry</span>
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Report</span>
-          </div>
-        </div>
+            </div>
+            </div>
         {/* Loading Spinner */}
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-gray-600">Loading ledger data...</p>
+            </div>
           </div>
-        </div>
       </div>
     );
   }
 
   // Error state - Show message when no data is available
   if (!ledgerData) {
-    return (
+  return (
       <div className="min-h-screen bg-gray-100">
-        <TopNavigation />
+      <TopNavigation />
         {/* Desktop Application Header */}
         <div className="bg-blue-800 text-white p-2">
           <h1 className="text-lg font-bold">Account Ledger</h1>
-        </div>
+                  </div>
         {/* Menu Bar */}
         <div className="bg-gray-200 p-1">
           <div className="flex space-x-4 text-sm">
@@ -565,13 +565,13 @@ const AccountLedger = () => {
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Create</span>
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Data Entry</span>
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Report</span>
-          </div>
-        </div>
+                  </div>
+                </div>
         {/* No Data Message */}
         <div className="text-center py-8">
           <p className="text-gray-600">No ledger data available</p>
-        </div>
-      </div>
+              </div>
+              </div>
     );
   }
 
@@ -585,8 +585,8 @@ const AccountLedger = () => {
       {/* Desktop Application Header */}
       <div className="bg-blue-800 text-white p-2">
         <h1 className="text-lg font-bold">Account Ledger</h1>
-      </div>
-      
+                </div>
+                
       {/* Menu Bar */}
       <div className="bg-gray-200 p-1">
         <div className="flex space-x-4 text-sm">
@@ -594,9 +594,9 @@ const AccountLedger = () => {
           <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Create</span>
           <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Data Entry</span>
           <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Report</span>
-        </div>
-      </div>
-      
+                  </div>
+                </div>
+                
       {/* Main Content Area */}
       <div className="flex h-screen">
         {/* Left Content Area */}
@@ -608,17 +608,17 @@ const AccountLedger = () => {
                 <h2 className="text-xl font-bold text-gray-900">Account Ledger</h2>
               </div>
               <div className="flex items-center space-x-4">
-                <div>
+                    <div>
                   <span className="text-sm font-medium">Party Name: </span>
                   <span className="text-sm">{partyName}</span>
-                </div>
-                <div>
+                    </div>
+                    <div>
                   <span className="text-sm font-medium">Closing Balance: </span>
                   <span className="text-sm font-bold">₹{(ledgerData.summary?.calculatedBalance || 0).toLocaleString()}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
 
               {/* Ledger Table */}
           <div className="bg-white border border-gray-300">
@@ -854,10 +854,10 @@ const AccountLedger = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-4 py-4">
-            <div>
+                <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
-              <input
-                type="number"
+                  <input
+                    type="number"
                 value={editingEntry?.credit || editingEntry?.debit || ''}
                 onChange={(e) => setEditingEntry(editingEntry ? {
                   ...editingEntry,
@@ -866,12 +866,12 @@ const AccountLedger = () => {
                 } : null)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md"
                 placeholder="Enter amount"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
-              <input
-                type="text"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
+                  <input
+                    type="text"
                 value={editingEntry?.remarks || ''}
                 onChange={(e) => setEditingEntry(editingEntry ? {
                   ...editingEntry,
@@ -879,11 +879,11 @@ const AccountLedger = () => {
                 } : null)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md"
                 placeholder="Enter remarks"
-              />
-            </div>
-            <div>
+                  />
+                </div>
+                  <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Transaction Type</label>
-              <select
+                    <select
                 value={editingEntry?.tnsType || 'CR'}
                 onChange={(e) => setEditingEntry(editingEntry ? {
                   ...editingEntry,
@@ -895,9 +895,9 @@ const AccountLedger = () => {
               >
                 <option value="CR">Credit (CR)</option>
                 <option value="DR">Debit (DR)</option>
-              </select>
-            </div>
-          </div>
+                    </select>
+                  </div>
+                </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
