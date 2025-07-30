@@ -172,8 +172,6 @@ const AccountLedger = () => {
 
     setActionLoading(true);
     try {
-      const currentDate = new Date().toLocaleDateString('en-GB'); // DD/MM/YYYY format
-      
       // Determine transaction type based on amount sign
       const tnsType = amount > 0 ? 'CR' : 'DR';
       const absoluteAmount = Math.abs(amount);
@@ -185,7 +183,6 @@ const AccountLedger = () => {
         tnsType,
         credit: tnsType === 'CR' ? absoluteAmount : 0,
         debit: tnsType === 'DR' ? absoluteAmount : 0,
-        date: currentDate,
         ti: `${Date.now()}:`
       };
 
