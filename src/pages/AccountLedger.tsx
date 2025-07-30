@@ -51,15 +51,21 @@ const AccountLedger = () => {
     setLoading(true);
     try {
       const response = await partyLedgerAPI.getPartyLedger(partyName);
+      console.log('Backend response:', response);
+      
       if (response.success) {
         // Convert array to expected format
         const entries = Array.isArray(response.data) ? response.data : [];
+        console.log('Processed entries:', entries);
+        
         const summary = {
-          totalCredit: entries.reduce((sum, entry) => sum + entry.credit, 0),
-          totalDebit: entries.reduce((sum, entry) => sum + entry.debit, 0),
-          calculatedBalance: entries.reduce((sum, entry) => sum + entry.balance, 0),
+          totalCredit: entries.reduce((sum, entry) => sum + (entry.credit || 0), 0),
+          totalDebit: entries.reduce((sum, entry) => sum + (entry.debit || 0), 0),
+          calculatedBalance: entries.reduce((sum, entry) => sum + (entry.balance || 0), 0),
           totalEntries: entries.length
         };
+        
+        console.log('Summary:', summary);
         
         setLedgerData({
           ledgerEntries: entries,
@@ -75,6 +81,7 @@ const AccountLedger = () => {
           }
         });
       } else {
+        console.error('API Error:', response.message);
         toast({
           title: "Error",
           description: response.message || "Failed to load ledger data",
@@ -82,6 +89,7 @@ const AccountLedger = () => {
         });
       }
     } catch (error: any) {
+      console.error('Load data error:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to load ledger data",
@@ -125,6 +133,8 @@ const AccountLedger = () => {
     setActionLoading(true);
     try {
       const amount = parseFloat(newEntry.amount);
+      const currentDate = new Date().toLocaleDateString('en-GB'); // DD/MM/YYYY format
+      
       const entryData = {
         partyName,
         amount,
@@ -132,12 +142,16 @@ const AccountLedger = () => {
         tnsType: newEntry.tnsType,
         credit: newEntry.tnsType === 'CR' ? amount : 0,
         debit: newEntry.tnsType === 'DR' ? amount : 0,
+        date: currentDate,
         ti: `${Date.now()}:`
       };
 
+      console.log('Adding entry:', entryData);
       const response = await partyLedgerAPI.addEntry(entryData);
+      console.log('Add entry response:', response);
 
       if (response.success) {
+        console.log('Entry added successfully, reloading data...');
         // Reload ledger data to get updated state
         await loadLedgerData();
 
@@ -153,6 +167,7 @@ const AccountLedger = () => {
           description: "Entry added successfully"
         });
       } else {
+        console.error('Add entry failed:', response.message);
         toast({
           title: "Error",
           description: response.message || "Failed to add entry",
@@ -160,6 +175,7 @@ const AccountLedger = () => {
         });
       }
     } catch (error: any) {
+      console.error('Add entry error:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to add entry",
