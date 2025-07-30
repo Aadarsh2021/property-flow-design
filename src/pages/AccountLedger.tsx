@@ -6,7 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, CheckCircle, AlertTriangle, Calculator, Clock, DollarSign, TrendingUp, Plus, RefreshCw, FileText, Printer } from 'lucide-react';
+import { Calendar, CheckCircle, AlertTriangle, Calculator, Clock, DollarSign, TrendingUp, Plus, RefreshCw, FileText, Printer, X } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { partyLedgerAPI } from '../lib/api';
 import { useToast } from '../hooks/use-toast';
@@ -213,14 +213,22 @@ const AccountLedger = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <TopNavigation />
-        <div className="max-w-7xl mx-auto px-4 py-8">
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading ledger data...</p>
-            </div>
+      <div className="min-h-screen bg-gray-100">
+        <div className="bg-blue-800 text-white p-2">
+          <h1 className="text-lg font-bold">SHUBH LABH 1011 - [Account Ledger]</h1>
+        </div>
+        <div className="bg-gray-200 p-1">
+          <div className="flex space-x-4 text-sm">
+            <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Configure</span>
+            <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Create</span>
+            <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Data Entry</span>
+            <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Report</span>
+          </div>
+        </div>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading ledger data...</p>
           </div>
         </div>
       </div>
@@ -229,12 +237,20 @@ const AccountLedger = () => {
 
   if (!ledgerData) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <TopNavigation />
-        <div className="max-w-7xl mx-auto px-4 py-8">
-          <div className="text-center">
-            <p className="text-gray-600">No ledger data available</p>
+      <div className="min-h-screen bg-gray-100">
+        <div className="bg-blue-800 text-white p-2">
+          <h1 className="text-lg font-bold">SHUBH LABH 1011 - [Account Ledger]</h1>
+        </div>
+        <div className="bg-gray-200 p-1">
+          <div className="flex space-x-4 text-sm">
+            <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Configure</span>
+            <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Create</span>
+            <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Data Entry</span>
+            <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Report</span>
           </div>
+        </div>
+        <div className="text-center py-8">
+          <p className="text-gray-600">No ledger data available</p>
         </div>
       </div>
     );
@@ -243,268 +259,245 @@ const AccountLedger = () => {
   const currentEntries = showOldRecords ? ledgerData.oldRecords : ledgerData.ledgerEntries;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <TopNavigation />
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Party Ledger</h1>
-              <p className="text-gray-600">Party: {partyName}</p>
+    <div className="min-h-screen bg-gray-100">
+      {/* Desktop Application Header */}
+      <div className="bg-blue-800 text-white p-2">
+        <h1 className="text-lg font-bold">SHUBH LABH 1011 - [Account Ledger]</h1>
+      </div>
+      
+      {/* Menu Bar */}
+      <div className="bg-gray-200 p-1">
+        <div className="flex space-x-4 text-sm">
+          <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Configure</span>
+          <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Create</span>
+          <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Data Entry</span>
+          <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Report</span>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div className="flex h-screen">
+        {/* Left Content Area */}
+        <div className="flex-1 p-4">
+          {/* Header Section */}
+          <div className="bg-white border border-gray-300 p-4 mb-4">
+            <div className="flex justify-between items-center">
+              <div className="text-center flex-1">
+                <h2 className="text-xl font-bold text-gray-900">Account Ledger</h2>
+              </div>
+              <div className="flex items-center space-x-4">
+                <div>
+                  <span className="text-sm font-medium">Party Name: </span>
+                  <span className="text-sm">{partyName}</span>
+                </div>
+                <div>
+                  <span className="text-sm font-medium">Closing Balance: </span>
+                  <span className="text-sm font-bold">₹{(ledgerData.summary?.calculatedBalance || 0).toLocaleString()}</span>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center space-x-3">
-              <Button
-                onClick={handleRefresh}
-                variant="outline"
-                size="sm"
-                disabled={loading}
-              >
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Refresh
-              </Button>
-              <Button
-                onClick={handlePrint}
-                variant="outline"
-                size="sm"
-              >
-                <Printer className="w-4 h-4 mr-2" />
-                Print
-              </Button>
-              <Button
-                onClick={handleExit}
-                variant="outline"
-                size="sm"
-              >
-                Exit
-              </Button>
+          </div>
+
+          {/* Ledger Table */}
+          <div className="bg-white border border-gray-300">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="border border-gray-300 px-2 py-1 text-left">Date</th>
+                    <th className="border border-gray-300 px-2 py-1 text-left">Remarks</th>
+                    <th className="border border-gray-300 px-2 py-1 text-left">Tns Type</th>
+                    <th className="border border-gray-300 px-2 py-1 text-right">Credit</th>
+                    <th className="border border-gray-300 px-2 py-1 text-right">Debit</th>
+                    <th className="border border-gray-300 px-2 py-1 text-right">Balance</th>
+                    <th className="border border-gray-300 px-2 py-1 text-center">Chk</th>
+                    <th className="border border-gray-300 px-2 py-1 text-center">Ti</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentEntries && currentEntries.length > 0 ? (
+                    currentEntries.map((entry) => (
+                      <tr key={entry.id} className="hover:bg-gray-50">
+                        <td className="border border-gray-300 px-2 py-1">{entry.date}</td>
+                        <td className="border border-gray-300 px-2 py-1">{entry.remarks}</td>
+                        <td className="border border-gray-300 px-2 py-1">
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            entry.tnsType === 'CR' ? 'bg-green-100 text-green-800' : 
+                            entry.tnsType === 'DR' ? 'bg-red-100 text-red-800' : 
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {entry.tnsType}
+                          </span>
+                        </td>
+                        <td className="border border-gray-300 px-2 py-1 text-right">
+                          {entry.credit > 0 ? `₹${entry.credit.toLocaleString()}` : '-'}
+                        </td>
+                        <td className="border border-gray-300 px-2 py-1 text-right">
+                          {entry.debit > 0 ? `₹${entry.debit.toLocaleString()}` : '-'}
+                        </td>
+                        <td className="border border-gray-300 px-2 py-1 text-right">
+                          <span className={entry.balance >= 0 ? 'text-green-600' : 'text-red-600'}>
+                            ₹{entry.balance.toLocaleString()}
+                          </span>
+                        </td>
+                        <td className="border border-gray-300 px-2 py-1 text-center">
+                          <input
+                            type="checkbox"
+                            checked={entry.chk}
+                            onChange={(e) => handleCheckboxChange(entry.id, e.target.checked)}
+                            className="w-4 h-4"
+                          />
+                        </td>
+                        <td className="border border-gray-300 px-2 py-1 text-center text-xs">
+                          {entry.ti || '-'}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={8} className="border border-gray-300 px-2 py-4 text-center text-gray-500">
+                        No entries found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* New Entry Form */}
+          <div className="bg-white border border-gray-300 p-4 mt-4">
+            <div className="grid grid-cols-4 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Party Name</label>
+                <input
+                  type="text"
+                  value={partyName || ''}
+                  disabled
+                  className="w-full px-2 py-1 border border-gray-300 text-sm bg-gray-100"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Amount</label>
+                <input
+                  type="number"
+                  value={newEntry.amount}
+                  onChange={(e) => setNewEntry({ ...newEntry, amount: e.target.value })}
+                  className="w-full px-2 py-1 border border-gray-300 text-sm"
+                  placeholder="Enter amount"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Remarks</label>
+                <input
+                  type="text"
+                  value={newEntry.remarks}
+                  onChange={(e) => setNewEntry({ ...newEntry, remarks: e.target.value })}
+                  className="w-full px-2 py-1 border border-gray-300 text-sm"
+                  placeholder="Enter remarks"
+                />
+              </div>
+              <div className="flex items-end">
+                <Button
+                  onClick={handleAddEntry}
+                  disabled={actionLoading || !newEntry.amount || !newEntry.remarks}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 text-sm"
+                >
+                  OK
+                </Button>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Credit</p>
-                <p className="text-2xl font-bold text-green-600">
-                  ₹{(ledgerData.summary?.totalCredit || 0).toLocaleString()}
-                </p>
-              </div>
-              <div className="bg-green-100 p-3 rounded-lg">
-                <DollarSign className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Debit</p>
-                <p className="text-2xl font-bold text-red-600">
-                  ₹{(ledgerData.summary?.totalDebit || 0).toLocaleString()}
-                </p>
-              </div>
-              <div className="bg-red-100 p-3 rounded-lg">
-                <Calculator className="w-6 h-6 text-red-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Balance</p>
-                <p className={`text-2xl font-bold ${(ledgerData.summary?.calculatedBalance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ₹{(ledgerData.summary?.calculatedBalance || 0).toLocaleString()}
-                </p>
-              </div>
-              <div className="bg-blue-100 p-3 rounded-lg">
-                <TrendingUp className="w-6 h-6 text-blue-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Entries</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {ledgerData.summary?.totalEntries || 0}
-                </p>
-              </div>
-              <div className="bg-purple-100 p-3 rounded-lg">
-                <FileText className="w-6 h-6 text-purple-600" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* New Entry Form */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Entry</h3>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Amount
-              </label>
-              <input
-                type="number"
-                value={newEntry.amount}
-                onChange={(e) => setNewEntry({ ...newEntry, amount: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Enter amount"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Remarks
-              </label>
-              <input
-                type="text"
-                value={newEntry.remarks}
-                onChange={(e) => setNewEntry({ ...newEntry, remarks: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Enter remarks"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Type
-              </label>
-              <select
-                value={newEntry.tnsType}
-                onChange={(e) => setNewEntry({ ...newEntry, tnsType: e.target.value as 'CR' | 'DR' })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="CR">Credit (CR)</option>
-                <option value="DR">Debit (DR)</option>
-              </select>
-            </div>
-            <div className="flex items-end">
-              <Button
-                onClick={handleAddEntry}
-                disabled={actionLoading || !newEntry.amount || !newEntry.remarks}
-                className="w-full"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Entry
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* Records Toggle */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Button
-                onClick={() => setShowOldRecords(false)}
-                variant={!showOldRecords ? "default" : "outline"}
-                size="sm"
-              >
-                Current Records
-              </Button>
-              <Button
-                onClick={() => setShowOldRecords(true)}
-                variant={showOldRecords ? "default" : "outline"}
-                size="sm"
-              >
-                Old Records
-              </Button>
-            </div>
+        {/* Right Sidebar - Action Buttons */}
+        <div className="w-48 bg-gray-200 p-2 border-l border-gray-300">
+          <div className="space-y-2">
+            <Button
+              onClick={handleRefresh}
+              className="w-full bg-orange-600 hover:bg-orange-700 text-white text-sm py-2"
+            >
+              Refresh All
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full bg-white hover:bg-gray-100 text-sm py-2"
+            >
+              DC Report
+            </Button>
             <Button
               onClick={() => setShowMondayFinalModal(true)}
               disabled={actionLoading || !currentEntries || currentEntries.filter(e => e.chk).length === 0}
-              className="bg-orange-600 hover:bg-orange-700"
+              variant="outline"
+              className="w-full bg-white hover:bg-gray-100 text-sm py-2"
             >
-              <CheckCircle className="w-4 h-4 mr-2" />
               Monday Final
+            </Button>
+            <Button
+              onClick={() => setShowOldRecords(!showOldRecords)}
+              variant="outline"
+              className="w-full bg-white hover:bg-gray-100 text-sm py-2"
+            >
+              Old Record
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2"
+            >
+              Modify
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full bg-red-600 hover:bg-red-700 text-white text-sm py-2"
+            >
+              Delete
+            </Button>
+            <Button
+              onClick={handlePrint}
+              variant="outline"
+              className="w-full bg-white hover:bg-gray-100 text-sm py-2"
+            >
+              Print
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full bg-white hover:bg-gray-100 text-sm py-2"
+            >
+              Check All
+            </Button>
+            <Button
+              onClick={handleExit}
+              variant="outline"
+              className="w-full bg-orange-700 hover:bg-orange-800 text-white text-sm py-2"
+            >
+              Exit
             </Button>
           </div>
         </div>
-
-        {/* Ledger Table */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12">
-                  <Checkbox />
-                </TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Remarks</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead className="text-right">Credit</TableHead>
-                <TableHead className="text-right">Debit</TableHead>
-                <TableHead className="text-right">Balance</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {currentEntries && currentEntries.length > 0 ? (
-                currentEntries.map((entry) => (
-                  <TableRow key={entry.id}>
-                    <TableCell>
-                      <Checkbox
-                        checked={entry.chk}
-                        onCheckedChange={(checked) => handleCheckboxChange(entry.id, checked as boolean)}
-                      />
-                    </TableCell>
-                    <TableCell>{entry.date}</TableCell>
-                    <TableCell>{entry.remarks}</TableCell>
-                    <TableCell>
-                      <Badge variant={entry.tnsType === 'CR' ? 'default' : entry.tnsType === 'DR' ? 'secondary' : 'outline'}>
-                        {entry.tnsType}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {entry.credit > 0 ? `₹${entry.credit.toLocaleString()}` : '-'}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {entry.debit > 0 ? `₹${entry.debit.toLocaleString()}` : '-'}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <span className={entry.balance >= 0 ? 'text-green-600' : 'text-red-600'}>
-                        ₹{entry.balance.toLocaleString()}
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                    No entries found
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-
-        {/* Monday Final Modal */}
-        <AlertDialog open={showMondayFinalModal} onOpenChange={setShowMondayFinalModal}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Monday Final Settlement</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to create a Monday Final settlement for the selected entries?
-                This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleMondayFinal}
-                disabled={actionLoading}
-                className="bg-orange-600 hover:bg-orange-700"
-              >
-                {actionLoading ? 'Processing...' : 'Confirm Settlement'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
+
+      {/* Monday Final Modal */}
+      <AlertDialog open={showMondayFinalModal} onOpenChange={setShowMondayFinalModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Monday Final Settlement</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to create a Monday Final settlement for the selected entries?
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleMondayFinal}
+              disabled={actionLoading}
+              className="bg-orange-600 hover:bg-orange-700"
+            >
+              {actionLoading ? 'Processing...' : 'Confirm Settlement'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
