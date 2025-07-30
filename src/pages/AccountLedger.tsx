@@ -52,7 +52,28 @@ const AccountLedger = () => {
     try {
       const response = await partyLedgerAPI.getPartyLedger(partyName);
       if (response.success) {
-        setLedgerData(response.data);
+        // Convert array to expected format
+        const entries = Array.isArray(response.data) ? response.data : [];
+        const summary = {
+          totalCredit: entries.reduce((sum, entry) => sum + entry.credit, 0),
+          totalDebit: entries.reduce((sum, entry) => sum + entry.debit, 0),
+          calculatedBalance: entries.reduce((sum, entry) => sum + entry.balance, 0),
+          totalEntries: entries.length
+        };
+        
+        setLedgerData({
+          ledgerEntries: entries,
+          oldRecords: entries.filter(entry => entry.tnsType === 'Monday S...'),
+          closingBalance: summary.calculatedBalance,
+          summary,
+          mondayFinalData: {
+            transactionCount: entries.filter(entry => entry.tnsType === 'Monday S...').length,
+            totalCredit: summary.totalCredit,
+            totalDebit: summary.totalDebit,
+            startingBalance: 0,
+            finalBalance: summary.calculatedBalance
+          }
+        });
       } else {
         toast({
           title: "Error",
@@ -103,23 +124,22 @@ const AccountLedger = () => {
 
     setActionLoading(true);
     try {
-      const response = await partyLedgerAPI.addEntry({
+      const amount = parseFloat(newEntry.amount);
+      const entryData = {
         partyName,
-        amount: parseFloat(newEntry.amount),
+        amount,
         remarks: newEntry.remarks,
         tnsType: newEntry.tnsType,
-        credit: newEntry.tnsType === 'CR' ? parseFloat(newEntry.amount) : 0,
-        debit: newEntry.tnsType === 'DR' ? parseFloat(newEntry.amount) : 0,
+        credit: newEntry.tnsType === 'CR' ? amount : 0,
+        debit: newEntry.tnsType === 'DR' ? amount : 0,
         ti: `${Date.now()}:`
-      });
+      };
+
+      const response = await partyLedgerAPI.addEntry(entryData);
 
       if (response.success) {
-        // Update ledger data with backend response
-        setLedgerData({
-          ...ledgerData!,
-          ledgerEntries: response.data.updatedLedger,
-          summary: response.data.summary
-        });
+        // Reload ledger data to get updated state
+        await loadLedgerData();
 
         // Clear form
         setNewEntry({
@@ -406,7 +426,7 @@ const AccountLedger = () => {
                   disabled={actionLoading || !newEntry.amount || !newEntry.remarks}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 text-sm"
                 >
-                  OK
+                  {actionLoading ? 'Saving...' : 'OK'}
                 </Button>
               </div>
             </div>
