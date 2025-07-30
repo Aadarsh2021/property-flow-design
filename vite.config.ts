@@ -9,6 +9,20 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
   },
+  build: {
+    target: 'esnext',
+    minify: 'terser',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          ui: ['@radix-ui/react-dialog', '@radix-ui/react-alert-dialog', '@radix-ui/react-toast'],
+          utils: ['lucide-react', 'clsx', 'tailwind-merge']
+        }
+      }
+    },
+    chunkSizeWarningLimit: 1000
+  },
   plugins: [
     react(),
     mode === 'development' &&
@@ -19,4 +33,7 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react-router-dom']
+  }
 }));

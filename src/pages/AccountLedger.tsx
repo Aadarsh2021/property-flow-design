@@ -1,6 +1,6 @@
 
 // React imports
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 
 // UI Components imports
 import TopNavigation from '../components/TopNavigation';
@@ -81,7 +81,7 @@ const AccountLedger = () => {
    * Fetches ledger entries for the current party and processes the response
    * to handle both array and object data formats from the backend.
    */
-  const loadLedgerData = async (showLoading = true) => {
+  const loadLedgerData = useCallback(async (showLoading = true) => {
     if (!partyName) return;
     
     if (showLoading) {
@@ -166,7 +166,7 @@ const AccountLedger = () => {
         setLoading(false);
       }
     }
-  };
+  }, [partyName]);
 
   // Load data when component mounts or partyName changes
   useEffect(() => {
@@ -745,10 +745,10 @@ const AccountLedger = () => {
                 </Button>
                 <Button
               onClick={() => setShowMondayFinalModal(true)}
-              disabled={actionLoading}
+                  disabled={actionLoading}
               variant="outline"
               className="w-full bg-white hover:bg-gray-100 text-sm py-2"
-            >
+                >
               Monday Final
                 </Button>
                 <Button

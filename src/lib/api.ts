@@ -11,8 +11,8 @@ const getAuthToken = () => {
 const retryRequest = async <T>(
   url: string, 
   config: RequestInit, 
-  maxRetries: number = 3,
-  delay: number = 2000
+  maxRetries: number = 2,
+  delay: number = 1000
 ): Promise<T> => {
   let lastError: Error;
   
@@ -116,7 +116,7 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
 export const checkBackendHealth = async () => {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout for health check
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout for health check
     
     const response = await fetch('https://account-ledger-software-9sys.onrender.com/health', {
       signal: controller.signal
