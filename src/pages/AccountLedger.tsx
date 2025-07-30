@@ -178,7 +178,7 @@ const AccountLedger = () => {
           closingBalance: closingBalance,
           summary: summary,
           mondayFinalData: mondayFinalData || {
-            transactionCount: entries.filter(entry => entry.tnsType === 'Monday S...').length,
+            transactionCount: entries.filter(entry => entry.tnsType === 'Monday Settlement').length,
             totalCredit: summary.totalCredit,
             totalDebit: summary.totalDebit,
             startingBalance: 0,
