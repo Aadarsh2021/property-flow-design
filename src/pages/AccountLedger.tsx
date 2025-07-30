@@ -1,22 +1,46 @@
 
+// React imports
 import { useState, useEffect } from 'react';
+
+// UI Components imports
 import TopNavigation from '../components/TopNavigation';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
+
+// Icons imports
 import { Calendar, CheckCircle, AlertTriangle, Calculator, Clock, DollarSign, TrendingUp, Plus, RefreshCw, FileText, Printer, X } from 'lucide-react';
+
+// Router imports
 import { useParams, useNavigate } from 'react-router-dom';
+
+// API and utilities imports
 import { partyLedgerAPI } from '../lib/api';
 import { useToast } from '../hooks/use-toast';
 import { LedgerEntry } from '../types';
 
+/**
+ * AccountLedger Component
+ * 
+ * This component handles the account ledger functionality for a specific party.
+ * It displays ledger entries, allows adding new transactions, and provides
+ * modify/delete capabilities for existing entries.
+ */
 const AccountLedger = () => {
+  // Router hooks
   const { partyName } = useParams<{ partyName: string }>();
   const navigate = useNavigate();
+  
+  // Toast notification hook
   const { toast } = useToast();
+  
+  // Loading states
   const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  
+  // Main ledger data state
   const [ledgerData, setLedgerData] = useState<{
     ledgerEntries: LedgerEntry[];
     oldRecords: LedgerEntry[];
@@ -35,25 +59,34 @@ const AccountLedger = () => {
       finalBalance: number;
     };
   } | null>(null);
+  
+  // UI state management
   const [showOldRecords, setShowOldRecords] = useState(false);
+  const [showMondayFinalModal, setShowMondayFinalModal] = useState(false);
+  const [showModifyModal, setShowModifyModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  
+  // Form and action states
   const [newEntry, setNewEntry] = useState({
     amount: '',
     remarks: '',
     tnsType: 'CR' as 'CR' | 'DR'
   });
-  const [showMondayFinalModal, setShowMondayFinalModal] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
   const [editingEntry, setEditingEntry] = useState<LedgerEntry | null>(null);
-  const [showModifyModal, setShowModifyModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [entryToDelete, setEntryToDelete] = useState<LedgerEntry | null>(null);
 
-  // Load ledger data
+  /**
+   * Load ledger data from backend API
+   * 
+   * Fetches ledger entries for the current party and processes the response
+   * to handle both array and object data formats from the backend.
+   */
   const loadLedgerData = async () => {
     if (!partyName) return;
     
     setLoading(true);
     try {
+      // Fetch ledger data from backend
       const response = await partyLedgerAPI.getPartyLedger(partyName);
       console.log('Backend response:', response);
       console.log('Response data type:', typeof response.data);
@@ -61,15 +94,16 @@ const AccountLedger = () => {
       console.log('Is response.data an array?', Array.isArray(response.data));
       
       if (response.success) {
-        // Check if data is array or object
+        // Initialize data variables
         let entries = [];
         let summary = null;
         let oldRecords = [];
         let closingBalance = 0;
         let mondayFinalData = null;
         
+        // Handle different response data formats
         if (Array.isArray(response.data)) {
-          // Data is array format - extract the first element
+          // Backend returns data wrapped in array - extract first element
           const dataObject = response.data[0] || {} as any;
           console.log('Extracted data object:', dataObject);
           
@@ -84,7 +118,7 @@ const AccountLedger = () => {
           closingBalance = dataObject.closingBalance || 0;
           mondayFinalData = dataObject.mondayFinalData;
         } else if (response.data && typeof response.data === 'object') {
-          // Data is object format (new format)
+          // Backend returns data as direct object
           const dataObj = response.data as any;
           entries = dataObj.ledgerEntries || [];
           summary = dataObj.summary || {
@@ -101,6 +135,7 @@ const AccountLedger = () => {
         console.log('Final entries:', entries);
         console.log('Final summary:', summary);
         
+        // Update ledger data state
         setLedgerData({
           ledgerEntries: entries,
           oldRecords: oldRecords,
@@ -115,14 +150,16 @@ const AccountLedger = () => {
           }
         });
       } else {
+        // Handle API error response
         console.error('API Error:', response.message);
-              toast({
-                title: "Error",
+        toast({
+          title: "Error",
           description: response.message || "Failed to load ledger data",
-                variant: "destructive"
+          variant: "destructive"
         });
       }
     } catch (error: any) {
+      // Handle network or other errors
       console.error('Load data error:', error);
       toast({
         title: "Error",
@@ -134,43 +171,66 @@ const AccountLedger = () => {
     }
   };
 
-  // Load data on component mount
+  // Load data when component mounts or partyName changes
   useEffect(() => {
     loadLedgerData();
   }, [partyName]);
 
-  // Handle checkbox change
+  /**
+   * Handle checkbox state change for ledger entries
+   * 
+   * Updates the checked state of a specific entry in the ledger data
+   * @param id - The MongoDB _id of the entry
+   * @param checked - The new checked state
+   */
   const handleCheckboxChange = async (id: string | number, checked: boolean) => {
     if (!ledgerData) return;
 
+    // Update the specific entry's checkbox state
     const updatedEntries = ledgerData.ledgerEntries.map(entry => 
       entry._id === id ? { ...entry, chk: checked } : entry
     );
 
+    // Update ledger data with new checkbox states
     setLedgerData({
       ...ledgerData,
       ledgerEntries: updatedEntries
     });
   };
 
-  // Handle check all functionality
+  /**
+   * Handle "Check All" functionality
+   * 
+   * Toggles all checkboxes in the ledger. If all are checked, unchecks all.
+   * If any are unchecked, checks all entries.
+   */
   const handleCheckAll = () => {
     if (!ledgerData) return;
 
+    // Check if all entries are currently checked
     const allChecked = ledgerData.ledgerEntries.every(entry => entry.chk);
+    
+    // Toggle all entries to the opposite state
     const updatedEntries = ledgerData.ledgerEntries.map(entry => ({
       ...entry,
       chk: !allChecked
     }));
 
+    // Update ledger data with new checkbox states
     setLedgerData({
       ...ledgerData,
       ledgerEntries: updatedEntries
     });
   };
 
-  // Handle add new entry
+  /**
+   * Handle adding a new ledger entry
+   * 
+   * Validates form data, determines transaction type based on amount sign,
+   * sends data to backend, and updates the UI accordingly.
+   */
   const handleAddEntry = async () => {
+    // Validate required fields
     if (!partyName || !newEntry.amount || !newEntry.remarks) {
       toast({
         title: "Validation Error",
@@ -194,9 +254,11 @@ const AccountLedger = () => {
     setActionLoading(true);
     try {
       // Determine transaction type based on amount sign
+      // Positive amount = Credit (CR), Negative amount = Debit (DR)
       const tnsType = amount > 0 ? 'CR' : 'DR';
       const absoluteAmount = Math.abs(amount);
       
+      // Prepare entry data for backend
       const entryData = {
         partyName,
         amount: absoluteAmount, // Send positive amount to backend
@@ -204,7 +266,7 @@ const AccountLedger = () => {
         tnsType,
         credit: tnsType === 'CR' ? absoluteAmount : 0,
         debit: tnsType === 'DR' ? absoluteAmount : 0,
-        ti: `${Date.now()}:`
+        ti: `${Date.now()}:` // Unique transaction identifier
       };
 
       console.log('Adding entry:', entryData);
@@ -216,7 +278,7 @@ const AccountLedger = () => {
         // Reload ledger data to get updated state
         await loadLedgerData();
 
-        // Clear form
+        // Clear form for next entry
         setNewEntry({
           amount: '',
           remarks: '',
@@ -247,8 +309,14 @@ const AccountLedger = () => {
     }
   };
 
-    // Handle modify entry
+    /**
+   * Handle modifying an existing ledger entry
+   * 
+   * Updates the selected entry with new data from the modify modal
+   * and refreshes the ledger data to reflect changes.
+   */
   const handleModifyEntry = async () => {
+    // Validate that we have an entry to modify
     if (!editingEntry || !editingEntry._id) {
       console.error('Modify entry error: No entry or _id found', editingEntry);
       toast({
@@ -262,6 +330,7 @@ const AccountLedger = () => {
     console.log('Modifying entry:', editingEntry);
     setActionLoading(true);
     try {
+      // Prepare update data based on transaction type
       const response = await partyLedgerAPI.updateEntry(editingEntry._id, {
         remarks: editingEntry.remarks,
         credit: editingEntry.tnsType === 'CR' ? (editingEntry.credit || editingEntry.debit || 0) : 0,
@@ -271,19 +340,20 @@ const AccountLedger = () => {
 
       console.log('Modify response:', response);
       if (response.success) {
+        // Reload data and close modal on success
         await loadLedgerData();
         setEditingEntry(null);
         setShowModifyModal(false);
-      toast({
+        toast({
           title: "Success",
           description: "Entry modified successfully"
         });
       } else {
-      toast({
+        toast({
           title: "Error",
           description: response.message || "Failed to modify entry",
-        variant: "destructive"
-      });
+          variant: "destructive"
+        });
       }
     } catch (error: any) {
       console.error('Modify entry error:', error);
@@ -297,8 +367,14 @@ const AccountLedger = () => {
     }
   };
 
-    // Handle delete entry
+    /**
+   * Handle deleting an existing ledger entry
+   * 
+   * Deletes the selected entry from the backend and refreshes
+   * the ledger data to reflect the change.
+   */
   const handleDeleteEntry = async () => {
+    // Validate that we have an entry to delete
     if (!entryToDelete || !entryToDelete._id) {
       console.error('Delete entry error: No entry or _id found', entryToDelete);
       toast({
@@ -312,23 +388,25 @@ const AccountLedger = () => {
     console.log('Deleting entry:', entryToDelete);
     setActionLoading(true);
     try {
+      // Send delete request to backend
       const response = await partyLedgerAPI.deleteEntry(entryToDelete._id);
       console.log('Delete response:', response);
 
       if (response.success) {
+        // Reload data and close modal on success
         await loadLedgerData();
         setEntryToDelete(null);
         setShowDeleteModal(false);
-      toast({
+        toast({
           title: "Success",
           description: "Entry deleted successfully"
-      });
-    } else {
-      toast({
-        title: "Error",
+        });
+      } else {
+        toast({
+          title: "Error",
           description: response.message || "Failed to delete entry",
-        variant: "destructive"
-      });
+          variant: "destructive"
+        });
       }
     } catch (error: any) {
       console.error('Delete entry error:', error);
@@ -342,10 +420,16 @@ const AccountLedger = () => {
     }
   };
 
-  // Handle Monday Final settlement
+    /**
+   * Handle Monday Final settlement process
+   * 
+   * Processes selected entries for Monday Final settlement,
+   * which marks entries as settled and updates their status.
+   */
   const handleMondayFinal = async () => {
     if (!ledgerData) return;
 
+    // Get all selected entries
     const selectedEntries = ledgerData.ledgerEntries.filter(entry => entry.chk);
     if (selectedEntries.length === 0) {
       toast({
@@ -358,24 +442,25 @@ const AccountLedger = () => {
     
     setActionLoading(true);
     try {
+      // Send Monday Final request to backend
       const response = await partyLedgerAPI.updateMondayFinal([partyName!]);
       
       if (response.success) {
         // Reload ledger data to get updated state
         await loadLedgerData();
         
-      toast({
+        toast({
           title: "Monday Final Settlement",
           description: "Settlement completed successfully"
         });
         
         setShowMondayFinalModal(false);
-    } else {
-      toast({
-        title: "Error",
+      } else {
+        toast({
+          title: "Error",
           description: response.message || "Failed to process settlement",
-        variant: "destructive"
-      });
+          variant: "destructive"
+        });
       }
     } catch (error: any) {
       toast({
@@ -388,78 +473,100 @@ const AccountLedger = () => {
     }
   };
 
-  // Handle print
+  /**
+   * Handle print functionality
+   * 
+   * Triggers browser's print dialog for the current page
+   */
   const handlePrint = () => {
     window.print();
   };
 
-  // Handle refresh
+  /**
+   * Handle refresh functionality
+   * 
+   * Reloads ledger data from backend
+   */
   const handleRefresh = () => {
     loadLedgerData();
   };
 
-  // Handle exit
+  /**
+   * Handle exit functionality
+   * 
+   * Navigates back to party ledger page
+   */
   const handleExit = () => {
     navigate('/party-ledger');
   };
 
+    // Loading state - Show spinner while data is being fetched
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100">
         <TopNavigation />
+        {/* Desktop Application Header */}
         <div className="bg-blue-800 text-white p-2">
           <h1 className="text-lg font-bold">Account Ledger</h1>
-            </div>
+        </div>
+        {/* Menu Bar */}
         <div className="bg-gray-200 p-1">
           <div className="flex space-x-4 text-sm">
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Configure</span>
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Create</span>
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Data Entry</span>
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Report</span>
-            </div>
           </div>
+        </div>
+        {/* Loading Spinner */}
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-gray-600">Loading ledger data...</p>
-            </div>
-            </div>
-            </div>
+          </div>
+        </div>
+      </div>
     );
   }
 
+  // Error state - Show message when no data is available
   if (!ledgerData) {
-  return (
+    return (
       <div className="min-h-screen bg-gray-100">
-      <TopNavigation />
+        <TopNavigation />
+        {/* Desktop Application Header */}
         <div className="bg-blue-800 text-white p-2">
           <h1 className="text-lg font-bold">Account Ledger</h1>
-                  </div>
+        </div>
+        {/* Menu Bar */}
         <div className="bg-gray-200 p-1">
           <div className="flex space-x-4 text-sm">
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Configure</span>
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Create</span>
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Data Entry</span>
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Report</span>
-                  </div>
-                </div>
+          </div>
+        </div>
+        {/* No Data Message */}
         <div className="text-center py-8">
           <p className="text-gray-600">No ledger data available</p>
-              </div>
-              </div>
+        </div>
+      </div>
     );
   }
 
+  // Determine which entries to display (current or old records)
   const currentEntries = showOldRecords ? ledgerData.oldRecords : ledgerData.ledgerEntries;
 
   return (
     <div className="min-h-screen bg-gray-100">
       <TopNavigation />
+      
       {/* Desktop Application Header */}
       <div className="bg-blue-800 text-white p-2">
         <h1 className="text-lg font-bold">Account Ledger</h1>
-                </div>
-                
+      </div>
+      
       {/* Menu Bar */}
       <div className="bg-gray-200 p-1">
         <div className="flex space-x-4 text-sm">
@@ -467,31 +574,31 @@ const AccountLedger = () => {
           <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Create</span>
           <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Data Entry</span>
           <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Report</span>
-                  </div>
-                </div>
-                
+        </div>
+      </div>
+      
       {/* Main Content Area */}
       <div className="flex h-screen">
         {/* Left Content Area */}
         <div className="flex-1 p-4">
-          {/* Header Section */}
+          {/* Header Section with Party Info and Balance */}
           <div className="bg-white border border-gray-300 p-4 mb-4">
             <div className="flex justify-between items-center">
               <div className="text-center flex-1">
                 <h2 className="text-xl font-bold text-gray-900">Account Ledger</h2>
               </div>
               <div className="flex items-center space-x-4">
-                    <div>
+                <div>
                   <span className="text-sm font-medium">Party Name: </span>
                   <span className="text-sm">{partyName}</span>
-                    </div>
-                    <div>
+                </div>
+                <div>
                   <span className="text-sm font-medium">Closing Balance: </span>
                   <span className="text-sm font-bold">₹{(ledgerData.summary?.calculatedBalance || 0).toLocaleString()}</span>
-                    </div>
-                  </div>
                 </div>
               </div>
+            </div>
+          </div>
 
               {/* Ledger Table */}
           <div className="bg-white border border-gray-300">
