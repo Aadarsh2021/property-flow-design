@@ -159,9 +159,19 @@ const AccountLedger = () => {
       return;
     }
 
+    // Validate amount is positive
+    const amount = parseFloat(newEntry.amount);
+    if (isNaN(amount) || amount <= 0) {
+      toast({
+        title: "Validation Error",
+        description: "Amount must be a positive number",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setActionLoading(true);
     try {
-      const amount = parseFloat(newEntry.amount);
       const currentDate = new Date().toLocaleDateString('en-GB'); // DD/MM/YYYY format
       
       const entryData = {
