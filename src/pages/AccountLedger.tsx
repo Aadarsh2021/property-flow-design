@@ -1,192 +1,69 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, CheckCircle, AlertTriangle, Calculator, Clock, DollarSign, TrendingUp } from 'lucide-react';
+import { Calendar, CheckCircle, AlertTriangle, Calculator, Clock, DollarSign, TrendingUp, Plus, RefreshCw, FileText, Print } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { partyLedgerAPI, mockData } from '../lib/api';
+import { partyLedgerAPI } from '../lib/api';
 import { useToast } from '../hooks/use-toast';
-import { LedgerEntry, LedgerEntryInput } from '../types';
+import { LedgerEntry } from '../types';
 
 const AccountLedger = () => {
   const { partyName } = useParams<{ partyName: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
-  const [closingBalance, setClosingBalance] = useState(0);
-  const [oldRecords, setOldRecords] = useState<LedgerEntry[]>([]);
+  const [ledgerData, setLedgerData] = useState<{
+    ledgerEntries: LedgerEntry[];
+    oldRecords: LedgerEntry[];
+    closingBalance: number;
+    summary: {
+      totalCredit: number;
+      totalDebit: number;
+      calculatedBalance: number;
+      totalEntries: number;
+    };
+    mondayFinalData: {
+      transactionCount: number;
+      totalCredit: number;
+      totalDebit: number;
+      startingBalance: number;
+      finalBalance: number;
+    };
+  } | null>(null);
   const [showOldRecords, setShowOldRecords] = useState(false);
   const [newEntry, setNewEntry] = useState({
-    partyName: '',
     amount: '',
-    remarks: ''
-  });
-  const [isModifyModalOpen, setIsModifyModalOpen] = useState(false);
-  const [selectedEntryForModify, setSelectedEntryForModify] = useState<LedgerEntry | null>(null);
-  const [modifyFormData, setModifyFormData] = useState({
     remarks: '',
-    amount: '',
     tnsType: 'CR' as 'CR' | 'DR'
   });
   const [showMondayFinalModal, setShowMondayFinalModal] = useState(false);
-  const [mondayFinalData, setMondayFinalData] = useState({
-    transactionCount: 0,
-    totalCredit: 0,
-    totalDebit: 0,
-    startingBalance: 0,
-    finalBalance: 0
-  });
   const [actionLoading, setActionLoading] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [selectedEntries, setSelectedEntries] = useState<(string | number)[]>([]);
 
-  // Calculate summary values based on current view
-  const currentEntries = showOldRecords ? (oldRecords || []) : (ledgerEntries || []);
-  const totalCredit = currentEntries.reduce((sum, entry) => sum + (entry.credit || 0), 0);
-  const totalDebit = currentEntries.reduce((sum, entry) => sum + Math.abs(entry.debit || 0), 0);
-  const calculatedBalance = totalCredit - totalDebit;
-
-  // Keyboard shortcuts for better UX
-  useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      // Ctrl/Cmd + N for new transaction
-      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
-        e.preventDefault();
-        const amountInput = document.getElementById('amount') as HTMLInputElement;
-        if (amountInput) {
-          amountInput.focus();
-        }
-      }
-      
-      // Ctrl/Cmd + S for save/refresh
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        handleRefreshAll();
-      }
-      
-      // Ctrl/Cmd + P for print
-      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
-        e.preventDefault();
-        handlePrint();
-      }
-      
-      // Escape to clear form
-      if (e.key === 'Escape') {
-        handleClearForm();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyPress);
-    return () => document.removeEventListener('keydown', handleKeyPress);
-  }, []);
-
-  // Load ledger data on component mount
-  useEffect(() => {
-    if (partyName) {
-      loadLedgerData();
-    }
-  }, [partyName]);
-
-  // Ensure proper ordering whenever ledger entries change
-  useEffect(() => {
-    if (ledgerEntries.length > 0) {
-      const sortedEntries = [...ledgerEntries].sort((a, b) => {
-        const dateA = new Date(a.date.split('/').reverse().join('-'));
-        const dateB = new Date(b.date.split('/').reverse().join('-'));
-        
-        // If dates are same, sort by creation time (older entries first)
-        if (dateA.getTime() === dateB.getTime()) {
-          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return timeA - timeB; // Older first
-        }
-        
-        return dateA.getTime() - dateB.getTime(); // Oldest first
-      });
-      
-      // Only update if order actually changed
-      const currentOrder = ledgerEntries.map(e => e.id).join(',');
-      const newOrder = sortedEntries.map(e => e.id).join(',');
-      
-      if (currentOrder !== newOrder) {
-        const recalculatedEntries = recalculateBalances(sortedEntries);
-        setLedgerEntries(recalculatedEntries);
-        
-        // Update closing balance
-        if (recalculatedEntries.length > 0) {
-          setClosingBalance(recalculatedEntries[recalculatedEntries.length - 1].balance);
-        }
-      }
-    }
-  }, [ledgerEntries.length]); // Only run when number of entries changes
-
+  // Load ledger data
   const loadLedgerData = async () => {
     if (!partyName) return;
     
     setLoading(true);
     try {
       const response = await partyLedgerAPI.getPartyLedger(partyName);
-      
-      // Check if response is valid and has data
-      if (response && response.success && response.data && Array.isArray(response.data)) {
-        // Ensure all entries have proper ID fields
-        const processedEntries = response.data.map((entry: any, index: number) => ({
-          ...entry,
-          id: entry._id || entry.id || `entry-${index}`,
-          chk: entry.chk || false
-        }));
-        
-        // Sort entries by date and time (oldest first) to maintain consistent order
-        const sortedEntries = processedEntries.sort((a, b) => {
-          const dateA = new Date(a.date.split('/').reverse().join('-'));
-          const dateB = new Date(b.date.split('/').reverse().join('-'));
-          
-          // If dates are same, sort by creation time (older entries first)
-          if (dateA.getTime() === dateB.getTime()) {
-            const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-            const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-            return timeA - timeB; // Older first
-          }
-          
-          return dateA.getTime() - dateB.getTime(); // Oldest first
-        });
-        
-        // Recalculate balances to ensure accuracy
-        const recalculatedEntries = recalculateBalances(sortedEntries);
-        setLedgerEntries(recalculatedEntries);
-        
-        // Update closing balance
-        if (recalculatedEntries.length > 0) {
-          setClosingBalance(recalculatedEntries[recalculatedEntries.length - 1].balance);
-        }
+      if (response.success) {
+        setLedgerData(response.data);
       } else {
-        // Fallback to mock data if API response is invalid
-        console.warn('Invalid API response format, using mock data');
-        const mockEntries = mockData.getMockLedgerEntries();
-        const recalculatedMockEntries = recalculateBalances(mockEntries);
-        setLedgerEntries(recalculatedMockEntries);
-        
         toast({
-          title: "Warning",
-          description: "Using offline data. Some features may be limited.",
+          title: "Error",
+          description: response.message || "Failed to load ledger data",
           variant: "destructive"
         });
       }
-    } catch (error) {
-      console.error('Error loading ledger data:', error);
-      // Use mock data as fallback
-      const mockEntries = mockData.getMockLedgerEntries();
-      const recalculatedMockEntries = recalculateBalances(mockEntries);
-      setLedgerEntries(recalculatedMockEntries);
-      
+    } catch (error: any) {
       toast({
-        title: "Warning",
-        description: "Using offline data. Some features may be limited.",
+        title: "Error",
+        description: error.message || "Failed to load ledger data",
         variant: "destructive"
       });
     } finally {
@@ -194,270 +71,66 @@ const AccountLedger = () => {
     }
   };
 
+  // Load data on component mount
+  useEffect(() => {
+    loadLedgerData();
+  }, [partyName]);
+
+  // Handle checkbox change
   const handleCheckboxChange = async (id: string | number, checked: boolean) => {
-    try {
-      // Ensure id is valid
-      if (id === undefined || id === null) {
-        console.error('Invalid entry ID:', id);
-        return;
-      }
+    if (!ledgerData) return;
 
-      // Update local state immediately for better UX
-      if (showOldRecords) {
-        // Update old records
-        setOldRecords(prevRecords => {
-          const updatedRecords = prevRecords.map(entry =>
-            entry.id === id ? { ...entry, chk: checked } : entry
-          );
-          
-          // Find the entry for backend update
-          const entry = updatedRecords.find(e => e.id === id);
-          if (entry && entry.id && !entry.id.toString().startsWith('entry-')) {
-            // Update backend asynchronously
-            const idString = typeof id === 'string' ? id : id.toString();
-            partyLedgerAPI.updateEntry(idString, { chk: checked }).catch(error => {
-              console.error('Error updating old record in backend:', error);
-              // Revert local state if backend update fails
-              setOldRecords(prevRecords =>
-                prevRecords.map(entry =>
-                  entry.id === id ? { ...entry, chk: !checked } : entry
-                )
-              );
-              toast({
-                title: "Error",
-                description: "Failed to update old record",
-                variant: "destructive"
-              });
-            });
-          }
-          
-          return updatedRecords;
-        });
-      } else {
-        // Update current ledger entries
-        setLedgerEntries(prevEntries => {
-          const updatedEntries = prevEntries.map(entry =>
-            entry.id === id ? { ...entry, chk: checked } : entry
-          );
-          
-          // Find the entry for backend update
-          const entry = updatedEntries.find(e => e.id === id);
-          if (entry && entry.id && !entry.id.toString().startsWith('entry-')) {
-            // Update backend asynchronously
-            const idString = typeof id === 'string' ? id : id.toString();
-            partyLedgerAPI.updateEntry(idString, { chk: checked }).catch(error => {
-              console.error('Error updating entry in backend:', error);
-              // Revert local state if backend update fails
-              setLedgerEntries(prevEntries =>
-                prevEntries.map(entry =>
-                  entry.id === id ? { ...entry, chk: !checked } : entry
-                )
-              );
-              toast({
-                title: "Error",
-                description: "Failed to update entry",
-                variant: "destructive"
-              });
-            });
-          }
-          
-          return updatedEntries;
-        });
-      }
-    } catch (error) {
-      console.error('Error updating entry:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update entry",
-        variant: "destructive"
-      });
-    }
+    const updatedEntries = ledgerData.ledgerEntries.map(entry => 
+      entry.id === id ? { ...entry, chk: checked } : entry
+    );
+
+    setLedgerData({
+      ...ledgerData,
+      ledgerEntries: updatedEntries
+    });
   };
 
-  const handleCheckAll = async () => {
-    if (showOldRecords) {
-      // Handle check all for old records
-      setOldRecords(prevRecords => {
-        const allChecked = (prevRecords || []).every(entry => entry.chk);
-        const newCheckedState = !allChecked;
-        
-        const updatedRecords = (prevRecords || []).map(entry => ({ ...entry, chk: newCheckedState }));
-        
-        // Update all old records in backend
-        const realRecords = updatedRecords.filter(entry => 
-          entry.id && entry.id.toString && !entry.id.toString().startsWith('entry-')
-        );
-        
-        if (realRecords.length > 0) {
-          const updatePromises = realRecords.map(entry => {
-            const idString = typeof entry.id === 'string' ? entry.id : entry.id.toString();
-            return partyLedgerAPI.updateEntry(idString, { chk: newCheckedState });
-          });
-          
-          Promise.all(updatePromises).catch(error => {
-            console.error('Error updating all old records:', error);
-            toast({
-              title: "Error",
-              description: "Failed to update old records",
-              variant: "destructive"
-            });
-          });
-        }
-        
-        return updatedRecords;
-      });
-    } else {
-      // Handle check all for current entries
-      setLedgerEntries(prevEntries => {
-        const allChecked = (prevEntries || []).every(entry => entry.chk);
-        const newCheckedState = !allChecked;
-        
-        const updatedEntries = (prevEntries || []).map(entry => ({ ...entry, chk: newCheckedState }));
-        
-        // Update all entries in backend - only real entries, not mock data
-        const realEntries = updatedEntries.filter(entry => 
-          entry.id && entry.id.toString && !entry.id.toString().startsWith('entry-')
-        );
-        
-        if (realEntries.length > 0) {
-          const updatePromises = realEntries.map(entry => {
-            const idString = typeof entry.id === 'string' ? entry.id : entry.id.toString();
-            return partyLedgerAPI.updateEntry(idString, { chk: newCheckedState });
-          });
-          
-          Promise.all(updatePromises).catch(error => {
-            console.error('Error updating all entries:', error);
-            toast({
-              title: "Error",
-              description: "Failed to update entries",
-              variant: "destructive"
-            });
-          });
-        }
-        
-        return updatedEntries;
-      });
-    }
-  };
-
-  // Generate remarks based on party name and remarks input
-  const generateRemarks = () => {
-    if (!newEntry.partyName) return newEntry.remarks;
-    
-    if (newEntry.remarks) {
-      return `${newEntry.partyName} (${newEntry.remarks})`;
-    }
-    
-    return newEntry.partyName;
-  };
-
+  // Handle add new entry
   const handleAddEntry = async () => {
-    // Enhanced validation
-    if (!newEntry.partyName || !newEntry.partyName.trim()) {
+    if (!partyName || !newEntry.amount || !newEntry.remarks) {
       toast({
-        title: "Error",
-        description: "Please enter party name",
+        title: "Validation Error",
+        description: "Please fill in all required fields",
         variant: "destructive"
       });
       return;
     }
 
-    if (!newEntry.amount || isNaN(parseFloat(newEntry.amount)) || parseFloat(newEntry.amount) === 0) {
-      toast({
-        title: "Error",
-        description: "Please enter a valid amount (non-zero)",
-        variant: "destructive"
-      });
-      return;
-    }
-
+    setActionLoading(true);
     try {
-      setLoading(true);
-      
-      // Calculate the new entry with current closing balance
-      const currentClosingBalance = closingBalance;
-      const newAmount = parseFloat(newEntry.amount);
-      
-      // Determine if it's credit or debit based on transaction type
-      const amount = parseFloat(newEntry.amount);
-    const isCredit = amount >= 0;
-      const finalAmount = isCredit ? Math.abs(newAmount) : -Math.abs(newAmount);
-      
-      // Calculate new balance starting from the last Monday Final Final settlement
-      let startingBalance = currentClosingBalance;
-      
-      // First check if there's a Monday Final Final settlement in current entries
-      const mondayFinalSettlement = ledgerEntries.find(entry => 
-        entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement'))
-      );
-      
-      if (mondayFinalSettlement) {
-        // Start from Monday Final Final settlement balance
-        startingBalance = mondayFinalSettlement.balance || currentClosingBalance;
-      } else {
-        // Check old records for the last settlement
-        if (oldRecords.length > 0) {
-          const lastSettlement = oldRecords
-            .filter(entry => entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement')))
-            .sort((a, b) => {
-              const dateA = new Date(a.date.split('/').reverse().join('-'));
-              const dateB = new Date(b.date.split('/').reverse().join('-'));
-              return dateB.getTime() - dateA.getTime(); // Newest first
-            })[0];
-          
-          if (lastSettlement) {
-            startingBalance = lastSettlement.balance || currentClosingBalance;
-          }
-        }
-      }
-      
-      const newBalance = parseFloat((startingBalance + finalAmount).toFixed(2));
-      
-      const newEntryData = {
-        partyName: decodeURIComponent(partyName || ''),
-        date: new Date().toLocaleDateString('en-GB'),
-        remarks: generateRemarks(),
-        tnsType: isCredit ? 'CR' : 'DR',
-        credit: isCredit ? Math.abs(newAmount) : 0,
-        debit: isCredit ? 0 : -Math.abs(newAmount),
-        balance: newBalance,
-        chk: false,
-        ti: '3:',
-        createdAt: new Date().toISOString() // Add creation timestamp for proper ordering
-      };
-
       const response = await partyLedgerAPI.addEntry({
-        partyName: decodeURIComponent(partyName || ''),
-        amount: finalAmount,
-        remarks: newEntryData.remarks,
-        tnsType: newEntryData.tnsType,
-        credit: newEntryData.credit,
-        debit: newEntryData.debit,
-        ti: newEntryData.ti
+        partyName,
+        amount: parseFloat(newEntry.amount),
+        remarks: newEntry.remarks,
+        tnsType: newEntry.tnsType,
+        credit: newEntry.tnsType === 'CR' ? parseFloat(newEntry.amount) : 0,
+        debit: newEntry.tnsType === 'DR' ? parseFloat(newEntry.amount) : 0,
+        ti: `${Date.now()}:`
       });
 
       if (response.success) {
-        // Add new entry to current list and recalculate all balances properly
-        setLedgerEntries(prevEntries => {
-          // Keep Monday Final Final settlement and add new entry
-          const mondayFinalEntry = prevEntries.find(entry => 
-            entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement'))
-          );
-          
-          const otherEntries = prevEntries.filter(entry => 
-            !(entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement')))
-          );
-          
-          // Add new entry and recalculate all balances from scratch
-          const allEntries = mondayFinalEntry ? [mondayFinalEntry, ...otherEntries, newEntryData] : [...otherEntries, newEntryData];
-          return recalculateBalances(allEntries);
+        // Update ledger data with backend response
+        setLedgerData({
+          ...ledgerData!,
+          ledgerEntries: response.data.updatedLedger,
+          summary: response.data.summary
         });
-        
-        // Clear form and show success message
-        setNewEntry({ partyName: '', amount: '', remarks: '' });
+
+        // Clear form
+        setNewEntry({
+          amount: '',
+          remarks: '',
+          tnsType: 'CR'
+        });
+
         toast({
-          title: "✅ Transaction Added Successfully",
-          description: `${isCredit ? 'Credit' : 'Debit'} entry of ${Math.abs(newAmount).toLocaleString()} added. New balance: ${newBalance.toLocaleString()}`,
+          title: "Success",
+          description: "Entry added successfully"
         });
       } else {
         toast({
@@ -466,1330 +139,364 @@ const AccountLedger = () => {
           variant: "destructive"
         });
       }
-    } catch (error) {
-      console.error('Error adding entry:', error);
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to add entry. Please try again.",
+        description: error.message || "Failed to add entry",
         variant: "destructive"
       });
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
-  // Auto-fill party name when component loads
-  useEffect(() => {
-    if (partyName && !newEntry.partyName) {
-      setNewEntry(prev => ({
-        ...prev,
-        partyName: decodeURIComponent(partyName)
-      }));
+  // Handle Monday Final settlement
+  const handleMondayFinal = async () => {
+    if (!ledgerData) return;
+
+    const selectedEntries = ledgerData.ledgerEntries.filter(entry => entry.chk);
+    if (selectedEntries.length === 0) {
+      toast({
+        title: "No Entries Selected",
+        description: "Please select entries for Monday Final settlement",
+        variant: "destructive"
+      });
+      return;
     }
-  }, [partyName]);
 
-  // Handle form submission on Enter key
-  const handleFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    handleAddEntry();
-  };
-
-  // Handle amount input with validation
-  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    // Allow only numbers and decimal point
-    if (value === '' || /^\d*\.?\d*$/.test(value)) {
-      setNewEntry(prev => ({ ...prev, amount: value }));
-    }
-  };
-
-  // Clear form function
-  const handleClearForm = () => {
-    setNewEntry({ partyName: '', amount: '', remarks: '' });
-    // Re-fill party name
-    if (partyName) {
-      setNewEntry(prev => ({
-        ...prev,
-        partyName: decodeURIComponent(partyName)
-      }));
-    }
-  };
-
-  // Handle refresh functionality
-  const handleRefreshAll = async () => {
-    setLoading(true);
+    setActionLoading(true);
     try {
-      await loadLedgerData();
-      toast({
-        title: "Success",
-        description: "Data refreshed successfully",
-      });
-    } catch (error) {
-      console.error('Error refreshing data:', error);
+      const response = await partyLedgerAPI.updateMondayFinal([partyName!]);
+      
+      if (response.success) {
+        // Reload ledger data to get updated state
+        await loadLedgerData();
+        
+        toast({
+          title: "Monday Final Settlement",
+          description: "Settlement completed successfully"
+        });
+        
+        setShowMondayFinalModal(false);
+      } else {
+        toast({
+          title: "Error",
+          description: response.message || "Failed to process settlement",
+          variant: "destructive"
+        });
+      }
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to refresh data",
+        description: error.message || "Failed to process settlement",
         variant: "destructive"
       });
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
-  // Handle exit functionality
+  // Handle print
+  const handlePrint = () => {
+    window.print();
+  };
+
+  // Handle refresh
+  const handleRefresh = () => {
+    loadLedgerData();
+  };
+
+  // Handle exit
   const handleExit = () => {
     navigate('/party-ledger');
   };
 
-  // DC Report functionality
-  const handleDCReport = () => {
-    const currentEntries = showOldRecords ? (oldRecords || []) : (ledgerEntries || []);
-    const selectedEntries = currentEntries.filter(entry => entry.chk);
-    
-    if (selectedEntries.length === 0) {
-      toast({
-        title: "Warning",
-        description: "Please select entries to generate DC Report",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    // Generate DC Report data
-    const reportData = {
-      partyName: decodeURIComponent(partyName || ''),
-      selectedEntries,
-      totalCredit: selectedEntries.reduce((sum, entry) => sum + (entry.credit || 0), 0),
-      totalDebit: selectedEntries.reduce((sum, entry) => sum + Math.abs(entry.debit || 0), 0),
-      generatedAt: new Date().toLocaleString()
-    };
-    
-    // For now, just show a toast with report summary
-    toast({
-      title: "DC Report Generated",
-      description: `${selectedEntries.length} entries selected. Total Credit: ${reportData.totalCredit.toLocaleString()}, Total Debit: ${reportData.totalDebit.toLocaleString()}`,
-    });
-  };
-
-  // Monday Final functionality - Consolidate all entries into one settlement
-  const handleMondayFinalClick = () => {
-    if (ledgerEntries.length === 0) {
-      toast({
-        title: "Warning",
-        description: "No entries to settle",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // Check if there are any non-settlement entries to process
-    const currentEntries = (ledgerEntries || []).filter(entry => 
-      !(entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement')))
-    );
-
-    if (currentEntries.length === 0) {
-      toast({
-        title: "Warning",
-        description: "No new transactions to settle. All entries are already settled.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // Calculate totals for confirmation
-    const totalCredit = parseFloat(currentEntries.reduce((sum, entry) => sum + (entry.credit || 0), 0).toFixed(2));
-    const totalDebit = parseFloat(currentEntries.reduce((sum, entry) => sum + Math.abs(entry.debit || 0), 0).toFixed(2));
-    
-    // Get starting balance from the last settlement (including today's settlements)
-    let startingBalance = 0;
-    
-    // First check current entries for any existing settlements
-    const currentSettlements = (ledgerEntries || []).filter(entry => 
-      entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement'))
-    );
-    
-    if (currentSettlements.length > 0) {
-      // Use the latest settlement balance
-      const latestSettlement = currentSettlements.sort((a, b) => {
-        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return timeB - timeA; // Newest first
-      })[0];
-      startingBalance = latestSettlement.balance || 0;
-    } else if (oldRecords.length > 0) {
-      // Check old records for the last settlement
-      const lastMondayFinal = oldRecords
-        .filter(entry => entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement')))
-        .sort((a, b) => {
-          const dateA = new Date(a.date.split('/').reverse().join('-'));
-          const dateB = new Date(b.date.split('/').reverse().join('-'));
-          return dateB.getTime() - dateA.getTime();
-        })[0];
-      
-      if (lastMondayFinal) {
-        startingBalance = lastMondayFinal.balance || 0;
-      }
-    }
-    
-    const netBalance = parseFloat((startingBalance + totalCredit - totalDebit).toFixed(2));
-
-    // Set modal data
-    setMondayFinalData({
-      transactionCount: currentEntries.length,
-      totalCredit,
-      totalDebit,
-      startingBalance,
-      finalBalance: netBalance
-    });
-
-    setShowMondayFinalModal(true);
-  };
-
-  const handleMondayFinalConfirm = async () => {
-    setActionLoading(true);
-    try {
-      // Calculate totals for confirmation
-      const currentEntries = (ledgerEntries || []).filter(entry => 
-        !(entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement')))
-      );
-      
-      const totalCredit = parseFloat(currentEntries.reduce((sum, entry) => sum + (entry.credit || 0), 0).toFixed(2));
-      const totalDebit = parseFloat(currentEntries.reduce((sum, entry) => sum + Math.abs(entry.debit || 0), 0).toFixed(2));
-
-      // Get starting balance from the last settlement
-      let startingBalance = 0;
-      
-      // First check current entries for any existing settlements
-      const currentSettlements = (ledgerEntries || []).filter(entry => 
-        entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement'))
-      );
-      
-      if (currentSettlements.length > 0) {
-        // Use the latest settlement balance
-        const latestSettlement = currentSettlements.sort((a, b) => {
-          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return timeB - timeA; // Newest first
-        })[0];
-        startingBalance = latestSettlement.balance || 0;
-      } else if (oldRecords.length > 0) {
-        // Check old records for the last settlement
-        const lastMondayFinal = oldRecords
-          .filter(entry => entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement')))
-          .sort((a, b) => {
-            const dateA = new Date(a.date.split('/').reverse().join('-'));
-            const dateB = new Date(b.date.split('/').reverse().join('-'));
-            return dateB.getTime() - dateA.getTime();
-          })[0];
-        
-        if (lastMondayFinal) {
-          startingBalance = lastMondayFinal.balance || 0;
-        }
-      }
-      
-      const netBalance = parseFloat((startingBalance + totalCredit - totalDebit).toFixed(2));
-
-      // Create Monday Final settlement entry with timestamp
-      const today = new Date().toLocaleDateString('en-GB');
-      const now = new Date();
-      const timeString = now.toLocaleTimeString('en-GB', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        second: '2-digit'
-      });
-      
-      const settlementEntry = {
-        id: Date.now(),
-        date: today,
-        remarks: `Monday Final Settlement ${today} at ${timeString}`,
-        tnsType: 'Monday S...',
-        credit: netBalance > 0 ? netBalance : 0,
-        debit: netBalance < 0 ? Math.abs(netBalance) : 0,
-        balance: netBalance,
-        chk: false,
-        ti: '12',
-        createdAt: now.toISOString() // Add creation timestamp for proper ordering
-      };
-
-      // Move current entries to old records
-      setOldRecords(prevOldRecords => [...prevOldRecords, ...currentEntries]);
-
-      // Add settlement to current entries (keep existing settlements)
-      const existingSettlements = ledgerEntries.filter(entry => 
-        entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement'))
-      );
-      setLedgerEntries([...existingSettlements, settlementEntry]);
-      
-      // Update closing balance
-      setClosingBalance(netBalance);
-
-      setShowMondayFinalModal(false);
-      toast({
-        title: "Success",
-        description: `Monday Final settlement created successfully at ${timeString}`,
-      });
-    } catch (error) {
-      console.error('Error creating Monday Final settlement:', error);
-      toast({
-        title: "Error",
-        description: "Failed to create Monday Final settlement",
-        variant: "destructive"
-      });
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // Undo Monday Final settlement
-  const handleUndoMondayFinal = async (settlementEntry: any, originalEntries: any[]) => {
-    try {
-      // Delete the settlement entry from backend
-      if (settlementEntry.id && !settlementEntry.id.toString().startsWith('entry-')) {
-        const idString = typeof settlementEntry.id === 'string' ? settlementEntry.id : settlementEntry.id.toString();
-        await partyLedgerAPI.deleteEntry(idString);
-      }
-
-      // Restore original entries
-      const restoredEntries = (originalEntries || []).filter(entry => 
-        !(entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement')))
-      );
-
-      // Update entries back to normal status
-      const updatePromises = restoredEntries
-        .filter(entry => entry.id && !entry.id.toString().startsWith('entry-'))
-        .map(entry => {
-          const idString = typeof entry.id === 'string' ? entry.id : entry.id.toString();
-          return partyLedgerAPI.updateEntry(idString, { mondayFinal: 'No' });
-        });
-
-      await Promise.all(updatePromises);
-
-      // Restore to current entries
-      const recalculatedEntries = recalculateBalances(restoredEntries);
-      setLedgerEntries(recalculatedEntries);
-      
-      // Remove from old records
-      setOldRecords(prevOldRecords => 
-        (prevOldRecords || []).filter(entry => 
-          !originalEntries.some(original => original.id === entry.id)
-        )
-      );
-
-      // Update closing balance
-      if (recalculatedEntries.length > 0) {
-        setClosingBalance(recalculatedEntries[recalculatedEntries.length - 1].balance);
-      }
-
-      toast({
-        title: "✅ Monday Final Settlement Undone",
-        description: `${restoredEntries.length} entries restored. Settlement deleted.`,
-      });
-
-    } catch (error) {
-      console.error('Error undoing Monday Final settlement:', error);
-      toast({
-        title: "Error",
-        description: "Failed to undo Monday Final settlement",
-        variant: "destructive"
-      });
-    }
-  };
-
-  // Old Record functionality - Toggle between current and old records
-  const handleOldRecord = () => {
-    if ((oldRecords || []).length === 0) {
-      toast({
-        title: "No Old Records",
-        description: "No archived records found. Complete a Monday Final settlement first.",
-      });
-      return;
-    }
-
-    setShowOldRecords(!showOldRecords);
-    
-    if (!showOldRecords) {
-      // Show old records in proper chronological order (oldest first for display)
-      const sortedOldRecords = [...(oldRecords || [])].sort((a, b) => {
-        const dateA = new Date(a.date.split('/').reverse().join('-'));
-        const dateB = new Date(b.date.split('/').reverse().join('-'));
-        return dateA.getTime() - dateB.getTime(); // Oldest first for display
-      });
-      
-      toast({
-        title: "📋 Old Records View",
-        description: `Showing ${sortedOldRecords.length} archived transactions in chronological order`,
-      });
-    } else {
-      toast({
-        title: "📊 Current View",
-        description: "Back to current ledger entries",
-      });
-    }
-  };
-
-  // Modify functionality
-  const handleModify = () => {
-    const currentEntries = showOldRecords ? (oldRecords || []) : (ledgerEntries || []);
-    const selectedEntries = currentEntries.filter(entry => entry.chk);
-    
-    if (selectedEntries.length === 0) {
-      toast({
-        title: "Warning",
-        description: "Please select an entry to modify",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    if (selectedEntries.length > 1) {
-      toast({
-        title: "Warning",
-        description: "Please select only one entry to modify",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    const entry = selectedEntries[0];
-    setSelectedEntryForModify(entry);
-    setModifyFormData({
-      remarks: entry.remarks || '',
-      amount: entry.credit ? entry.credit.toString() : Math.abs(entry.debit || 0).toString(),
-      tnsType: (entry.tnsType as 'CR' | 'DR') || 'CR'
-    });
-    setIsModifyModalOpen(true);
-  };
-
-  // Helper function to recalculate all balances
-  const recalculateBalances = (entries: any[]) => {
-    if (!entries || entries.length === 0) {
-      setClosingBalance(0);
-      return [];
-    }
-
-    // Sort entries by date AND creation time (oldest first) for proper balance calculation
-    const sortedEntries = [...entries].sort((a, b) => {
-      const dateA = new Date(a.date.split('/').reverse().join('-'));
-      const dateB = new Date(b.date.split('/').reverse().join('-'));
-      
-      // If dates are same, sort by creation time (older entries first for balance calculation)
-      if (dateA.getTime() === dateB.getTime()) {
-        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return timeA - timeB; // Older first for balance calculation
-      }
-      
-      return dateA.getTime() - dateB.getTime(); // Oldest first for balance calculation
-    });
-    
-    // Find Monday Final settlement to get starting balance
-    let startingBalance = 0;
-    const mondayFinalSettlement = sortedEntries.find(entry => 
-      entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement'))
-    );
-    
-    if (mondayFinalSettlement) {
-      startingBalance = mondayFinalSettlement.balance || 0;
-    }
-    
-    // Recalculate balances for all entries starting from Monday Final balance
-    let runningBalance = startingBalance;
-    const recalculatedEntries = sortedEntries.map(entry => {
-      // Skip balance calculation for Monday Final settlement (keep its original balance)
-      if (entry.tnsType === 'Monday S...' || (entry.remarks && entry.remarks.includes('Monday Final Settlement'))) {
-        return {
-          ...entry,
-          balance: entry.balance || runningBalance
-        };
-      }
-      
-      // Credit increases balance, Debit decreases balance
-      const creditAmount = parseFloat((entry.credit || 0).toFixed(2));
-      const debitAmount = parseFloat(Math.abs(entry.debit || 0).toFixed(2)); // Make sure debit is positive for calculation
-      
-      // Calculate net effect of this entry
-      const netEffect = creditAmount - debitAmount;
-      runningBalance = parseFloat((runningBalance + netEffect).toFixed(2));
-      
-      return {
-        ...entry,
-        credit: creditAmount,
-        debit: entry.debit ? -debitAmount : 0, // Keep debit negative
-        balance: runningBalance
-      };
-    });
-    
-    // Update closing balance
-    setClosingBalance(parseFloat(runningBalance.toFixed(2)));
-    
-    // Return entries in display order (oldest first - new transactions at bottom)
-    return recalculatedEntries.sort((a, b) => {
-      const dateA = new Date(a.date.split('/').reverse().join('-'));
-      const dateB = new Date(b.date.split('/').reverse().join('-'));
-      
-      // If dates are same, sort by creation time (older entries first for display)
-      if (dateA.getTime() === dateB.getTime()) {
-        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return timeA - timeB; // Older first for display
-      }
-      
-      return dateA.getTime() - dateB.getTime(); // Oldest first for display
-    });
-  };
-
-  // Handle modify form submission
-  const handleModifySubmit = async () => {
-    if (!selectedEntryForModify) return;
-    
-    // Validate amount
-    if (!modifyFormData.amount || parseFloat(modifyFormData.amount) === 0) {
-      toast({
-        title: "Error",
-        description: "Please enter a valid amount greater than 0",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    try {
-      const updateData: any = {
-        remarks: modifyFormData.remarks,
-        tnsType: modifyFormData.tnsType
-      };
-      
-      // Update credit/debit based on transaction type
-      if (modifyFormData.tnsType === 'CR') {
-        updateData.credit = parseFloat(modifyFormData.amount);
-        updateData.debit = 0;
-      } else {
-        updateData.credit = 0;
-        updateData.debit = -parseFloat(modifyFormData.amount);
-      }
-      
-      // Only update if it's a real entry (not mock data)
-      if (selectedEntryForModify.id && !selectedEntryForModify.id.toString().startsWith('entry-')) {
-        const idString = typeof selectedEntryForModify.id === 'string' 
-          ? selectedEntryForModify.id 
-          : selectedEntryForModify.id.toString();
-        
-        await partyLedgerAPI.updateEntry(idString, updateData);
-      }
-      
-      // Update local state and recalculate all balances
-      if (showOldRecords) {
-        setOldRecords(prevRecords => {
-          const updatedRecords = prevRecords.map(entry =>
-            entry.id === selectedEntryForModify.id
-              ? { ...entry, ...updateData }
-              : entry
-          );
-          return recalculateBalances(updatedRecords);
-        });
-      } else {
-        setLedgerEntries(prevEntries => {
-          const updatedEntries = prevEntries.map(entry =>
-            entry.id === selectedEntryForModify.id
-              ? { ...entry, ...updateData }
-              : entry
-          );
-          return recalculateBalances(updatedEntries);
-        });
-      }
-      
-      setIsModifyModalOpen(false);
-      setSelectedEntryForModify(null);
-      setModifyFormData({ remarks: '', amount: '', tnsType: 'CR' });
-      
-      toast({
-        title: "Success",
-        description: "Entry modified successfully",
-      });
-    } catch (error) {
-      console.error('Error modifying entry:', error);
-      toast({
-        title: "Error",
-        description: "Failed to modify entry",
-        variant: "destructive"
-      });
-    }
-  };
-
-  // Handle modify form cancellation
-  const handleModifyCancel = () => {
-    setIsModifyModalOpen(false);
-    setSelectedEntryForModify(null);
-    setModifyFormData({ remarks: '', amount: '', tnsType: 'CR' });
-  };
-
-  // Delete functionality
-  const handleDelete = async () => {
-    const currentEntries = showOldRecords ? (oldRecords || []) : (ledgerEntries || []);
-    const selectedEntries = currentEntries.filter(entry => entry.chk);
-    
-    if (selectedEntries.length === 0) {
-      toast({
-        title: "Warning",
-        description: "Please select entries to delete",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setShowDeleteModal(true);
-  };
-
-  const handleDeleteConfirm = async () => {
-    const currentEntries = showOldRecords ? (oldRecords || []) : (ledgerEntries || []);
-    const selectedEntries = currentEntries.filter(entry => entry.chk);
-    
-    setActionLoading(true);
-    try {
-      // Delete entries from backend
-      const deletePromises = selectedEntries
-        .filter(entry => entry.id && !entry.id.toString().startsWith('entry-'))
-        .map(entry => {
-          const idString = typeof entry.id === 'string' ? entry.id : entry.id.toString();
-          return partyLedgerAPI.deleteEntry(idString);
-        });
-
-      await Promise.all(deletePromises);
-
-      // Update local state
-      if (showOldRecords) {
-        setOldRecords(prevRecords => {
-          const updatedRecords = prevRecords.filter(entry => !entry.chk);
-          return recalculateBalances(updatedRecords);
-        });
-      } else {
-        setLedgerEntries(prevEntries => {
-          const updatedEntries = prevEntries.filter(entry => !entry.chk);
-          return recalculateBalances(updatedEntries);
-        });
-      }
-
-      setShowDeleteModal(false);
-      toast({
-        title: "Success",
-        description: `${selectedEntries.length} entry(ies) deleted successfully`,
-      });
-    } catch (error) {
-      console.error('Error deleting entries:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete entries",
-        variant: "destructive"
-      });
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // Print functionality
-  const handlePrint = () => {
-    // Calculate totals for summary
-    const totalCredit = ledgerEntries.reduce((sum, entry) => sum + (entry.credit || 0), 0);
-    const totalDebit = ledgerEntries.reduce((sum, entry) => sum + Math.abs(entry.debit || 0), 0);
-    
-    const printContent = `
-      <html>
-        <head>
-          <title>Account Ledger - ${decodeURIComponent(partyName || '')}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            th { background-color: #f2f2f2; font-weight: bold; }
-            .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 20px; }
-            .summary { margin-top: 20px; display: flex; justify-content: space-between; }
-            .summary-item { flex: 1; text-align: center; padding: 10px; border: 1px solid #ddd; margin: 0 5px; }
-            .credit { color: #28a745; font-weight: bold; }
-            .debit { color: #dc3545; font-weight: bold; }
-            .balance { color: #007bff; font-weight: bold; }
-            .company-info { margin-bottom: 20px; text-align: center; }
-            .date-time { font-size: 12px; color: #666; margin-top: 10px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div class="company-info">
-              <h1 style="margin: 0; color: #333;">Account Ledger Report</h1>
-              <h2 style="margin: 10px 0; color: #666;">Party: ${decodeURIComponent(partyName || '')}</h2>
-            </div>
-            <div class="date-time">
-              Generated on: ${new Date().toLocaleString('en-GB')}
-            </div>
-          </div>
-          
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Remarks</th>
-                <th>Type</th>
-                <th>Credit</th>
-                <th>Debit</th>
-                <th>Balance</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${ledgerEntries.map(entry => `
-                <tr>
-                  <td>${entry.date}</td>
-                  <td>${entry.remarks || ''}</td>
-                  <td>${entry.tnsType}</td>
-                  <td class="credit">${entry.credit ? entry.credit.toLocaleString() : ''}</td>
-                  <td class="debit">${entry.debit ? Math.abs(entry.debit).toLocaleString() : ''}</td>
-                  <td class="balance">${entry.balance ? entry.balance.toLocaleString() : ''}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-          
-          <div class="summary">
-            <div class="summary-item">
-              <strong>Total Credit:</strong><br>
-              <span class="credit">${totalCredit.toLocaleString()}</span>
-            </div>
-            <div class="summary-item">
-              <strong>Total Debit:</strong><br>
-              <span class="debit">${totalDebit.toLocaleString()}</span>
-            </div>
-            <div class="summary-item">
-              <strong>Closing Balance:</strong><br>
-              <span class="balance">${closingBalance.toLocaleString()}</span>
-            </div>
-            <div class="summary-item">
-              <strong>Total Entries:</strong><br>
-              <span>${ledgerEntries.length}</span>
-            </div>
-          </div>
-        </body>
-      </html>
-    `;
-    
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(printContent);
-      printWindow.document.close();
-      printWindow.print();
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <TopNavigation />
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Main Container */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          {/* Header Section */}
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 rounded-t-lg">
-            <div className="flex justify-between items-center">
-              <div>
-                <h1 className="text-2xl font-bold">SHUBH LABH 1011 - [Account Ledger]</h1>
-                <div className="flex items-center space-x-6 mt-2">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm font-medium">Party Name:</span>
-                    <span className="font-semibold">{decodeURIComponent(partyName || '001-AR RTGS')}</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm font-medium">Closing Balance:</span>
-                    <span className={`font-bold ${closingBalance < 0 ? 'text-red-200' : 'text-green-200'}`}>
-                      {closingBalance.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center space-x-3">
-                <button
-                  onClick={handleRefreshAll}
-                  disabled={loading}
-                  className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors font-medium disabled:opacity-50 flex items-center"
-                >
-                  {loading ? 'Refreshing...' : 'Refresh All'}
-                </button>
-              </div>
-            </div>
-          </div>
-          
-          {/* Main Content Area */}
-          <div className="flex">
-            {/* Left Side - Ledger Table */}
-            <div className="flex-1 p-6">
-              {/* Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-green-600">Total Credit</p>
-                      <p className="text-2xl font-bold text-green-900">
-                        {totalCredit.toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="bg-green-100 p-3 rounded-lg">
-                      <TrendingUp className="w-6 h-6 text-green-600" />
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-red-600">Total Debit</p>
-                      <p className="text-2xl font-bold text-red-900">
-                        {totalDebit.toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="bg-red-100 p-3 rounded-lg">
-                      <DollarSign className="w-6 h-6 text-red-600" />
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-blue-600">Calculated Balance</p>
-                      <p className="text-2xl font-bold text-blue-900">
-                        {calculatedBalance.toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="bg-blue-100 p-3 rounded-lg">
-                      <Calculator className="w-6 h-6 text-blue-600" />
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-purple-600">Total Entries</p>
-                      <p className="text-2xl font-bold text-purple-900">
-                        {currentEntries.length}
-                      </p>
-                    </div>
-                    <div className="bg-purple-100 p-3 rounded-lg">
-                      <Clock className="w-6 h-6 text-purple-600" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Ledger Table */}
-              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                <div className="bg-gray-50 px-6 py-3 border-b border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      {showOldRecords ? 'Archived Records' : 'Transaction Ledger'}
-                    </h3>
-                    {showOldRecords && (
-                      <div className="flex items-center space-x-2">
-                        <span className="text-sm text-gray-600">📋 Viewing archived records</span>
-                        <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
-                          {oldRecords.length} entries
-                        </Badge>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-gray-50">
-                        <TableHead className="font-semibold text-gray-700">Date</TableHead>
-                        <TableHead className="font-semibold text-gray-700">Remarks</TableHead>
-                        <TableHead className="font-semibold text-gray-700">Tns Type</TableHead>
-                        <TableHead className="font-semibold text-gray-700 text-right">Credit</TableHead>
-                        <TableHead className="font-semibold text-gray-700 text-right">Debit</TableHead>
-                        <TableHead className="font-semibold text-gray-700 text-right">Balance</TableHead>
-                        <TableHead className="font-semibold text-gray-700 text-center">Chk Ti</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {loading ? (
-                        <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8">
-                            <div className="flex items-center justify-center space-x-2">
-                              <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                              <span>Loading ledger data...</span>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ) : showOldRecords ? (
-                        // Show Old Records
-                        oldRecords.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={7} className="text-center py-8">
-                              <div className="text-gray-500">
-                                <div className="text-6xl mb-4">📋</div>
-                                <p className="text-lg font-medium">No archived records found</p>
-                                <p className="text-sm">Complete a Monday Final settlement to archive transactions.</p>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          oldRecords.map((entry, index) => (
-                            <TableRow key={`old-${index}`} className="hover:bg-gray-50 bg-gray-50">
-                              <TableCell className="font-medium text-gray-600">{entry.date}</TableCell>
-                              <TableCell className="max-w-xs truncate text-gray-600" title={entry.remarks || ''}>
-                                {entry.remarks || ''}
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="secondary" className="bg-gray-100 text-gray-800">
-                                  {entry.tnsType}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-right font-medium text-green-600">
-                                {entry.credit ? entry.credit.toLocaleString() : ''}
-                              </TableCell>
-                              <TableCell className="text-right font-medium text-red-600">
-                                {entry.debit ? Math.abs(entry.debit).toLocaleString() : ''}
-                              </TableCell>
-                              <TableCell className="text-right font-medium text-blue-600">
-                                {entry.balance ? entry.balance.toLocaleString() : ''}
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <Checkbox
-                                  checked={selectedEntries.includes(entry.id || index)}
-                                  onCheckedChange={(checked) => 
-                                    handleCheckboxChange(entry.id || index, checked as boolean)
-                                  }
-                                />
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        )
-                      ) : ledgerEntries.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8">
-                            <div className="text-gray-500">
-                              <div className="text-6xl mb-4">📊</div>
-                              <p className="text-lg font-medium">No ledger entries found</p>
-                              <p className="text-sm">Add your first transaction to get started.</p>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        (ledgerEntries || []).map((entry, index) => (
-                          <TableRow key={entry.id || index} className="hover:bg-gray-50">
-                            <TableCell className="font-medium">{entry.date}</TableCell>
-                            <TableCell className="max-w-xs truncate" title={entry.remarks || ''}>
-                              {entry.remarks || ''}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={entry.tnsType === 'CR' ? 'default' : 'secondary'}>
-                                {entry.tnsType}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-right font-medium text-green-600">
-                              {entry.credit ? entry.credit.toLocaleString() : ''}
-                            </TableCell>
-                            <TableCell className="text-right font-medium text-red-600">
-                              {entry.debit ? Math.abs(entry.debit).toLocaleString() : ''}
-                            </TableCell>
-                            <TableCell className="text-right font-medium text-blue-600">
-                              {entry.balance ? entry.balance.toLocaleString() : ''}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Checkbox
-                                checked={selectedEntries.includes(entry.id || index)}
-                                onCheckedChange={(checked) => 
-                                  handleCheckboxChange(entry.id || index, checked as boolean)
-                                }
-                              />
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            </div>
-
-            {/* Right Sidebar - Action Buttons */}
-            <div className="w-80 bg-gray-50 p-6 border-l border-gray-200">
-              <div className="space-y-3">
-                <Button
-                  onClick={handleRefreshAll}
-                  disabled={loading}
-                  className="w-full bg-orange-600 hover:bg-orange-700 text-white"
-                >
-                  {loading ? 'Refreshing...' : 'Refresh All'}
-                </Button>
-                
-                <Button
-                  onClick={handleDCReport}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  DC Report
-                </Button>
-                
-                <Button
-                  onClick={handleMondayFinalClick}
-                  disabled={actionLoading}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white"
-                >
-                  {actionLoading ? 'Processing...' : 'Monday Final'}
-                </Button>
-                
-                <Button
-                  onClick={handleOldRecord}
-                  className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-                >
-                  Old Record
-                </Button>
-                
-                <Button
-                  onClick={handleModify}
-                  disabled={selectedEntries.length !== 1}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
-                >
-                  Modify
-                </Button>
-                
-                <Button
-                  onClick={handleDelete}
-                  disabled={selectedEntries.length === 0}
-                  className="w-full bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
-                >
-                  Delete
-                </Button>
-                
-                <Button
-                  onClick={handlePrint}
-                  className="w-full bg-gray-600 hover:bg-gray-700 text-white"
-                >
-                  Print
-                </Button>
-                
-                <Button
-                  onClick={handleCheckAll}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
-                >
-                  Check All
-                </Button>
-                
-                <Button
-                  onClick={handleExit}
-                  className="w-full bg-brown-600 hover:bg-brown-700 text-white"
-                >
-                  Exit
-                </Button>
-              </div>
-              
-              {/* Keyboard Shortcuts Help */}
-              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="text-sm font-medium text-blue-800 mb-2">Keyboard Shortcuts:</div>
-                <div className="grid grid-cols-1 gap-1 text-xs text-blue-700">
-                  <div>Ctrl+N: Focus Amount</div>
-                  <div>Ctrl+S: Refresh Data</div>
-                  <div>Ctrl+P: Print Report</div>
-                  <div>Esc: Clear Form</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom Input Form */}
-          <div className="border-t border-gray-200 p-6 bg-gray-50">
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Transaction</h3>
-              <form onSubmit={handleFormSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Party Name</label>
-                  <input
-                    type="text"
-                    value={newEntry.partyName}
-                    onChange={(e) => setNewEntry({...newEntry, partyName: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter party name"
-                    readOnly
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount (+ for Credit, - for Debit)</label>
-                  <input
-                    id="amount"
-                    type="number"
-                    value={newEntry.amount}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === '' || /^-?\d*\.?\d*$/.test(value)) {
-                        setNewEntry({...newEntry, amount: value});
-                      }
-                    }}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        handleFormSubmit(e as React.FormEvent);
-                      }
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter amount (+ for credit, - for debit)"
-                    step="0.01"
-                    required
-                    autoFocus
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
-                  <input
-                    type="text"
-                    value={newEntry.remarks}
-                    onChange={(e) => setNewEntry({...newEntry, remarks: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter remarks (optional)"
-                  />
-                </div>
-                
-                <div className="flex items-end space-x-2">
-                  <Button
-                    type="submit"
-                    disabled={loading || !newEntry.partyName || !newEntry.amount || parseFloat(newEntry.amount) === 0}
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
-                  >
-                    {loading ? 'Adding...' : 'OK'}
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={handleClearForm}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300"
-                  >
-                    Clear
-                  </Button>
-                </div>
-              </form>
-              
-              {/* Transaction Preview */}
-              {newEntry.amount && parseFloat(newEntry.amount) !== 0 && (
-                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="text-sm font-medium text-blue-800 mb-1">Transaction Preview:</div>
-                  <div className="text-sm text-blue-700">
-                    <span className="font-medium">Type:</span> {parseFloat(newEntry.amount) >= 0 ? 'Credit' : 'Debit'} |
-                    <span className="font-medium"> Amount:</span> {Math.abs(parseFloat(newEntry.amount)).toLocaleString()} |
-                    <span className="font-medium"> Remarks:</span> {generateRemarks()} |
-                    <span className="font-medium"> New Balance:</span> {(closingBalance + parseFloat(newEntry.amount)).toLocaleString()}
-                  </div>
-                </div>
-              )}
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <TopNavigation />
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading ledger data...</p>
             </div>
           </div>
         </div>
       </div>
+    );
+  }
 
-      {/* Modify Modal */}
-      {isModifyModalOpen && selectedEntryForModify && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-50">
-          <div className="relative p-8 border w-96 shadow-lg rounded-md bg-white">
-            <div className="text-center">
-              <h3 className="text-lg font-semibold leading-6 text-gray-900">Modify Entry</h3>
-              <div className="mt-2 px-7 py-3">
-                <div className="grid grid-cols-1 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
-                    <input
-                      type="text"
-                      value={modifyFormData.remarks}
-                      onChange={(e) => setModifyFormData({...modifyFormData, remarks: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
-                    <input
-                      type="number"
-                      value={modifyFormData.amount}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                          setModifyFormData({...modifyFormData, amount: value});
-                        }
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter amount"
-                      min="0"
-                      step="0.01"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Tns Type</label>
-                    <select
-                      value={modifyFormData.tnsType}
-                      onChange={(e) => setModifyFormData({...modifyFormData, tnsType: e.target.value as 'CR' | 'DR'})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="CR">Credit</option>
-                      <option value="DR">Debit</option>
-                    </select>
-                  </div>
-                </div>
+  if (!ledgerData) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <TopNavigation />
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <div className="text-center">
+            <p className="text-gray-600">No ledger data available</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const currentEntries = showOldRecords ? ledgerData.oldRecords : ledgerData.ledgerEntries;
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <TopNavigation />
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Party Ledger</h1>
+              <p className="text-gray-600">Party: {partyName}</p>
+            </div>
+            <div className="flex items-center space-x-3">
+              <Button
+                onClick={handleRefresh}
+                variant="outline"
+                size="sm"
+                disabled={loading}
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Refresh
+              </Button>
+              <Button
+                onClick={handlePrint}
+                variant="outline"
+                size="sm"
+              >
+                <Print className="w-4 h-4 mr-2" />
+                Print
+              </Button>
+              <Button
+                onClick={handleExit}
+                variant="outline"
+                size="sm"
+              >
+                Exit
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Credit</p>
+                <p className="text-2xl font-bold text-green-600">
+                  ₹{ledgerData.summary.totalCredit.toLocaleString()}
+                </p>
               </div>
-              <div className="items-center px-4 py-3">
-                <button
-                  onClick={handleModifySubmit}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors font-medium"
-                >
-                  Save Changes
-                </button>
-                <button
-                  onClick={handleModifyCancel}
-                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors font-medium"
-                >
-                  Cancel
-                </button>
+              <div className="bg-green-100 p-3 rounded-lg">
+                <DollarSign className="w-6 h-6 text-green-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Debit</p>
+                <p className="text-2xl font-bold text-red-600">
+                  ₹{ledgerData.summary.totalDebit.toLocaleString()}
+                </p>
+              </div>
+              <div className="bg-red-100 p-3 rounded-lg">
+                <Calculator className="w-6 h-6 text-red-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Balance</p>
+                <p className={`text-2xl font-bold ${ledgerData.summary.calculatedBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  ₹{ledgerData.summary.calculatedBalance.toLocaleString()}
+                </p>
+              </div>
+              <div className="bg-blue-100 p-3 rounded-lg">
+                <TrendingUp className="w-6 h-6 text-blue-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Entries</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {ledgerData.summary.totalEntries}
+                </p>
+              </div>
+              <div className="bg-purple-100 p-3 rounded-lg">
+                <FileText className="w-6 h-6 text-purple-600" />
               </div>
             </div>
           </div>
         </div>
-      )}
 
-      {/* Monday Final Confirmation Modal */}
-      <AlertDialog open={showMondayFinalModal} onOpenChange={setShowMondayFinalModal}>
-        <AlertDialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-          <AlertDialogHeader className="flex-shrink-0 pb-4">
-            <AlertDialogTitle className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-green-600" />
-              Monday Final Settlement Confirmation
-            </AlertDialogTitle>
-            <AlertDialogDescription className="sr-only">
-              Monday Final settlement confirmation dialog with transaction summary and warnings
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="flex-1 overflow-y-auto space-y-4 px-1">
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <div className="flex items-center gap-2 mb-3">
-                <Calculator className="w-5 h-5 text-blue-600" />
-                <span className="font-semibold text-blue-800">Settlement Summary</span>
-              </div>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Transactions:</span>
-                  <span className="font-medium">{mondayFinalData.transactionCount}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Total Credit:</span>
-                  <span className="font-medium text-green-600">₹{mondayFinalData.totalCredit.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Total Debit:</span>
-                  <span className="font-medium text-red-600">₹{mondayFinalData.totalDebit.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Starting Balance:</span>
-                  <span className="font-medium">₹{mondayFinalData.startingBalance.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between col-span-2 border-t pt-2">
-                  <span className="text-gray-800 font-semibold">Final Balance:</span>
-                  <span className={`font-bold text-lg ${mondayFinalData.finalBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    ₹{mondayFinalData.finalBalance.toLocaleString()}
-                  </span>
-                </div>
-              </div>
+        {/* New Entry Form */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Entry</h3>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Amount
+              </label>
+              <input
+                type="number"
+                value={newEntry.amount}
+                onChange={(e) => setNewEntry({ ...newEntry, amount: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter amount"
+              />
             </div>
-
-            <div className="bg-yellow-50 p-4 rounded-lg">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-yellow-800">
-                  <p className="font-semibold mb-2">⚠️ WARNING: This action cannot be easily undone!</p>
-                  <p className="mb-3">This will:</p>
-                  <ul className="list-disc list-inside space-y-1">
-                    <li>Consolidate all current entries into one settlement</li>
-                    <li>Move all current entries to Old Records</li>
-                    <li>Start fresh with the settlement balance</li>
-                    <li>Create a permanent financial record</li>
-                    <li>Add timestamp to settlement for tracking</li>
-                  </ul>
-                </div>
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Remarks
+              </label>
+              <input
+                type="text"
+                value={newEntry.remarks}
+                onChange={(e) => setNewEntry({ ...newEntry, remarks: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter remarks"
+              />
             </div>
-
-            <div className="bg-green-50 p-4 rounded-lg">
-              <div className="flex items-start gap-2">
-                <TrendingUp className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-green-800">
-                  <p className="font-semibold mb-1">Benefits:</p>
-                  <ul className="list-disc list-inside space-y-1">
-                    <li>Clean ledger with consolidated balance</li>
-                    <li>Historical records preserved in Old Records</li>
-                    <li>Multiple settlements per day allowed</li>
-                    <li>Timestamp tracking for each settlement</li>
-                    <li>Accurate balance continuity</li>
-                  </ul>
-                </div>
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Type
+              </label>
+              <select
+                value={newEntry.tnsType}
+                onChange={(e) => setNewEntry({ ...newEntry, tnsType: e.target.value as 'CR' | 'DR' })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="CR">Credit (CR)</option>
+                <option value="DR">Debit (DR)</option>
+              </select>
             </div>
-
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <div className="flex items-start gap-2">
-                <Clock className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-blue-800">
-                  <p className="font-semibold mb-1">Multiple Settlements:</p>
-                  <p>You can create multiple Monday Final settlements per day. Each settlement will be timestamped for proper tracking and balance calculation.</p>
-                </div>
-              </div>
+            <div className="flex items-end">
+              <Button
+                onClick={handleAddEntry}
+                disabled={actionLoading || !newEntry.amount || !newEntry.remarks}
+                className="w-full"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Entry
+              </Button>
             </div>
           </div>
-          <AlertDialogFooter className="flex-shrink-0 border-t pt-4 mt-4 bg-white">
-            <AlertDialogCancel disabled={actionLoading}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleMondayFinalConfirm}
-              disabled={actionLoading}
-              className="bg-green-600 hover:bg-green-700 text-white"
-            >
-              {actionLoading ? (
-                <>
-                  <Clock className="w-4 h-4 mr-2 animate-spin" />
-                  Creating Settlement...
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="w-4 h-4 mr-2" />
-                  Confirm Settlement
-                </>
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        </div>
 
-      {/* Delete Confirmation Modal */}
-      <AlertDialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
-        <AlertDialogContent className="max-w-sm">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-semibold text-gray-900">Confirm Deletion</AlertDialogTitle>
-            <AlertDialogDescription className="text-sm text-gray-700">
-              Are you sure you want to delete {selectedEntries.length} selected entry(ies)? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setShowDeleteModal(false)} disabled={actionLoading}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteConfirm}
-              disabled={actionLoading}
-              className="bg-red-600 hover:bg-red-700 text-white"
+        {/* Records Toggle */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <Button
+                onClick={() => setShowOldRecords(false)}
+                variant={!showOldRecords ? "default" : "outline"}
+                size="sm"
+              >
+                Current Records
+              </Button>
+              <Button
+                onClick={() => setShowOldRecords(true)}
+                variant={showOldRecords ? "default" : "outline"}
+                size="sm"
+              >
+                Old Records
+              </Button>
+            </div>
+            <Button
+              onClick={() => setShowMondayFinalModal(true)}
+              disabled={actionLoading || currentEntries.filter(e => e.chk).length === 0}
+              className="bg-orange-600 hover:bg-orange-700"
             >
-              {actionLoading ? (
-                <>
-                  <Clock className="w-4 h-4 mr-2 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                <>
-                  <AlertTriangle className="w-4 h-4 mr-2" />
-                  Delete
-                </>
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              <CheckCircle className="w-4 h-4 mr-2" />
+              Monday Final
+            </Button>
+          </div>
+        </div>
+
+        {/* Ledger Table */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-12">
+                  <Checkbox />
+                </TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Remarks</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead className="text-right">Credit</TableHead>
+                <TableHead className="text-right">Debit</TableHead>
+                <TableHead className="text-right">Balance</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {currentEntries.map((entry) => (
+                <TableRow key={entry.id}>
+                  <TableCell>
+                    <Checkbox
+                      checked={entry.chk}
+                      onCheckedChange={(checked) => handleCheckboxChange(entry.id, checked as boolean)}
+                    />
+                  </TableCell>
+                  <TableCell>{entry.date}</TableCell>
+                  <TableCell>{entry.remarks}</TableCell>
+                  <TableCell>
+                    <Badge variant={entry.tnsType === 'CR' ? 'default' : entry.tnsType === 'DR' ? 'secondary' : 'outline'}>
+                      {entry.tnsType}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {entry.credit > 0 ? `₹${entry.credit.toLocaleString()}` : '-'}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {entry.debit > 0 ? `₹${entry.debit.toLocaleString()}` : '-'}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <span className={entry.balance >= 0 ? 'text-green-600' : 'text-red-600'}>
+                      ₹{entry.balance.toLocaleString()}
+                    </span>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* Monday Final Modal */}
+        <AlertDialog open={showMondayFinalModal} onOpenChange={setShowMondayFinalModal}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Monday Final Settlement</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to create a Monday Final settlement for the selected entries?
+                This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleMondayFinal}
+                disabled={actionLoading}
+                className="bg-orange-600 hover:bg-orange-700"
+              >
+                {actionLoading ? 'Processing...' : 'Confirm Settlement'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
     </div>
   );
 };
