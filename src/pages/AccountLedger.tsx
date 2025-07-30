@@ -368,51 +368,80 @@ const AccountLedger = () => {
   };
 
     /**
-   * Handle deleting an existing ledger entry
+   * Handle deleting multiple ledger entries
    * 
-   * Deletes the selected entry from the backend and refreshes
-   * the ledger data to reflect the change.
+   * Deletes all selected entries from the backend and refreshes
+   * the ledger data to reflect the changes.
    */
   const handleDeleteEntry = async () => {
-    // Validate that we have an entry to delete
-    if (!entryToDelete || !entryToDelete._id) {
-      console.error('Delete entry error: No entry or _id found', entryToDelete);
+    // Get all selected entries
+    const selectedEntries = currentEntries?.filter(entry => entry.chk) || [];
+    
+    // Validate that we have entries to delete
+    if (selectedEntries.length === 0) {
+      console.error('Delete entry error: No entries selected for deletion');
       toast({
         title: "Error",
-        description: "No entry selected for deletion",
+        description: "No entries selected for deletion",
         variant: "destructive"
       });
       return;
     }
 
-    console.log('Deleting entry:', entryToDelete);
+    console.log('Deleting entries:', selectedEntries);
     setActionLoading(true);
+    
     try {
-      // Send delete request to backend
-      const response = await partyLedgerAPI.deleteEntry(entryToDelete._id);
-      console.log('Delete response:', response);
+      // Delete all selected entries one by one
+      let successCount = 0;
+      let errorCount = 0;
+      
+      for (const entry of selectedEntries) {
+        try {
+          const response = await partyLedgerAPI.deleteEntry(entry._id);
+          console.log(`Delete response for ${entry._id}:`, response);
+          
+          if (response.success) {
+            successCount++;
+          } else {
+            errorCount++;
+            console.error(`Failed to delete entry ${entry._id}:`, response.message);
+          }
+        } catch (error: any) {
+          errorCount++;
+          console.error(`Error deleting entry ${entry._id}:`, error);
+        }
+      }
 
-      if (response.success) {
-        // Reload data and close modal on success
-        await loadLedgerData();
-        setEntryToDelete(null);
-        setShowDeleteModal(false);
+      // Reload data and close modal
+      await loadLedgerData();
+      setEntryToDelete(null);
+      setShowDeleteModal(false);
+      
+      // Show appropriate success/error message
+      if (successCount > 0 && errorCount === 0) {
         toast({
           title: "Success",
-          description: "Entry deleted successfully"
+          description: `Successfully deleted ${successCount} entr${successCount === 1 ? 'y' : 'ies'}`
+        });
+      } else if (successCount > 0 && errorCount > 0) {
+        toast({
+          title: "Partial Success",
+          description: `Deleted ${successCount} entr${successCount === 1 ? 'y' : 'ies'}, ${errorCount} failed`,
+          variant: "destructive"
         });
       } else {
         toast({
           title: "Error",
-          description: response.message || "Failed to delete entry",
+          description: "Failed to delete any entries",
           variant: "destructive"
         });
       }
     } catch (error: any) {
-      console.error('Delete entry error:', error);
+      console.error('Delete entries error:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to delete entry",
+        description: error.message || "Failed to delete entries",
         variant: "destructive"
       });
     } finally {
@@ -763,18 +792,18 @@ const AccountLedger = () => {
                 </Button>
                 <Button
               onClick={() => {
-                const selectedEntry = currentEntries?.find(entry => entry.chk);
+                const selectedEntries = currentEntries?.filter(entry => entry.chk) || [];
                 console.log('=== DELETE BUTTON CLICKED ===');
                 console.log('Current entries:', currentEntries);
-                console.log('Selected entry for delete:', selectedEntry);
-                console.log('Selected entry _id:', selectedEntry?._id);
-                if (selectedEntry) {
-                  setEntryToDelete(selectedEntry);
+                console.log('Selected entries for delete:', selectedEntries);
+                console.log('Number of selected entries:', selectedEntries.length);
+                if (selectedEntries.length > 0) {
+                  setEntryToDelete(selectedEntries[0]); // For modal display, we'll handle multiple in the function
                   setShowDeleteModal(true);
                 } else {
                   toast({
                     title: "No Entry Selected",
-                    description: "Please select an entry to delete",
+                    description: "Please select entries to delete",
                     variant: "destructive"
                   });
                 }
@@ -903,9 +932,9 @@ const AccountLedger = () => {
       <AlertDialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Entry</AlertDialogTitle>
+            <AlertDialogTitle>Delete Entries</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this entry? This action cannot be undone.
+              Are you sure you want to delete the selected entries? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -915,7 +944,7 @@ const AccountLedger = () => {
               disabled={actionLoading}
               className="bg-red-600 hover:bg-red-700"
             >
-              {actionLoading ? 'Deleting...' : 'Delete Entry'}
+              {actionLoading ? 'Deleting...' : 'Delete Entries'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
