@@ -81,9 +81,9 @@ const AccountLedger = () => {
     if (!ledgerData) return;
 
     const updatedEntries = ledgerData.ledgerEntries.map(entry => 
-      entry.id === id ? { ...entry, chk: checked } : entry
-    );
-
+            entry.id === id ? { ...entry, chk: checked } : entry
+          );
+          
     setLedgerData({
       ...ledgerData,
       ledgerEntries: updatedEntries
@@ -163,7 +163,7 @@ const AccountLedger = () => {
       });
       return;
     }
-
+    
     setActionLoading(true);
     try {
       const response = await partyLedgerAPI.updateMondayFinal([partyName!]);
@@ -172,18 +172,18 @@ const AccountLedger = () => {
         // Reload ledger data to get updated state
         await loadLedgerData();
         
-        toast({
+      toast({
           title: "Monday Final Settlement",
           description: "Settlement completed successfully"
         });
         
         setShowMondayFinalModal(false);
-      } else {
-        toast({
-          title: "Error",
+    } else {
+      toast({
+        title: "Error",
           description: response.message || "Failed to process settlement",
-          variant: "destructive"
-        });
+        variant: "destructive"
+      });
       }
     } catch (error: any) {
       toast({
@@ -216,43 +216,43 @@ const AccountLedger = () => {
       <div className="min-h-screen bg-gray-100">
         <div className="bg-blue-800 text-white p-2">
           <h1 className="text-lg font-bold">SHUBH LABH 1011 - [Account Ledger]</h1>
-        </div>
+            </div>
         <div className="bg-gray-200 p-1">
           <div className="flex space-x-4 text-sm">
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Configure</span>
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Create</span>
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Data Entry</span>
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Report</span>
+            </div>
           </div>
-        </div>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-gray-600">Loading ledger data...</p>
-          </div>
-        </div>
-      </div>
+            </div>
+            </div>
+            </div>
     );
   }
 
   if (!ledgerData) {
-    return (
+  return (
       <div className="min-h-screen bg-gray-100">
         <div className="bg-blue-800 text-white p-2">
           <h1 className="text-lg font-bold">SHUBH LABH 1011 - [Account Ledger]</h1>
-        </div>
+                  </div>
         <div className="bg-gray-200 p-1">
           <div className="flex space-x-4 text-sm">
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Configure</span>
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Create</span>
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Data Entry</span>
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Report</span>
-          </div>
-        </div>
+                  </div>
+                </div>
         <div className="text-center py-8">
           <p className="text-gray-600">No ledger data available</p>
-        </div>
-      </div>
+              </div>
+              </div>
     );
   }
 
@@ -263,8 +263,8 @@ const AccountLedger = () => {
       {/* Desktop Application Header */}
       <div className="bg-blue-800 text-white p-2">
         <h1 className="text-lg font-bold">SHUBH LABH 1011 - [Account Ledger]</h1>
-      </div>
-      
+                </div>
+                
       {/* Menu Bar */}
       <div className="bg-gray-200 p-1">
         <div className="flex space-x-4 text-sm">
@@ -272,9 +272,9 @@ const AccountLedger = () => {
           <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Create</span>
           <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Data Entry</span>
           <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Report</span>
-        </div>
-      </div>
-
+                  </div>
+                </div>
+                
       {/* Main Content Area */}
       <div className="flex h-screen">
         {/* Left Content Area */}
@@ -286,19 +286,19 @@ const AccountLedger = () => {
                 <h2 className="text-xl font-bold text-gray-900">Account Ledger</h2>
               </div>
               <div className="flex items-center space-x-4">
-                <div>
+                    <div>
                   <span className="text-sm font-medium">Party Name: </span>
                   <span className="text-sm">{partyName}</span>
-                </div>
-                <div>
+                    </div>
+                    <div>
                   <span className="text-sm font-medium">Closing Balance: </span>
                   <span className="text-sm font-bold">₹{(ledgerData.summary?.calculatedBalance || 0).toLocaleString()}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
 
-          {/* Ledger Table */}
+              {/* Ledger Table */}
           <div className="bg-white border border-gray-300">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -362,8 +362,8 @@ const AccountLedger = () => {
                   )}
                 </tbody>
               </table>
-            </div>
-          </div>
+                  </div>
+                </div>
 
           {/* New Entry Form */}
           <div className="bg-white border border-gray-300 p-4 mt-4">
@@ -376,7 +376,7 @@ const AccountLedger = () => {
                   disabled
                   className="w-full px-2 py-1 border border-gray-300 text-sm bg-gray-100"
                 />
-              </div>
+                            </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Amount</label>
                 <input
@@ -386,7 +386,7 @@ const AccountLedger = () => {
                   className="w-full px-2 py-1 border border-gray-300 text-sm"
                   placeholder="Enter amount"
                 />
-              </div>
+                            </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Remarks</label>
                 <input
@@ -406,75 +406,75 @@ const AccountLedger = () => {
                   OK
                 </Button>
               </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* Right Sidebar - Action Buttons */}
+            {/* Right Sidebar - Action Buttons */}
         <div className="w-48 bg-gray-200 p-2 border-l border-gray-300">
           <div className="space-y-2">
-            <Button
+                <Button
               onClick={handleRefresh}
               className="w-full bg-orange-600 hover:bg-orange-700 text-white text-sm py-2"
-            >
+                >
               Refresh All
-            </Button>
-            <Button
+                </Button>
+                <Button
               variant="outline"
               className="w-full bg-white hover:bg-gray-100 text-sm py-2"
-            >
-              DC Report
-            </Button>
-            <Button
+                >
+                  DC Report
+                </Button>
+                <Button
               onClick={() => setShowMondayFinalModal(true)}
               disabled={actionLoading || !currentEntries || currentEntries.filter(e => e.chk).length === 0}
               variant="outline"
               className="w-full bg-white hover:bg-gray-100 text-sm py-2"
             >
               Monday Final
-            </Button>
-            <Button
+                </Button>
+                <Button
               onClick={() => setShowOldRecords(!showOldRecords)}
               variant="outline"
               className="w-full bg-white hover:bg-gray-100 text-sm py-2"
-            >
-              Old Record
-            </Button>
-            <Button
+                >
+                  Old Record
+                </Button>
+                <Button
               variant="outline"
               className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2"
-            >
-              Modify
-            </Button>
-            <Button
+                >
+                  Modify
+                </Button>
+                <Button
               variant="outline"
               className="w-full bg-red-600 hover:bg-red-700 text-white text-sm py-2"
-            >
-              Delete
-            </Button>
-            <Button
-              onClick={handlePrint}
+                >
+                  Delete
+                </Button>
+                <Button
+                  onClick={handlePrint}
               variant="outline"
               className="w-full bg-white hover:bg-gray-100 text-sm py-2"
-            >
-              Print
-            </Button>
-            <Button
+                >
+                  Print
+                </Button>
+                <Button
               variant="outline"
               className="w-full bg-white hover:bg-gray-100 text-sm py-2"
-            >
-              Check All
-            </Button>
-            <Button
-              onClick={handleExit}
+                >
+                  Check All
+                </Button>
+                <Button
+                  onClick={handleExit}
               variant="outline"
               className="w-full bg-orange-700 hover:bg-orange-800 text-white text-sm py-2"
-            >
-              Exit
-            </Button>
+                >
+                  Exit
+                </Button>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
       {/* Monday Final Modal */}
       <AlertDialog open={showMondayFinalModal} onOpenChange={setShowMondayFinalModal}>
