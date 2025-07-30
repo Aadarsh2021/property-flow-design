@@ -43,6 +43,10 @@ const AccountLedger = () => {
   });
   const [showMondayFinalModal, setShowMondayFinalModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<LedgerEntry | null>(null);
+  const [showModifyModal, setShowModifyModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [entryToDelete, setEntryToDelete] = useState<LedgerEntry | null>(null);
 
   // Load ledger data
   const loadLedgerData = async () => {
@@ -111,10 +115,10 @@ const AccountLedger = () => {
         });
       } else {
         console.error('API Error:', response.message);
-        toast({
-          title: "Error",
+              toast({
+                title: "Error",
           description: response.message || "Failed to load ledger data",
-          variant: "destructive"
+                variant: "destructive"
         });
       }
     } catch (error: any) {
@@ -226,6 +230,94 @@ const AccountLedger = () => {
     }
   };
 
+  // Handle modify entry
+  const handleModifyEntry = async () => {
+    if (!editingEntry || !editingEntry._id) {
+      toast({
+        title: "Error",
+        description: "No entry selected for modification",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const response = await partyLedgerAPI.updateEntry(editingEntry._id, {
+        remarks: editingEntry.remarks,
+        amount: editingEntry.credit || editingEntry.debit,
+        tnsType: editingEntry.tnsType
+      });
+
+      if (response.success) {
+        await loadLedgerData();
+        setEditingEntry(null);
+        setShowModifyModal(false);
+        toast({
+          title: "Success",
+          description: "Entry modified successfully"
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: response.message || "Failed to modify entry",
+          variant: "destructive"
+        });
+      }
+    } catch (error: any) {
+      console.error('Modify entry error:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to modify entry",
+        variant: "destructive"
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handle delete entry
+  const handleDeleteEntry = async () => {
+    if (!entryToDelete || !entryToDelete._id) {
+      toast({
+        title: "Error",
+        description: "No entry selected for deletion",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const response = await partyLedgerAPI.deleteEntry(entryToDelete._id);
+
+      if (response.success) {
+        await loadLedgerData();
+        setEntryToDelete(null);
+        setShowDeleteModal(false);
+        toast({
+          title: "Success",
+          description: "Entry deleted successfully"
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: response.message || "Failed to delete entry",
+          variant: "destructive"
+        });
+      }
+    } catch (error: any) {
+      console.error('Delete entry error:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete entry",
+        variant: "destructive"
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Handle Monday Final settlement
   const handleMondayFinal = async () => {
     if (!ledgerData) return;
@@ -239,7 +331,7 @@ const AccountLedger = () => {
       });
       return;
     }
-
+    
     setActionLoading(true);
     try {
       const response = await partyLedgerAPI.updateMondayFinal([partyName!]);
@@ -248,18 +340,18 @@ const AccountLedger = () => {
         // Reload ledger data to get updated state
         await loadLedgerData();
         
-        toast({
+      toast({
           title: "Monday Final Settlement",
           description: "Settlement completed successfully"
         });
         
         setShowMondayFinalModal(false);
-      } else {
-        toast({
-          title: "Error",
+    } else {
+      toast({
+        title: "Error",
           description: response.message || "Failed to process settlement",
-          variant: "destructive"
-        });
+        variant: "destructive"
+      });
       }
     } catch (error: any) {
       toast({
@@ -293,44 +385,44 @@ const AccountLedger = () => {
         <TopNavigation />
         <div className="bg-blue-800 text-white p-2">
           <h1 className="text-lg font-bold">Account Ledger</h1>
-        </div>
+            </div>
         <div className="bg-gray-200 p-1">
           <div className="flex space-x-4 text-sm">
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Configure</span>
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Create</span>
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Data Entry</span>
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Report</span>
+            </div>
           </div>
-        </div>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-gray-600">Loading ledger data...</p>
-          </div>
-        </div>
-      </div>
+            </div>
+            </div>
+            </div>
     );
   }
 
   if (!ledgerData) {
-    return (
+  return (
       <div className="min-h-screen bg-gray-100">
-        <TopNavigation />
+      <TopNavigation />
         <div className="bg-blue-800 text-white p-2">
           <h1 className="text-lg font-bold">Account Ledger</h1>
-        </div>
+                  </div>
         <div className="bg-gray-200 p-1">
           <div className="flex space-x-4 text-sm">
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Configure</span>
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Create</span>
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Data Entry</span>
             <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Report</span>
-          </div>
-        </div>
+                  </div>
+                </div>
         <div className="text-center py-8">
           <p className="text-gray-600">No ledger data available</p>
-        </div>
-      </div>
+              </div>
+              </div>
     );
   }
 
@@ -342,8 +434,8 @@ const AccountLedger = () => {
       {/* Desktop Application Header */}
       <div className="bg-blue-800 text-white p-2">
         <h1 className="text-lg font-bold">Account Ledger</h1>
-      </div>
-      
+                </div>
+                
       {/* Menu Bar */}
       <div className="bg-gray-200 p-1">
         <div className="flex space-x-4 text-sm">
@@ -351,9 +443,9 @@ const AccountLedger = () => {
           <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Create</span>
           <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Data Entry</span>
           <span className="cursor-pointer hover:bg-blue-600 hover:text-white px-2 py-1">Report</span>
-        </div>
-      </div>
-
+                  </div>
+                </div>
+                
       {/* Main Content Area */}
       <div className="flex h-screen">
         {/* Left Content Area */}
@@ -365,19 +457,19 @@ const AccountLedger = () => {
                 <h2 className="text-xl font-bold text-gray-900">Account Ledger</h2>
               </div>
               <div className="flex items-center space-x-4">
-                <div>
+                    <div>
                   <span className="text-sm font-medium">Party Name: </span>
                   <span className="text-sm">{partyName}</span>
-                </div>
-                <div>
+                    </div>
+                    <div>
                   <span className="text-sm font-medium">Closing Balance: </span>
                   <span className="text-sm font-bold">₹{(ledgerData.summary?.calculatedBalance || 0).toLocaleString()}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
 
-          {/* Ledger Table */}
+              {/* Ledger Table */}
           <div className="bg-white border border-gray-300">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -391,6 +483,7 @@ const AccountLedger = () => {
                     <th className="border border-gray-300 px-2 py-1 text-right">Balance</th>
                     <th className="border border-gray-300 px-2 py-1 text-center">Chk</th>
                     <th className="border border-gray-300 px-2 py-1 text-center">Ti</th>
+                    <th className="border border-gray-300 px-2 py-1 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -430,6 +523,32 @@ const AccountLedger = () => {
                         <td className="border border-gray-300 px-2 py-1 text-center text-xs">
                           {entry.ti || '-'}
                         </td>
+                        <td className="border border-gray-300 px-2 py-1 text-center">
+                          <div className="flex space-x-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setEditingEntry(entry);
+                                setShowModifyModal(true);
+                              }}
+                              className="h-6 px-2 text-xs bg-blue-50 hover:bg-blue-100"
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setEntryToDelete(entry);
+                                setShowDeleteModal(true);
+                              }}
+                              className="h-6 px-2 text-xs bg-red-50 hover:bg-red-100 text-red-600"
+                            >
+                              Del
+                            </Button>
+                          </div>
+                        </td>
                       </tr>
                     ))
                   ) : (
@@ -441,8 +560,8 @@ const AccountLedger = () => {
                   )}
                 </tbody>
               </table>
-            </div>
-          </div>
+                  </div>
+                </div>
 
           {/* New Entry Form */}
           <div className="bg-white border border-gray-300 p-4 mt-4">
@@ -455,7 +574,7 @@ const AccountLedger = () => {
                   disabled
                   className="w-full px-2 py-1 border border-gray-300 text-sm bg-gray-100"
                 />
-              </div>
+                            </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Amount</label>
                 <input
@@ -465,7 +584,7 @@ const AccountLedger = () => {
                   className="w-full px-2 py-1 border border-gray-300 text-sm"
                   placeholder="Enter amount"
                 />
-              </div>
+                            </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Remarks</label>
                 <input
@@ -485,75 +604,75 @@ const AccountLedger = () => {
                   {actionLoading ? 'Saving...' : 'OK'}
                 </Button>
               </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* Right Sidebar - Action Buttons */}
+            {/* Right Sidebar - Action Buttons */}
         <div className="w-48 bg-gray-200 p-2 border-l border-gray-300">
           <div className="space-y-2">
-            <Button
+                <Button
               onClick={handleRefresh}
               className="w-full bg-orange-600 hover:bg-orange-700 text-white text-sm py-2"
-            >
+                >
               Refresh All
-            </Button>
-            <Button
+                </Button>
+                <Button
               variant="outline"
               className="w-full bg-white hover:bg-gray-100 text-sm py-2"
-            >
-              DC Report
-            </Button>
-            <Button
+                >
+                  DC Report
+                </Button>
+                <Button
               onClick={() => setShowMondayFinalModal(true)}
               disabled={actionLoading || !currentEntries || currentEntries.filter(e => e.chk).length === 0}
               variant="outline"
               className="w-full bg-white hover:bg-gray-100 text-sm py-2"
             >
               Monday Final
-            </Button>
-            <Button
+                </Button>
+                <Button
               onClick={() => setShowOldRecords(!showOldRecords)}
               variant="outline"
               className="w-full bg-white hover:bg-gray-100 text-sm py-2"
-            >
-              Old Record
-            </Button>
-            <Button
+                >
+                  Old Record
+                </Button>
+                <Button
               variant="outline"
               className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2"
-            >
-              Modify
-            </Button>
-            <Button
+                >
+                  Modify
+                </Button>
+                <Button
               variant="outline"
               className="w-full bg-red-600 hover:bg-red-700 text-white text-sm py-2"
-            >
-              Delete
-            </Button>
-            <Button
-              onClick={handlePrint}
+                >
+                  Delete
+                </Button>
+                <Button
+                  onClick={handlePrint}
               variant="outline"
               className="w-full bg-white hover:bg-gray-100 text-sm py-2"
-            >
-              Print
-            </Button>
-            <Button
+                >
+                  Print
+                </Button>
+                <Button
               variant="outline"
               className="w-full bg-white hover:bg-gray-100 text-sm py-2"
-            >
-              Check All
-            </Button>
-            <Button
-              onClick={handleExit}
+                >
+                  Check All
+                </Button>
+                <Button
+                  onClick={handleExit}
               variant="outline"
               className="w-full bg-orange-700 hover:bg-orange-800 text-white text-sm py-2"
-            >
-              Exit
-            </Button>
+                >
+                  Exit
+                </Button>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
       {/* Monday Final Modal */}
       <AlertDialog open={showMondayFinalModal} onOpenChange={setShowMondayFinalModal}>
@@ -573,6 +692,95 @@ const AccountLedger = () => {
               className="bg-orange-600 hover:bg-orange-700"
             >
               {actionLoading ? 'Processing...' : 'Confirm Settlement'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Modify Entry Modal */}
+      <AlertDialog open={showModifyModal} onOpenChange={setShowModifyModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Modify Entry</AlertDialogTitle>
+            <AlertDialogDescription>
+              Modify the selected entry details.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+              <input
+                type="number"
+                value={editingEntry?.credit || editingEntry?.debit || ''}
+                onChange={(e) => setEditingEntry(editingEntry ? {
+                  ...editingEntry,
+                  credit: editingEntry.tnsType === 'CR' ? parseFloat(e.target.value) || 0 : 0,
+                  debit: editingEntry.tnsType === 'DR' ? parseFloat(e.target.value) || 0 : 0
+                } : null)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                placeholder="Enter amount"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
+              <input
+                type="text"
+                value={editingEntry?.remarks || ''}
+                onChange={(e) => setEditingEntry(editingEntry ? {
+                  ...editingEntry,
+                  remarks: e.target.value
+                } : null)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                placeholder="Enter remarks"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Transaction Type</label>
+              <select
+                value={editingEntry?.tnsType || 'CR'}
+                onChange={(e) => setEditingEntry(editingEntry ? {
+                  ...editingEntry,
+                  tnsType: e.target.value as 'CR' | 'DR',
+                  credit: e.target.value === 'CR' ? (editingEntry.credit || editingEntry.debit || 0) : 0,
+                  debit: e.target.value === 'DR' ? (editingEntry.credit || editingEntry.debit || 0) : 0
+                } : null)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              >
+                <option value="CR">Credit (CR)</option>
+                <option value="DR">Debit (DR)</option>
+              </select>
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleModifyEntry}
+              disabled={actionLoading}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {actionLoading ? 'Saving...' : 'Save Changes'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Entry Modal */}
+      <AlertDialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Entry</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this entry? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteEntry}
+              disabled={actionLoading}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {actionLoading ? 'Deleting...' : 'Delete Entry'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
