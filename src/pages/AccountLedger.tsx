@@ -501,7 +501,6 @@ const AccountLedger = () => {
                     <th className="border border-gray-300 px-2 py-1 text-right">Balance</th>
                     <th className="border border-gray-300 px-2 py-1 text-center">Chk</th>
                     <th className="border border-gray-300 px-2 py-1 text-center">Ti</th>
-                    <th className="border border-gray-300 px-2 py-1 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -538,34 +537,8 @@ const AccountLedger = () => {
                             className="w-4 h-4"
                           />
                         </td>
-                        <td className="border border-gray-300 px-2 py-1 text-center text-xs">
+                                                <td className="border border-gray-300 px-2 py-1 text-center text-xs">
                           {entry.ti || '-'}
-                        </td>
-                        <td className="border border-gray-300 px-2 py-1 text-center">
-                          <div className="flex space-x-1">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setEditingEntry(entry);
-                                setShowModifyModal(true);
-                              }}
-                              className="h-6 px-2 text-xs bg-blue-50 hover:bg-blue-100"
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setEntryToDelete(entry);
-                                setShowDeleteModal(true);
-                              }}
-                              className="h-6 px-2 text-xs bg-red-50 hover:bg-red-100 text-red-600"
-                            >
-                              Del
-                            </Button>
-                          </div>
                         </td>
                       </tr>
                     ))
@@ -649,6 +622,44 @@ const AccountLedger = () => {
               className="w-full bg-white hover:bg-gray-100 text-sm py-2"
                 >
                   Old Record
+                </Button>
+                <Button
+              onClick={() => {
+                const selectedEntry = currentEntries?.find(entry => entry.chk);
+                if (selectedEntry) {
+                  setEditingEntry(selectedEntry);
+                  setShowModifyModal(true);
+                } else {
+                  toast({
+                    title: "No Entry Selected",
+                    description: "Please select an entry to modify",
+                    variant: "destructive"
+                  });
+                }
+              }}
+              variant="outline"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2"
+                >
+                  Modify
+                </Button>
+                <Button
+              onClick={() => {
+                const selectedEntry = currentEntries?.find(entry => entry.chk);
+                if (selectedEntry) {
+                  setEntryToDelete(selectedEntry);
+                  setShowDeleteModal(true);
+                } else {
+                  toast({
+                    title: "No Entry Selected",
+                    description: "Please select an entry to delete",
+                    variant: "destructive"
+                  });
+                }
+              }}
+              variant="outline"
+              className="w-full bg-red-600 hover:bg-red-700 text-white text-sm py-2"
+                >
+                  Delete
                 </Button>
                 <Button
                   onClick={handlePrint}
