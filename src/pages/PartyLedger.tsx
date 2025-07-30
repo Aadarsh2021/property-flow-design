@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
+import TopNavigation from '../components/TopNavigation';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
@@ -134,6 +135,7 @@ const PartyLedger = () => {
 
   return (
     <div className="min-h-screen bg-gray-100">
+      <TopNavigation />
       {/* Header Section */}
       <div className="flex items-center justify-between bg-gray-200 border-b border-gray-300 px-4 py-2">
         <div className="flex items-center space-x-2">
