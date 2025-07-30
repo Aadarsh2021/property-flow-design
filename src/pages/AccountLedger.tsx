@@ -247,9 +247,10 @@ const AccountLedger = () => {
     }
   };
 
-  // Handle modify entry
+    // Handle modify entry
   const handleModifyEntry = async () => {
     if (!editingEntry || !editingEntry._id) {
+      console.error('Modify entry error: No entry or _id found', editingEntry);
       toast({
         title: "Error",
         description: "No entry selected for modification",
@@ -257,7 +258,8 @@ const AccountLedger = () => {
       });
       return;
     }
-
+    
+    console.log('Modifying entry:', editingEntry);
     setActionLoading(true);
     try {
       const response = await partyLedgerAPI.updateEntry(editingEntry._id, {
@@ -267,20 +269,21 @@ const AccountLedger = () => {
         tnsType: editingEntry.tnsType
       } as any);
 
+      console.log('Modify response:', response);
       if (response.success) {
         await loadLedgerData();
         setEditingEntry(null);
         setShowModifyModal(false);
-        toast({
+      toast({
           title: "Success",
           description: "Entry modified successfully"
         });
       } else {
-        toast({
+      toast({
           title: "Error",
           description: response.message || "Failed to modify entry",
-          variant: "destructive"
-        });
+        variant: "destructive"
+      });
       }
     } catch (error: any) {
       console.error('Modify entry error:', error);
@@ -294,9 +297,10 @@ const AccountLedger = () => {
     }
   };
 
-  // Handle delete entry
+    // Handle delete entry
   const handleDeleteEntry = async () => {
     if (!entryToDelete || !entryToDelete._id) {
+      console.error('Delete entry error: No entry or _id found', entryToDelete);
       toast({
         title: "Error",
         description: "No entry selected for deletion",
@@ -305,24 +309,26 @@ const AccountLedger = () => {
       return;
     }
 
+    console.log('Deleting entry:', entryToDelete);
     setActionLoading(true);
     try {
       const response = await partyLedgerAPI.deleteEntry(entryToDelete._id);
+      console.log('Delete response:', response);
 
       if (response.success) {
         await loadLedgerData();
         setEntryToDelete(null);
         setShowDeleteModal(false);
-        toast({
+      toast({
           title: "Success",
           description: "Entry deleted successfully"
-        });
-      } else {
-        toast({
-          title: "Error",
+      });
+    } else {
+      toast({
+        title: "Error",
           description: response.message || "Failed to delete entry",
-          variant: "destructive"
-        });
+        variant: "destructive"
+      });
       }
     } catch (error: any) {
       console.error('Delete entry error:', error);
@@ -626,6 +632,7 @@ const AccountLedger = () => {
                 <Button
               onClick={() => {
                 const selectedEntry = currentEntries?.find(entry => entry.chk);
+                console.log('Selected entry for modify:', selectedEntry);
                 if (selectedEntry) {
                   setEditingEntry(selectedEntry);
                   setShowModifyModal(true);
@@ -645,6 +652,7 @@ const AccountLedger = () => {
                 <Button
               onClick={() => {
                 const selectedEntry = currentEntries?.find(entry => entry.chk);
+                console.log('Selected entry for delete:', selectedEntry);
                 if (selectedEntry) {
                   setEntryToDelete(selectedEntry);
                   setShowDeleteModal(true);
