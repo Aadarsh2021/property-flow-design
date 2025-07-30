@@ -289,7 +289,7 @@ const AccountLedger = () => {
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Credit</p>
                 <p className="text-2xl font-bold text-green-600">
-                  ₹{ledgerData.summary.totalCredit.toLocaleString()}
+                  ₹{(ledgerData.summary?.totalCredit || 0).toLocaleString()}
                 </p>
               </div>
               <div className="bg-green-100 p-3 rounded-lg">
@@ -303,7 +303,7 @@ const AccountLedger = () => {
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Debit</p>
                 <p className="text-2xl font-bold text-red-600">
-                  ₹{ledgerData.summary.totalDebit.toLocaleString()}
+                  ₹{(ledgerData.summary?.totalDebit || 0).toLocaleString()}
                 </p>
               </div>
               <div className="bg-red-100 p-3 rounded-lg">
@@ -316,8 +316,8 @@ const AccountLedger = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Balance</p>
-                <p className={`text-2xl font-bold ${ledgerData.summary.calculatedBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ₹{ledgerData.summary.calculatedBalance.toLocaleString()}
+                <p className={`text-2xl font-bold ${(ledgerData.summary?.calculatedBalance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  ₹{(ledgerData.summary?.calculatedBalance || 0).toLocaleString()}
                 </p>
               </div>
               <div className="bg-blue-100 p-3 rounded-lg">
@@ -331,7 +331,7 @@ const AccountLedger = () => {
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Entries</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {ledgerData.summary.totalEntries}
+                  {ledgerData.summary?.totalEntries || 0}
                 </p>
               </div>
               <div className="bg-purple-100 p-3 rounded-lg">
