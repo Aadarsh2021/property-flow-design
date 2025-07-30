@@ -52,27 +52,50 @@ const AccountLedger = () => {
     try {
       const response = await partyLedgerAPI.getPartyLedger(partyName);
       console.log('Backend response:', response);
+      console.log('Response data type:', typeof response.data);
+      console.log('Response data:', response.data);
+      console.log('Is response.data an array?', Array.isArray(response.data));
       
       if (response.success) {
-        // Extract ledgerEntries from the response object
-        const entries = response.data?.ledgerEntries || [];
-        console.log('Processed entries:', entries);
+        // Check if data is array or object
+        let entries = [];
+        let summary = null;
+        let oldRecords = [];
+        let closingBalance = 0;
+        let mondayFinalData = null;
         
-        const summary = response.data?.summary || {
-          totalCredit: entries.reduce((sum, entry) => sum + (entry.credit || 0), 0),
-          totalDebit: entries.reduce((sum, entry) => sum + (entry.debit || 0), 0),
-          calculatedBalance: entries.reduce((sum, entry) => sum + (entry.balance || 0), 0),
-          totalEntries: entries.length
-        };
+        if (Array.isArray(response.data)) {
+          // Data is array format (old format)
+          entries = response.data;
+          summary = {
+            totalCredit: entries.reduce((sum, entry) => sum + (entry.credit || 0), 0),
+            totalDebit: entries.reduce((sum, entry) => sum + (entry.debit || 0), 0),
+            calculatedBalance: entries.reduce((sum, entry) => sum + (entry.balance || 0), 0),
+            totalEntries: entries.length
+          };
+        } else if (response.data && typeof response.data === 'object') {
+          // Data is object format (new format)
+          entries = response.data.ledgerEntries || [];
+          summary = response.data.summary || {
+            totalCredit: entries.reduce((sum, entry) => sum + (entry.credit || 0), 0),
+            totalDebit: entries.reduce((sum, entry) => sum + (entry.debit || 0), 0),
+            calculatedBalance: entries.reduce((sum, entry) => sum + (entry.balance || 0), 0),
+            totalEntries: entries.length
+          };
+          oldRecords = response.data.oldRecords || [];
+          closingBalance = response.data.closingBalance || 0;
+          mondayFinalData = response.data.mondayFinalData;
+        }
         
-        console.log('Summary:', summary);
+        console.log('Final entries:', entries);
+        console.log('Final summary:', summary);
         
         setLedgerData({
           ledgerEntries: entries,
-          oldRecords: response.data?.oldRecords || [],
-          closingBalance: response.data?.closingBalance || 0,
-          summary,
-          mondayFinalData: response.data?.mondayFinalData || {
+          oldRecords: oldRecords,
+          closingBalance: closingBalance,
+          summary: summary,
+          mondayFinalData: mondayFinalData || {
             transactionCount: entries.filter(entry => entry.tnsType === 'Monday S...').length,
             totalCredit: summary.totalCredit,
             totalDebit: summary.totalDebit,
