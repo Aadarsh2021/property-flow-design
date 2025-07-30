@@ -144,7 +144,7 @@ const AccountLedger = () => {
     if (!ledgerData) return;
 
     const updatedEntries = ledgerData.ledgerEntries.map(entry => 
-      entry.id === id ? { ...entry, chk: checked } : entry
+      entry._id === id ? { ...entry, chk: checked } : entry
     );
 
     setLedgerData({
@@ -512,9 +512,8 @@ const AccountLedger = () => {
                 <tbody>
                   {currentEntries && currentEntries.length > 0 ? (
                     currentEntries.map((entry) => {
-                      console.log('Rendering entry:', entry);
                       return (
-                        <tr key={entry.id} className="hover:bg-gray-50">
+                        <tr key={entry._id} className="hover:bg-gray-50">
                         <td className="border border-gray-300 px-2 py-1">{entry.date}</td>
                         <td className="border border-gray-300 px-2 py-1">{entry.remarks}</td>
                         <td className="border border-gray-300 px-2 py-1">
@@ -540,8 +539,8 @@ const AccountLedger = () => {
                         <td className="border border-gray-300 px-2 py-1 text-center">
                           <input
                             type="checkbox"
-                            checked={entry.chk}
-                            onChange={(e) => handleCheckboxChange(entry.id, e.target.checked)}
+                            checked={entry.chk || false}
+                            onChange={(e) => handleCheckboxChange(entry._id, e.target.checked)}
                             className="w-4 h-4"
                           />
                         </td>
@@ -553,7 +552,7 @@ const AccountLedger = () => {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={8} className="border border-gray-300 px-2 py-4 text-center text-gray-500">
+                      <td colSpan={7} className="border border-gray-300 px-2 py-4 text-center text-gray-500">
                         No entries found
                       </td>
                     </tr>
