@@ -511,8 +511,10 @@ const AccountLedger = () => {
                 </thead>
                 <tbody>
                   {currentEntries && currentEntries.length > 0 ? (
-                    currentEntries.map((entry) => (
-                      <tr key={entry.id} className="hover:bg-gray-50">
+                    currentEntries.map((entry) => {
+                      console.log('Rendering entry:', entry);
+                      return (
+                        <tr key={entry.id} className="hover:bg-gray-50">
                         <td className="border border-gray-300 px-2 py-1">{entry.date}</td>
                         <td className="border border-gray-300 px-2 py-1">{entry.remarks}</td>
                         <td className="border border-gray-300 px-2 py-1">
@@ -547,7 +549,8 @@ const AccountLedger = () => {
                           {entry.ti || '-'}
                         </td>
                       </tr>
-                    ))
+                    );
+                    })
                   ) : (
                     <tr>
                       <td colSpan={8} className="border border-gray-300 px-2 py-4 text-center text-gray-500">
@@ -632,7 +635,10 @@ const AccountLedger = () => {
                 <Button
               onClick={() => {
                 const selectedEntry = currentEntries?.find(entry => entry.chk);
+                console.log('=== MODIFY BUTTON CLICKED ===');
+                console.log('Current entries:', currentEntries);
                 console.log('Selected entry for modify:', selectedEntry);
+                console.log('Selected entry _id:', selectedEntry?._id);
                 if (selectedEntry) {
                   setEditingEntry(selectedEntry);
                   setShowModifyModal(true);
@@ -652,7 +658,10 @@ const AccountLedger = () => {
                 <Button
               onClick={() => {
                 const selectedEntry = currentEntries?.find(entry => entry.chk);
+                console.log('=== DELETE BUTTON CLICKED ===');
+                console.log('Current entries:', currentEntries);
                 console.log('Selected entry for delete:', selectedEntry);
+                console.log('Selected entry _id:', selectedEntry?._id);
                 if (selectedEntry) {
                   setEntryToDelete(selectedEntry);
                   setShowDeleteModal(true);
