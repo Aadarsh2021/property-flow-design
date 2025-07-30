@@ -228,10 +228,10 @@ const AccountLedger = () => {
    */
   const handleAddEntry = async () => {
     // Validate required fields
-    if (!partyName || !newEntry.amount || !newEntry.remarks) {
+    if (!partyName || !newEntry.amount) {
       toast({
         title: "Validation Error",
-        description: "Please fill in all required fields",
+        description: "Please enter party name and amount",
         variant: "destructive"
       });
       return;
@@ -712,19 +712,19 @@ const AccountLedger = () => {
                 />
                             </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Remarks</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Remarks (Optional)</label>
                 <input
                   type="text"
                   value={newEntry.remarks}
                   onChange={(e) => setNewEntry({ ...newEntry, remarks: e.target.value })}
                   className="w-full px-2 py-1 border border-gray-300 text-sm"
-                  placeholder="Enter remarks"
+                  placeholder="Enter remarks (optional)"
                 />
               </div>
               <div className="flex items-end">
                 <Button
                   onClick={handleAddEntry}
-                  disabled={actionLoading || !newEntry.amount || !newEntry.remarks}
+                  disabled={actionLoading || !newEntry.amount}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 text-sm"
                 >
                   {actionLoading ? 'Saving...' : 'OK'}
@@ -745,7 +745,7 @@ const AccountLedger = () => {
                 </Button>
                 <Button
               onClick={() => setShowMondayFinalModal(true)}
-              disabled={actionLoading || !currentEntries || currentEntries.filter(e => e.chk).length === 0}
+              disabled={actionLoading}
               variant="outline"
               className="w-full bg-white hover:bg-gray-100 text-sm py-2"
             >
