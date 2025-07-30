@@ -353,14 +353,14 @@ const AccountLedger = () => {
                           </span>
                         </td>
                         <td className="border border-gray-300 px-2 py-1 text-right">
-                          {entry.credit > 0 ? `₹${entry.credit.toLocaleString()}` : '-'}
+                          {(entry.credit || 0) > 0 ? `₹${(entry.credit || 0).toLocaleString()}` : '-'}
                         </td>
                         <td className="border border-gray-300 px-2 py-1 text-right">
-                          {entry.debit > 0 ? `₹${entry.debit.toLocaleString()}` : '-'}
+                          {(entry.debit || 0) > 0 ? `₹${(entry.debit || 0).toLocaleString()}` : '-'}
                         </td>
                         <td className="border border-gray-300 px-2 py-1 text-right">
-                          <span className={entry.balance >= 0 ? 'text-green-600' : 'text-red-600'}>
-                            ₹{entry.balance.toLocaleString()}
+                          <span className={(entry.balance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}>
+                            ₹{(entry.balance || 0).toLocaleString()}
                           </span>
                         </td>
                         <td className="border border-gray-300 px-2 py-1 text-center">
