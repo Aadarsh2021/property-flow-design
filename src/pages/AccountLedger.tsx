@@ -416,7 +416,7 @@ const AccountLedger = () => {
             </div>
             <Button
               onClick={() => setShowMondayFinalModal(true)}
-              disabled={actionLoading || currentEntries.filter(e => e.chk).length === 0}
+              disabled={actionLoading || !currentEntries || currentEntries.filter(e => e.chk).length === 0}
               className="bg-orange-600 hover:bg-orange-700"
             >
               <CheckCircle className="w-4 h-4 mr-2" />
@@ -442,34 +442,42 @@ const AccountLedger = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {currentEntries.map((entry) => (
-                <TableRow key={entry.id}>
-                  <TableCell>
-                    <Checkbox
-                      checked={entry.chk}
-                      onCheckedChange={(checked) => handleCheckboxChange(entry.id, checked as boolean)}
-                    />
-                  </TableCell>
-                  <TableCell>{entry.date}</TableCell>
-                  <TableCell>{entry.remarks}</TableCell>
-                  <TableCell>
-                    <Badge variant={entry.tnsType === 'CR' ? 'default' : entry.tnsType === 'DR' ? 'secondary' : 'outline'}>
-                      {entry.tnsType}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {entry.credit > 0 ? `₹${entry.credit.toLocaleString()}` : '-'}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {entry.debit > 0 ? `₹${entry.debit.toLocaleString()}` : '-'}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <span className={entry.balance >= 0 ? 'text-green-600' : 'text-red-600'}>
-                      ₹{entry.balance.toLocaleString()}
-                    </span>
+              {currentEntries && currentEntries.length > 0 ? (
+                currentEntries.map((entry) => (
+                  <TableRow key={entry.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={entry.chk}
+                        onCheckedChange={(checked) => handleCheckboxChange(entry.id, checked as boolean)}
+                      />
+                    </TableCell>
+                    <TableCell>{entry.date}</TableCell>
+                    <TableCell>{entry.remarks}</TableCell>
+                    <TableCell>
+                      <Badge variant={entry.tnsType === 'CR' ? 'default' : entry.tnsType === 'DR' ? 'secondary' : 'outline'}>
+                        {entry.tnsType}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {entry.credit > 0 ? `₹${entry.credit.toLocaleString()}` : '-'}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {entry.debit > 0 ? `₹${entry.debit.toLocaleString()}` : '-'}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className={entry.balance >= 0 ? 'text-green-600' : 'text-red-600'}>
+                        ₹{entry.balance.toLocaleString()}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                    No entries found
                   </TableCell>
                 </TableRow>
-              ))}
+              )}
             </TableBody>
           </Table>
         </div>
