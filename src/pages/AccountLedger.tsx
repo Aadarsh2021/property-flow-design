@@ -153,6 +153,22 @@ const AccountLedger = () => {
     });
   };
 
+  // Handle check all functionality
+  const handleCheckAll = () => {
+    if (!ledgerData) return;
+
+    const allChecked = ledgerData.ledgerEntries.every(entry => entry.chk);
+    const updatedEntries = ledgerData.ledgerEntries.map(entry => ({
+      ...entry,
+      chk: !allChecked
+    }));
+
+    setLedgerData({
+      ...ledgerData,
+      ledgerEntries: updatedEntries
+    });
+  };
+
   // Handle add new entry
   const handleAddEntry = async () => {
     if (!partyName || !newEntry.amount || !newEntry.remarks) {
@@ -620,12 +636,6 @@ const AccountLedger = () => {
               Refresh All
                 </Button>
                 <Button
-              variant="outline"
-              className="w-full bg-white hover:bg-gray-100 text-sm py-2"
-                >
-                  DC Report
-                </Button>
-                <Button
               onClick={() => setShowMondayFinalModal(true)}
               disabled={actionLoading || !currentEntries || currentEntries.filter(e => e.chk).length === 0}
               variant="outline"
@@ -641,18 +651,6 @@ const AccountLedger = () => {
                   Old Record
                 </Button>
                 <Button
-              variant="outline"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2"
-                >
-                  Modify
-                </Button>
-                <Button
-              variant="outline"
-              className="w-full bg-red-600 hover:bg-red-700 text-white text-sm py-2"
-                >
-                  Delete
-                </Button>
-                <Button
                   onClick={handlePrint}
               variant="outline"
               className="w-full bg-white hover:bg-gray-100 text-sm py-2"
@@ -660,6 +658,7 @@ const AccountLedger = () => {
                   Print
                 </Button>
                 <Button
+                  onClick={handleCheckAll}
               variant="outline"
               className="w-full bg-white hover:bg-gray-100 text-sm py-2"
                 >
