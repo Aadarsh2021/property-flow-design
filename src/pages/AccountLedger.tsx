@@ -65,14 +65,20 @@ const AccountLedger = () => {
         let mondayFinalData = null;
         
         if (Array.isArray(response.data)) {
-          // Data is array format (old format)
-          entries = response.data;
-          summary = {
+          // Data is array format - extract the first element
+          const dataObject = response.data[0] || {};
+          console.log('Extracted data object:', dataObject);
+          
+          entries = dataObject.ledgerEntries || [];
+          summary = dataObject.summary || {
             totalCredit: entries.reduce((sum, entry) => sum + (entry.credit || 0), 0),
             totalDebit: entries.reduce((sum, entry) => sum + (entry.debit || 0), 0),
             calculatedBalance: entries.reduce((sum, entry) => sum + (entry.balance || 0), 0),
             totalEntries: entries.length
           };
+          oldRecords = dataObject.oldRecords || [];
+          closingBalance = dataObject.closingBalance || 0;
+          mondayFinalData = dataObject.mondayFinalData;
         } else if (response.data && typeof response.data === 'object') {
           // Data is object format (new format)
           entries = response.data.ledgerEntries || [];
