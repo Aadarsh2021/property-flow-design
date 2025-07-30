@@ -1,3 +1,20 @@
+/**
+ * Vite Configuration
+ * 
+ * This file configures the Vite build tool for the Property Flow Design
+ * frontend application with optimized settings for development and production.
+ * 
+ * Features:
+ * - React plugin with SWC for fast compilation
+ * - Path aliases for clean imports
+ * - Code splitting and optimization
+ * - Development server configuration
+ * - Build optimization settings
+ * 
+ * @author Account Ledger Team
+ * @version 1.0.0
+ */
+
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";

@@ -1,3 +1,21 @@
+/**
+ * Authentication Context
+ * 
+ * Provides authentication state management for the Property Flow Design application.
+ * Handles user login, logout, and authentication status across the application.
+ * 
+ * Features:
+ * - User authentication state management
+ * - Token storage and validation
+ * - Automatic login persistence
+ * - Logout functionality
+ * - Authentication status checking
+ * - User profile management
+ * 
+ * @author Account Ledger Team
+ * @version 1.0.0
+ */
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 interface User {

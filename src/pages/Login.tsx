@@ -1,3 +1,21 @@
+/**
+ * Login Page
+ * 
+ * User authentication page for the Property Flow Design application.
+ * Handles user login with email and password validation.
+ * 
+ * Features:
+ * - Email and password authentication
+ * - Form validation and error handling
+ * - Remember me functionality
+ * - Password reset option
+ * - Registration link
+ * - Responsive design
+ * 
+ * @author Account Ledger Team
+ * @version 1.0.0
+ */
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';

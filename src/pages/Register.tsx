@@ -1,3 +1,21 @@
+/**
+ * Register Page
+ * 
+ * User registration page for the Property Flow Design application.
+ * Handles new user account creation with comprehensive validation.
+ * 
+ * Features:
+ * - User registration with full details
+ * - Comprehensive form validation
+ * - Password strength requirements
+ * - Email verification
+ * - Terms and conditions acceptance
+ * - Responsive design
+ * 
+ * @author Account Ledger Team
+ * @version 1.0.0
+ */
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';

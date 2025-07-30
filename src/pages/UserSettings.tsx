@@ -1,4 +1,22 @@
 
+/**
+ * User Settings Page
+ * 
+ * Manages user preferences and account settings in the Property Flow Design application.
+ * Allows users to update their profile and application preferences.
+ * 
+ * Features:
+ * - Profile information management
+ * - Password change functionality
+ * - Application preferences
+ * - Theme and display settings
+ * - Notification preferences
+ * - Account security settings
+ * 
+ * @author Account Ledger Team
+ * @version 1.0.0
+ */
+
 import React, { useState, useEffect } from 'react';
 import { ChevronDown, Lock } from 'lucide-react';
 import TopNavigation from '../components/TopNavigation';

@@ -1,3 +1,20 @@
+/**
+ * TypeScript Type Definitions
+ * 
+ * Defines all TypeScript interfaces and types used throughout
+ * the Property Flow Design application.
+ * 
+ * Features:
+ * - API response type definitions
+ * - Component prop interfaces
+ * - Form data types
+ * - State management types
+ * - Utility type definitions
+ * 
+ * @author Account Ledger Team
+ * @version 1.0.0
+ */
+
 // API Response Types
 export interface ApiResponse<T = unknown> {
   success: boolean;

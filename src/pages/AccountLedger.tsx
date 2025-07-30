@@ -27,20 +27,46 @@ import { LedgerEntry } from '../types';
  * This component handles the account ledger functionality for a specific party.
  * It displays ledger entries, allows adding new transactions, and provides
  * modify/delete capabilities for existing entries.
+ * 
+ * Features:
+ * - Real-time ledger data display
+ * - Add new transactions with validation
+ * - Modify existing entries
+ * - Delete single or multiple entries
+ * - Monday Final settlement processing
+ * - Checkbox selection for batch operations
+ * - Desktop application UI design
+ * 
+ * State Management:
+ * - Ledger data with entries and summaries
+ * - Loading states for better UX
+ * - Form state for new entries
+ * - Modal states for confirmations
+ * 
+ * @author Account Ledger Team
+ * @version 1.0.0
  */
 const AccountLedger = () => {
-  // Router hooks
+  // Router hooks for navigation and URL parameters
   const { partyName } = useParams<{ partyName: string }>();
   const navigate = useNavigate();
   
-  // Toast notification hook
+  // Toast notification hook for user feedback
   const { toast } = useToast();
   
-  // Loading states
+  // Loading states for better user experience
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   
-  // Main ledger data state
+  /**
+   * Main ledger data state
+   * 
+   * Stores the complete ledger information including:
+   * - Current ledger entries with calculated balances
+   * - Old records for historical data
+   * - Summary statistics (totals and counts)
+   * - Monday Final data for settlements
+   */
   const [ledgerData, setLedgerData] = useState<{
     ledgerEntries: LedgerEntry[];
     oldRecords: LedgerEntry[];
@@ -60,13 +86,28 @@ const AccountLedger = () => {
     };
   } | null>(null);
   
-  // UI state management
+  /**
+   * UI State Management
+   * 
+   * Controls visibility of various UI components:
+   * - Old records display toggle
+   * - Monday Final confirmation modal
+   * - Modify entry modal
+   * - Delete confirmation modal
+   */
   const [showOldRecords, setShowOldRecords] = useState(false);
   const [showMondayFinalModal, setShowMondayFinalModal] = useState(false);
   const [showModifyModal, setShowModifyModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   
-  // Form and action states
+  /**
+   * Form and Action States
+   * 
+   * Manages form data and action targets:
+   * - New entry form data (amount, remarks, transaction type)
+   * - Currently editing entry for modification
+   * - Entry selected for deletion
+   */
   const [newEntry, setNewEntry] = useState({
     amount: '',
     remarks: '',
@@ -147,10 +188,10 @@ const AccountLedger = () => {
       } else {
         // Handle API error response
         console.error('API Error:', response.message);
-              toast({
+        toast({
                 title: "Error",
           description: response.message || "Failed to load ledger data",
-                variant: "destructive"
+          variant: "destructive"
         });
       }
     } catch (error: any) {
@@ -163,8 +204,8 @@ const AccountLedger = () => {
       });
     } finally {
       if (showLoading) {
-        setLoading(false);
-      }
+      setLoading(false);
+    }
     }
   }, [partyName]);
 

@@ -1,3 +1,21 @@
+/**
+ * Top Navigation Component
+ * 
+ * Provides the main navigation header for the Property Flow Design application.
+ * Includes user authentication status, navigation links, and responsive design.
+ * 
+ * Features:
+ * - User authentication display
+ * - Navigation menu with dropdown
+ * - Responsive mobile design
+ * - Logout functionality
+ * - User profile management
+ * - Search functionality
+ * 
+ * @author Account Ledger Team
+ * @version 1.0.0
+ */
+
 import React, { useState } from 'react';
 import { ChevronDown, Settings, FileText, BarChart3, Database, Home, LogOut, User, LogIn, UserPlus } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';

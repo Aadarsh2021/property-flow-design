@@ -1,3 +1,19 @@
+/**
+ * Mobile Detection Hook
+ * 
+ * Custom React hook for detecting mobile devices and screen size
+ * in the Property Flow Design application.
+ * 
+ * Features:
+ * - Mobile device detection
+ * - Screen size monitoring
+ * - Responsive design support
+ * - Window resize handling
+ * 
+ * @author Account Ledger Team
+ * @version 1.0.0
+ */
+
 import * as React from "react"
 
 const MOBILE_BREAKPOINT = 768

@@ -1,4 +1,20 @@
 import { useLocation } from "react-router-dom";
+/**
+ * 404 Not Found Page
+ * 
+ * Displays a user-friendly error page when users navigate to non-existent routes
+ * in the Property Flow Design application.
+ * 
+ * Features:
+ * - Clear error message
+ * - Navigation back to home
+ * - Professional error page design
+ * - Helpful suggestions for users
+ * 
+ * @author Account Ledger Team
+ * @version 1.0.0
+ */
+
 import { useEffect } from "react";
 
 const NotFound = () => {

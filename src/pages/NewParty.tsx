@@ -1,4 +1,22 @@
 
+/**
+ * New Party Page
+ * 
+ * Handles party creation and management in the Property Flow Design application.
+ * Provides form for adding new parties with validation and SR number generation.
+ * 
+ * Features:
+ * - Party creation form with validation
+ * - Automatic SR number generation
+ * - Contact information management
+ * - Status tracking (Active/Inactive)
+ * - Search and filter functionality
+ * - Responsive design
+ * 
+ * @author Account Ledger Team
+ * @version 1.0.0
+ */
+
 import React, { useState, useEffect } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { useNavigate } from 'react-router-dom';

@@ -1,3 +1,20 @@
+/**
+ * Tailwind CSS Configuration
+ * 
+ * This file configures Tailwind CSS for the Property Flow Design
+ * frontend application with custom theme and component styles.
+ * 
+ * Features:
+ * - Custom color palette and typography
+ * - Component-specific styling
+ * - Responsive design utilities
+ * - Dark mode support
+ * - Animation and transition classes
+ * 
+ * @author Account Ledger Team
+ * @version 1.0.0
+ */
+
 import type { Config } from "tailwindcss";
 import tailwindcssAnimate from "tailwindcss-animate";
 

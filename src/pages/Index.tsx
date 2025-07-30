@@ -1,4 +1,21 @@
 
+/**
+ * Index/Dashboard Page
+ * 
+ * Main dashboard page for the Property Flow Design application.
+ * Provides overview of system status, quick actions, and navigation.
+ * 
+ * Features:
+ * - System overview and statistics
+ * - Quick action buttons
+ * - Recent activity display
+ * - Navigation to main features
+ * - User welcome and status
+ * 
+ * @author Account Ledger Team
+ * @version 1.0.0
+ */
+
 import React from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { Link } from 'react-router-dom';

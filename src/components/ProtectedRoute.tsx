@@ -1,3 +1,19 @@
+/**
+ * Protected Route Component
+ * 
+ * Provides route protection for authenticated users in the Property Flow Design application.
+ * Redirects unauthenticated users to the login page.
+ * 
+ * Features:
+ * - Authentication check
+ * - Automatic redirect for unauthenticated users
+ * - Loading state handling
+ * - Route protection for sensitive pages
+ * 
+ * @author Account Ledger Team
+ * @version 1.0.0
+ */
+
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';

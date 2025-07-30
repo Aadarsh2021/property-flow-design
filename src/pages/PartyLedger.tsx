@@ -1,4 +1,22 @@
 
+/**
+ * Party Ledger Page
+ * 
+ * Displays a list of all parties with their Monday Final status
+ * in the Property Flow Design application.
+ * 
+ * Features:
+ * - Party list with search functionality
+ * - Monday Final status tracking
+ * - Party selection for ledger view
+ * - Desktop application UI design
+ * - Responsive table layout
+ * - Navigation to individual ledgers
+ * 
+ * @author Account Ledger Team
+ * @version 1.0.0
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -95,23 +113,23 @@ const PartyLedger = () => {
 
   const handleMondayFinalConfirm = async () => {
     setActionLoading(true);
-    try {
-      const response = await partyLedgerAPI.updateMondayFinal(selectedParties);
-      if (response.success) {
+      try {
+        const response = await partyLedgerAPI.updateMondayFinal(selectedParties);
+        if (response.success) {
         setParties((prevParties) =>
           prevParties.map((party) =>
-            selectedParties.includes(party.name)
-              ? { ...party, mondayFinal: 'Yes' }
-              : party
-          )
-        );
-        setSelectedParties([]);
+          selectedParties.includes(party.name) 
+            ? { ...party, mondayFinal: 'Yes' }
+            : party
+        )
+      );
+      setSelectedParties([]);
         setShowMondayFinalModal(false);
-        toast({
+          toast({
           title: 'Success',
           description: 'Monday Final status updated successfully',
-        });
-      } else {
+          });
+        } else {
         toast({
           title: 'Error',
           description: response.message || 'Failed to update Monday Final status',
@@ -123,7 +141,7 @@ const PartyLedger = () => {
         title: 'Error',
         description: 'Failed to update Monday Final status',
         variant: 'destructive',
-      });
+          });
     } finally {
       setActionLoading(false);
     }
@@ -136,36 +154,36 @@ const PartyLedger = () => {
   return (
     <div className="min-h-screen bg-gray-100">
       <TopNavigation />
-      {/* Header Section */}
+          {/* Header Section */}
       <div className="flex items-center justify-between bg-gray-200 border-b border-gray-300 px-4 py-2">
-        <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2">
           <span className="font-semibold text-lg">Party A/C. Ledger</span>
-          <input
-            type="text"
+                <input
+                  type="text"
             placeholder="Party Name"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
             className="ml-4 px-2 py-1 border border-gray-400 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
             style={{ width: 200 }}
-          />
-        </div>
+                />
+                </div>
         <div className="flex items-center space-x-2">
-          <Button
-            onClick={handleMondayFinalClick}
-            disabled={actionLoading || selectedParties.length === 0}
+                <Button
+                  onClick={handleMondayFinalClick}
+                  disabled={actionLoading || selectedParties.length === 0}
             className="bg-green-600 hover:bg-green-700 text-white px-4 py-1 text-sm"
           >
             Monday Final
-          </Button>
-          <Button
-            onClick={handleExit}
+                </Button>
+                <Button
+                  onClick={handleExit}
             className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-1 text-sm"
-          >
-            Exit
-          </Button>
+                >
+                  Exit
+                </Button>
         </div>
-      </div>
-
+              </div>
+              
       {/* Table Section */}
       <div className="p-4">
         <div className="border border-gray-300 rounded overflow-auto" style={{ maxHeight: 600 }}>

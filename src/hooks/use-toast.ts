@@ -1,3 +1,20 @@
+/**
+ * Toast Notification Hook
+ * 
+ * Custom React hook for managing toast notifications
+ * in the Property Flow Design application.
+ * 
+ * Features:
+ * - Toast notification management
+ * - Multiple toast types (success, error, warning, info)
+ * - Auto-dismiss functionality
+ * - Toast positioning and styling
+ * - Accessibility support
+ * 
+ * @author Account Ledger Team
+ * @version 1.0.0
+ */
+
 import * as React from "react"
 
 import type {

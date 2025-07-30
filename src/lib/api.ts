@@ -1,13 +1,54 @@
+/**
+ * API Client Library
+ * 
+ * This module provides a comprehensive API client for the Account Ledger Software.
+ * It includes authentication, error handling, retry logic, and type-safe API calls.
+ * 
+ * Features:
+ * - Centralized API configuration
+ * - Automatic token management
+ * - Retry mechanism for failed requests
+ * - Type-safe API responses
+ * - Health check functionality
+ * 
+ * @author Account Ledger Team
+ * @version 1.0.0
+ */
+
 import { ApiResponse, NewPartyData, NewParty, Party, LedgerEntry, LedgerEntryInput, UserSettings, TrialBalanceEntry } from '../types';
 
+/**
+ * API Configuration
+ * 
+ * Base URL for all API endpoints.
+ * Points to the deployed backend server on Render.
+ */
 const API_BASE_URL = 'https://account-ledger-software-9sys.onrender.com/api';
 
-// Get token from localStorage
+/**
+ * Authentication Token Management
+ * 
+ * Retrieves the authentication token from browser's localStorage.
+ * Used for API requests that require authentication.
+ * 
+ * @returns {string|null} - JWT token or null if not found
+ */
 const getAuthToken = () => {
   return localStorage.getItem('token');
 };
 
-// Retry mechanism for failed requests
+/**
+ * Retry Mechanism for Failed Requests
+ * 
+ * Implements exponential backoff retry logic for failed API requests.
+ * Handles network errors, timeouts, and temporary server issues.
+ * 
+ * @param {string} url - API endpoint URL
+ * @param {RequestInit} config - Fetch configuration
+ * @param {number} maxRetries - Maximum number of retry attempts (default: 2)
+ * @param {number} delay - Base delay between retries in milliseconds (default: 1000)
+ * @returns {Promise<T>} - API response data
+ */
 const retryRequest = async <T>(
   url: string, 
   config: RequestInit, 
@@ -69,7 +110,22 @@ const retryRequest = async <T>(
   throw lastError;
 };
 
-// Generic API helper with timeout and better error handling
+/**
+ * Generic API Helper with Enhanced Error Handling
+ * 
+ * Centralized function for making API calls with consistent error handling,
+ * authentication, and response processing.
+ * 
+ * Features:
+ * - Automatic authentication token inclusion
+ * - Request timeout handling (60 seconds)
+ * - Response validation and error processing
+ * - Type-safe response handling
+ * 
+ * @param {string} endpoint - API endpoint path
+ * @param {RequestInit} options - Fetch options (method, body, headers)
+ * @returns {Promise<ApiResponse<T>>} - Typed API response
+ */
 const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> => {
     const url = `${API_BASE_URL}${endpoint}`;
     const token = getAuthToken();
@@ -112,7 +168,20 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
   }
 };
 
-// Health check function with timeout
+/**
+ * Backend Health Check Function
+ * 
+ * Performs a health check on the backend server to verify connectivity.
+ * Used for monitoring server status and deployment verification.
+ * 
+ * Features:
+ * - 10-second timeout for quick response
+ * - Detailed error reporting
+ * - Server status validation
+ * 
+ * @returns {Promise<Object>} - Server health status
+ * @throws {Error} - If server is unreachable or unhealthy
+ */
 export const checkBackendHealth = async () => {
   try {
     const controller = new AbortController();
@@ -136,7 +205,20 @@ export const checkBackendHealth = async () => {
   }
 };
 
-// New Party API
+/**
+ * New Party API Client
+ * 
+ * Provides type-safe API calls for party management operations.
+ * Handles CRUD operations for party entities.
+ * 
+ * Endpoints:
+ * - GET /new-party - Retrieve all parties
+ * - GET /new-party/:id - Get specific party
+ * - POST /new-party - Create new party
+ * - PUT /new-party/:id - Update party
+ * - DELETE /new-party/:id - Delete party
+ * - GET /new-party/next-sr-no - Get next SR number
+ */
 export const newPartyAPI = {
   // Get all parties
   getAll: () => apiCall<NewParty[]>('/new-party'),
@@ -165,7 +247,21 @@ export const newPartyAPI = {
   getNextSrNo: () => apiCall<{ nextSrNo: string }>('/new-party/next-sr-no'),
 };
 
-// Party Ledger API
+/**
+ * Party Ledger API Client
+ * 
+ * Provides type-safe API calls for ledger management operations.
+ * Handles ledger entries, transactions, and Monday Final settlements.
+ * 
+ * Endpoints:
+ * - GET /party-ledger/parties - Get all parties for ledger
+ * - GET /party-ledger/:partyName - Get ledger for specific party
+ * - POST /party-ledger/entry - Add new ledger entry
+ * - PUT /party-ledger/entry/:id - Update ledger entry
+ * - DELETE /party-ledger/entry/:id - Delete ledger entry
+ * - PUT /party-ledger/monday-final - Process Monday Final settlement
+ * - DELETE /party-ledger/parties - Delete multiple parties
+ */
 export const partyLedgerAPI = {
   // Get all parties for ledger
   getAllParties: () => apiCall<Party[]>('/party-ledger/parties'),

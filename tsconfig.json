@@ -1,3 +1,20 @@
+/**
+ * TypeScript Configuration
+ * 
+ * This file configures TypeScript compiler options for the Property Flow Design
+ * frontend application with strict type checking and modern JavaScript features.
+ * 
+ * Features:
+ * - Strict type checking
+ * - Modern JavaScript features
+ * - Path mapping for clean imports
+ * - Library type definitions
+ * - Build optimization settings
+ * 
+ * @author Account Ledger Team
+ * @version 1.0.0
+ */
+
 {
   "files": [],
   "references": [

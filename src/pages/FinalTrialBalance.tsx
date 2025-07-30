@@ -1,4 +1,22 @@
 
+/**
+ * Final Trial Balance Page
+ * 
+ * Displays comprehensive trial balance reports in the Property Flow Design application.
+ * Shows credit and debit entries with calculated balances.
+ * 
+ * Features:
+ * - Complete trial balance display
+ * - Credit and debit categorization
+ * - Balance calculations
+ * - Search and filter functionality
+ * - Export capabilities
+ * - Responsive design
+ * 
+ * @author Account Ledger Team
+ * @version 1.0.0
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { Checkbox } from '@/components/ui/checkbox';
