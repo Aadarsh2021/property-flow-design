@@ -224,8 +224,8 @@ const AccountLedger = () => {
   const handleCheckboxChange = async (id: string | number, checked: boolean) => {
     if (!ledgerData) return;
 
-    if (showOldRecords) {
-      // Update old records
+      if (showOldRecords) {
+        // Update old records
       const updatedOldRecords = ledgerData.oldRecords.map(entry => 
         entry._id === id ? { ...entry, chk: checked } : entry
       );
@@ -239,9 +239,9 @@ const AccountLedger = () => {
         ...ledgerData,
         oldRecords: updatedOldRecords,
         ledgerEntries: updatedLedgerEntries
-      });
-    } else {
-      // Update current ledger entries
+        });
+      } else {
+        // Update current ledger entries
       const updatedEntries = ledgerData.ledgerEntries.map(entry => 
         entry._id === id ? { ...entry, chk: checked } : entry
       );
@@ -454,8 +454,8 @@ const AccountLedger = () => {
    * the ledger data to reflect the changes.
    */
   const handleDeleteEntry = async () => {
-    // Get all selected entries
-    const selectedEntries = currentEntries?.filter(entry => entry.chk) || [];
+    // Get all selected entries from displayEntries (which includes Monday Final entries)
+    const selectedEntries = displayEntries?.filter(entry => entry.chk) || [];
     
     // Validate that we have entries to delete
     if (selectedEntries.length === 0) {
@@ -481,7 +481,7 @@ const AccountLedger = () => {
           
           if (response.success) {
             successCount++;
-          } else {
+      } else {
             errorCount++;
             console.error(`Failed to delete entry ${entry._id}:`, response.message);
           }
@@ -498,8 +498,8 @@ const AccountLedger = () => {
       
       // Show appropriate success/error message
       if (successCount > 0 && errorCount === 0) {
-        toast({
-          title: "Success",
+      toast({
+        title: "Success",
           description: `Successfully deleted ${successCount} entr${successCount === 1 ? 'y' : 'ies'}`
         });
       } else if (successCount > 0 && errorCount > 0) {
@@ -514,7 +514,7 @@ const AccountLedger = () => {
           description: "Failed to delete any entries",
         variant: "destructive"
       });
-      }
+    }
     } catch (error: any) {
       console.error('Delete entries error:', error);
       toast({
@@ -973,19 +973,19 @@ const AccountLedger = () => {
                                   {entry.tnsType === 'CR' ? ' +' : ' -'}₹{entry.tnsType === 'CR' ? entry.credit : entry.debit}
                                 </span>
                                 {entry.remarks && <span className="text-gray-600"> - {entry.remarks}</span>}
-                              </div>
+                  </div>
                             ))}
-                          </div>
-                        </div>
-                      </div>
+                </div>
+            </div>
+          </div>
                     ) : (
                       <div className="bg-yellow-50 p-3 rounded-md">
                         <p className="text-sm text-yellow-800">No new transactions to settle since the last Monday Final.</p>
-                      </div>
+        </div>
                     )}
                     
                     <p className="text-xs text-gray-600">This action cannot be undone.</p>
-                  </div>
+      </div>
                 );
               })()}
             </AlertDialogDescription>
@@ -1019,9 +1019,9 @@ const AccountLedger = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-4 py-4">
-                <div>
+                  <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
-                  <input
+                    <input
                     type="number"
                 value={editingEntry?.credit || editingEntry?.debit || ''}
                 onChange={(e) => setEditingEntry(editingEntry ? {
@@ -1031,11 +1031,11 @@ const AccountLedger = () => {
                 } : null)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md"
                 placeholder="Enter amount"
-                  />
-                </div>
-                <div>
+                    />
+                  </div>
+                  <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
-                  <input
+                    <input
                     type="text"
                 value={editingEntry?.remarks || ''}
                 onChange={(e) => setEditingEntry(editingEntry ? {
@@ -1044,8 +1044,8 @@ const AccountLedger = () => {
                 } : null)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md"
                 placeholder="Enter remarks"
-                  />
-                </div>
+                    />
+                  </div>
                   <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Transaction Type</label>
                     <select
