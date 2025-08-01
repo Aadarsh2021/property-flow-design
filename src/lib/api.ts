@@ -380,6 +380,17 @@ export const authAPI = {
   }),
 };
 
+// Dashboard API
+export const dashboardAPI = {
+  // Get dashboard statistics
+  getStats: () => apiCall<{
+    totalParties: { count: number; growth: number };
+    totalTransactions: { count: number; growth: number; recent: number };
+    totalBalance: { amount: number; growth: number };
+    settlements: { count: number };
+  }>('/dashboard/stats'),
+};
+
 // Mock data fallback functions
 export const mockData = {
   // Mock parties for ledger

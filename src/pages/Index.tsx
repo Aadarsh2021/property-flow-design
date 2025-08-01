@@ -11,19 +11,82 @@
  * - Recent activity display
  * - Navigation to main features
  * - User welcome and status
+ * - Real-time data from database
  * 
  * @author Account Ledger Team
  * @version 1.0.0
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { Link } from 'react-router-dom';
 import { Settings, FileText, BarChart3, Users, TrendingUp, DollarSign, LogIn, UserPlus, ArrowRight, Plus, ChartBar, Calculator } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { dashboardAPI } from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
+
+interface DashboardStats {
+  totalParties: { count: number; growth: number };
+  totalTransactions: { count: number; growth: number; recent: number };
+  totalBalance: { amount: number; growth: number };
+  settlements: { count: number };
+}
 
 const Index = () => {
   const { isAuthenticated } = useAuth();
+  const { toast } = useToast();
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch dashboard statistics
+  const fetchDashboardStats = async () => {
+    if (!isAuthenticated) return;
+    
+    setLoading(true);
+    try {
+      const response = await dashboardAPI.getStats();
+      if (response.success) {
+        setStats(response.data);
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to load dashboard statistics",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Dashboard stats error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load dashboard statistics",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load stats when component mounts
+  useEffect(() => {
+    fetchDashboardStats();
+  }, [isAuthenticated]);
+
+  // Format currency
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
+
+  // Format growth percentage
+  const formatGrowth = (growth: number) => {
+    const sign = growth >= 0 ? '+' : '';
+    const color = growth >= 0 ? 'text-green-600' : 'text-red-600';
+    return { text: `${sign}${growth}%`, color };
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -149,14 +212,20 @@ const Index = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-600">Total Parties</p>
-                    <p className="text-2xl font-bold text-gray-900">24</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {loading ? '...' : stats?.totalParties.count || 0}
+                    </p>
                   </div>
                   <div className="bg-blue-100 p-3 rounded-lg">
                     <Users className="w-6 h-6 text-blue-600" />
                   </div>
                 </div>
                 <div className="mt-4">
-                  <span className="text-sm text-green-600 font-medium">+12%</span>
+                  {stats && (
+                    <span className={`text-sm font-medium ${formatGrowth(stats.totalParties.growth).color}`}>
+                      {formatGrowth(stats.totalParties.growth).text}
+                    </span>
+                  )}
                   <span className="text-sm text-gray-500 ml-2">from last month</span>
                 </div>
               </div>
@@ -165,14 +234,20 @@ const Index = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-600">Total Transactions</p>
-                    <p className="text-2xl font-bold text-gray-900">1,234</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {loading ? '...' : stats?.totalTransactions.count || 0}
+                    </p>
                   </div>
                   <div className="bg-green-100 p-3 rounded-lg">
                     <BarChart3 className="w-6 h-6 text-green-600" />
                   </div>
                 </div>
                 <div className="mt-4">
-                  <span className="text-sm text-green-600 font-medium">+8%</span>
+                  {stats && (
+                    <span className={`text-sm font-medium ${formatGrowth(stats.totalTransactions.growth).color}`}>
+                      {formatGrowth(stats.totalTransactions.growth).text}
+                    </span>
+                  )}
                   <span className="text-sm text-gray-500 ml-2">from last week</span>
                 </div>
               </div>
@@ -181,14 +256,20 @@ const Index = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-600">Total Balance</p>
-                    <p className="text-2xl font-bold text-gray-900">₹2,45,678</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {loading ? '...' : stats ? formatCurrency(stats.totalBalance.amount) : '₹0'}
+                    </p>
                   </div>
                   <div className="bg-purple-100 p-3 rounded-lg">
                     <DollarSign className="w-6 h-6 text-purple-600" />
                   </div>
                 </div>
                 <div className="mt-4">
-                  <span className="text-sm text-green-600 font-medium">+15%</span>
+                  {stats && (
+                    <span className={`text-sm font-medium ${formatGrowth(stats.totalBalance.growth).color}`}>
+                      {formatGrowth(stats.totalBalance.growth).text}
+                    </span>
+                  )}
                   <span className="text-sm text-gray-500 ml-2">from last month</span>
                 </div>
               </div>
@@ -197,15 +278,16 @@ const Index = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-600">Settlements</p>
-                    <p className="text-2xl font-bold text-gray-900">18</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {loading ? '...' : stats?.settlements.count || 0}
+                    </p>
                   </div>
                   <div className="bg-orange-100 p-3 rounded-lg">
-                    <FileText className="w-6 h-6 text-orange-600" />
+                    <Calculator className="w-6 h-6 text-orange-600" />
                   </div>
                 </div>
                 <div className="mt-4">
-                  <span className="text-sm text-green-600 font-medium">+5</span>
-                  <span className="text-sm text-gray-500 ml-2">this week</span>
+                  <span className="text-sm text-gray-500">Monday Final entries</span>
                 </div>
               </div>
             </div>
