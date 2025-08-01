@@ -54,12 +54,18 @@ const Register = () => {
         if (!value.trim()) {
           errors.fullname = 'Full name is required';
         } else {
-          // Enhanced name validation
+          // Enhanced name validation - accept single name as full name
           const nameParts = value.trim().split(' ').filter(part => part.length > 0);
           
-          if (nameParts.length < 2) {
-            errors.fullname = 'Please enter your full name (first and last name)';
+          if (nameParts.length === 0) {
+            errors.fullname = 'Full name is required';
+          } else if (nameParts.length === 1) {
+            // Single name is acceptable as full name
+            if (nameParts[0].length < 2) {
+              errors.fullname = 'Name must be at least 2 characters';
+            }
           } else {
+            // Multiple names - check each part
             for (const part of nameParts) {
               if (part.length < 2) {
                 errors.fullname = 'Each name part must be at least 2 characters';
