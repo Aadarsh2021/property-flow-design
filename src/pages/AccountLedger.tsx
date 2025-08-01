@@ -125,6 +125,8 @@ const AccountLedger = () => {
   const loadLedgerData = useCallback(async (showLoading = true) => {
     if (!partyName) return;
     
+    console.log('🔄 Loading ledger data for party:', partyName, 'showLoading:', showLoading);
+    
     if (showLoading) {
     setLoading(true);
     }
@@ -132,6 +134,8 @@ const AccountLedger = () => {
     try {
       // Fetch ledger data from backend
       const response = await partyLedgerAPI.getPartyLedger(partyName);
+      
+      console.log('📡 Ledger API response:', response);
       
       if (response.success) {
         // Initialize data variables
@@ -171,6 +175,13 @@ const AccountLedger = () => {
           mondayFinalData = dataObj.mondayFinalData;
         }
         
+        console.log('📊 Processed ledger data:', {
+          entriesCount: entries.length,
+          oldRecordsCount: oldRecords.length,
+          mondaySettlements: entries.filter(entry => entry.tnsType === 'Monday Settlement').length,
+          summary
+        });
+        
         // Update ledger data state
         setLedgerData({
           ledgerEntries: entries,
@@ -185,6 +196,8 @@ const AccountLedger = () => {
             finalBalance: summary.calculatedBalance
           }
         });
+        
+        console.log('✅ Ledger data state updated');
       } else {
         // Handle API error response
         console.error('API Error:', response.message);
@@ -538,20 +551,29 @@ const AccountLedger = () => {
     
     setActionLoading(true);
     try {
+      console.log('🔄 Starting Monday Final settlement for:', partyName);
+      
       // Send Monday Final request to backend
       const response = await partyLedgerAPI.updateMondayFinal([partyName!]);
       
+      console.log('📡 Monday Final API response:', response);
+      
       if (response.success) {
-        // Reload ledger data without showing loading spinner
-        await loadLedgerData(false);
+        console.log('✅ Monday Final settlement successful, reloading data...');
+        
+        // Force reload ledger data with loading spinner to ensure fresh data
+        await loadLedgerData(true);
+        
+        console.log('🔄 Ledger data reloaded after Monday Final');
         
         toast({
           title: "Monday Final Settlement",
-          description: "Settlement completed successfully"
+          description: "Settlement completed successfully. Table updated with new settlement entry."
         });
         
         setShowMondayFinalModal(false);
       } else {
+        console.error('❌ Monday Final settlement failed:', response.message);
         toast({
           title: "Error",
           description: response.message || "Failed to process settlement",
@@ -559,6 +581,7 @@ const AccountLedger = () => {
         });
       }
     } catch (error: any) {
+      console.error('❌ Monday Final settlement error:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to process settlement",
