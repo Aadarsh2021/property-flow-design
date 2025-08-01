@@ -10,6 +10,7 @@
  * - Retry mechanism for failed requests
  * - Type-safe API responses
  * - Health check functionality
+ * - Performance monitoring
  * 
  * @author Account Ledger Team
  * @version 1.0.0
@@ -24,6 +25,34 @@ import { ApiResponse, NewPartyData, NewParty, Party, LedgerEntry, LedgerEntryInp
  * Points to the deployed backend server on Render.
  */
 const API_BASE_URL = 'https://account-ledger-software-9sys.onrender.com/api';
+
+/**
+ * Performance Monitoring
+ * 
+ * Tracks API call performance for debugging and optimization.
+ */
+const performanceMonitor = {
+  startTime: 0,
+  endTime: 0,
+  
+  start: () => {
+    performanceMonitor.startTime = Date.now();
+  },
+  
+  end: (endpoint: string) => {
+    performanceMonitor.endTime = Date.now();
+    const duration = performanceMonitor.endTime - performanceMonitor.startTime;
+    
+    // Log performance for slow requests (>5 seconds)
+    if (duration > 5000) {
+      console.warn(`🐌 Slow API call: ${endpoint} took ${duration}ms`);
+    } else if (duration > 2000) {
+      console.log(`⏱️ API call: ${endpoint} took ${duration}ms`);
+    }
+    
+    return duration;
+  }
+};
 
 /**
  * Authentication Token Management
@@ -45,8 +74,8 @@ const getAuthToken = () => {
  * 
  * @param {string} url - API endpoint URL
  * @param {RequestInit} config - Fetch configuration
- * @param {number} maxRetries - Maximum number of retry attempts (default: 2)
- * @param {number} delay - Base delay between retries in milliseconds (default: 1000)
+ * @param {number} maxRetries - Maximum number of retry attempts (default: 3)
+ * @param {number} delay - Base delay between retries in milliseconds (default: 2000)
  * @returns {Promise<T>} - API response data
  */
 const retryRequest = async <T>(
@@ -100,108 +129,87 @@ const retryRequest = async <T>(
     }
   }
   
-  // If we get here, all retries failed
-  if (lastError!.name === 'AbortError') {
-    throw new Error('Request timeout. Server is taking too long to respond. Please try again.');
-  }
-  if (lastError!.message.includes('Failed to fetch')) {
-    throw new Error('Network error. Please check your internet connection and try again.');
-  }
-  throw lastError;
+  throw lastError!;
 };
 
 /**
- * Generic API Helper with Enhanced Error Handling
+ * Generic API Call Function
  * 
- * Centralized function for making API calls with consistent error handling,
- * authentication, and response processing.
- * 
- * Features:
- * - Automatic authentication token inclusion
- * - Request timeout handling (60 seconds)
- * - Response validation and error processing
- * - Type-safe response handling
+ * Centralized function for making API calls with authentication,
+ * error handling, and retry logic.
  * 
  * @param {string} endpoint - API endpoint path
- * @param {RequestInit} options - Fetch options (method, body, headers)
- * @returns {Promise<ApiResponse<T>>} - Typed API response
+ * @param {RequestInit} options - Fetch options
+ * @returns {Promise<ApiResponse<T>>} - API response
  */
 const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> => {
-    const url = `${API_BASE_URL}${endpoint}`;
-    const token = getAuthToken();
-    
-    const config: RequestInit = {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
-        ...options.headers,
-      },
-      ...options,
-    };
-
+  const url = `${API_BASE_URL}${endpoint}`;
+  const token = getAuthToken();
+  
+  // Start performance monitoring
+  performanceMonitor.start();
+  
+  const config: RequestInit = {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...options.headers,
+    },
+    ...options,
+  };
+  
   try {
-    const response = await retryRequest<ApiResponse<T>>(url, config);
+    const data = await retryRequest<ApiResponse<T>>(url, config);
     
-    // Ensure response has proper structure
-    if (!response) {
-      throw new Error('Invalid API response: No response received');
-    }
+    // End performance monitoring
+    const duration = performanceMonitor.end(endpoint);
     
-    // Only convert to array for specific endpoints that should return arrays
-    // Login and other single-object endpoints should not be converted
-    const shouldConvertToArray = [
-      '/new-party',
-      '/party-ledger',
-      '/final-trial-balance',
-      '/settings'
-    ].some(path => endpoint.includes(path));
-    
-    if (shouldConvertToArray && response.data && !Array.isArray(response.data)) {
-      console.warn('API response data is not an array, converting to array');
-      response.data = [response.data] as T;
-    }
-    
-    return response;
+    return data;
   } catch (error: any) {
-    console.error('API Error:', error);
+    // End performance monitoring even on error
+    performanceMonitor.end(endpoint);
+    
+    // Handle specific error types
+    if (error.name === 'AbortError') {
+      throw new Error('Request timeout. Please try again.');
+    }
+    
+    if (error.message.includes('Failed to fetch')) {
+      throw new Error('Network error. Please check your connection.');
+    }
+    
     throw error;
   }
 };
 
 /**
- * Backend Health Check Function
+ * Backend Health Check
  * 
- * Performs a health check on the backend server to verify connectivity.
- * Used for monitoring server status and deployment verification.
+ * Checks if the backend server is responding.
+ * Used for connection testing and server status monitoring.
  * 
- * Features:
- * - 10-second timeout for quick response
- * - Detailed error reporting
- * - Server status validation
- * 
- * @returns {Promise<Object>} - Server health status
- * @throws {Error} - If server is unreachable or unhealthy
+ * @returns {Promise<boolean>} - True if server is healthy
  */
 export const checkBackendHealth = async () => {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout for health check
-    
     const response = await fetch('https://account-ledger-software-9sys.onrender.com/health', {
-      signal: controller.signal
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
     });
     
-    clearTimeout(timeoutId);
-    
-    if (!response.ok) {
-      throw new Error(`Health check failed: ${response.status}`);
+    if (response.ok) {
+      const data = await response.json();
+      console.log('✅ Backend health check passed:', data);
+      return true;
+    } else {
+      console.error('❌ Backend health check failed:', response.status);
+      return false;
     }
-    
-    const data = await response.json();
-    return data;
   } catch (error) {
-    console.error('Health check failed:', error);
-    throw new Error('Backend server is not responding. Please try again later.');
+    console.error('❌ Backend health check error:', error);
+    return false;
   }
 };
 
