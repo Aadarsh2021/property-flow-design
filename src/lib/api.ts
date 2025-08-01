@@ -52,15 +52,15 @@ const getAuthToken = () => {
 const retryRequest = async <T>(
   url: string, 
   config: RequestInit, 
-  maxRetries: number = 2,
-  delay: number = 1000
+  maxRetries: number = 3,
+  delay: number = 2000
 ): Promise<T> => {
   let lastError: Error;
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 second timeout for Render
 
       const response = await fetch(url, {
         ...config,

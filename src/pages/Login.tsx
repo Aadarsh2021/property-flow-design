@@ -43,6 +43,7 @@ const Login = () => {
   const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({});
   const [loadingMessage, setLoadingMessage] = useState('Signing In...');
   const [retryCount, setRetryCount] = useState(0);
+  const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
 
   // Get the page user was trying to access
   const from = location.state?.from?.pathname || '/';
