@@ -193,7 +193,7 @@ const Login = () => {
     setLoading(true);
     setError('');
     setRetryCount(0);
-    setLoadingMessage('Connecting to server...');
+    setLoadingMessage('Signing In...');
 
     try {
       const response = await authAPI.login({
