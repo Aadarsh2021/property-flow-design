@@ -389,6 +389,15 @@ export const dashboardAPI = {
     totalBalance: { amount: number; growth: number };
     settlements: { count: number };
   }>('/dashboard/stats'),
+  
+  // Get recent activity
+  getRecentActivity: () => apiCall<Array<{
+    type: 'transaction' | 'settlement' | 'party';
+    title: string;
+    amount: string;
+    time: string;
+    color: 'green' | 'blue' | 'purple';
+  }>>('/dashboard/recent-activity'),
 };
 
 // Mock data fallback functions

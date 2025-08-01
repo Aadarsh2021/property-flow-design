@@ -32,10 +32,19 @@ interface DashboardStats {
   settlements: { count: number };
 }
 
+interface RecentActivity {
+  type: 'transaction' | 'settlement' | 'party';
+  title: string;
+  amount: string;
+  time: string;
+  color: 'green' | 'blue' | 'purple';
+}
+
 const Index = () => {
   const { isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Fetch dashboard statistics
@@ -44,9 +53,13 @@ const Index = () => {
     
     setLoading(true);
     try {
-      const response = await dashboardAPI.getStats();
-      if (response.success) {
-        setStats(response.data);
+      const [statsResponse, activityResponse] = await Promise.all([
+        dashboardAPI.getStats(),
+        dashboardAPI.getRecentActivity()
+      ]);
+      
+      if (statsResponse.success) {
+        setStats(statsResponse.data);
       } else {
         toast({
           title: "Error",
@@ -54,11 +67,15 @@ const Index = () => {
           variant: "destructive"
         });
       }
+      
+      if (activityResponse.success) {
+        setRecentActivity(activityResponse.data);
+      }
     } catch (error) {
-      console.error('Dashboard stats error:', error);
+      console.error('Dashboard data error:', error);
       toast({
         title: "Error",
-        description: "Failed to load dashboard statistics",
+        description: "Failed to load dashboard data",
         variant: "destructive"
       });
     } finally {
@@ -86,6 +103,24 @@ const Index = () => {
     const sign = growth >= 0 ? '+' : '';
     const color = growth >= 0 ? 'text-green-600' : 'text-red-600';
     return { text: `${sign}${growth}%`, color };
+  };
+
+  // Format time ago
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes} minutes ago`;
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours} hours ago`;
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `${diffInDays} days ago`;
+    
+    return date.toLocaleDateString();
   };
 
   return (
@@ -298,32 +333,38 @@ const Index = () => {
                 <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
               </div>
               <div className="p-6">
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">New transaction added to ABC Company</p>
-                      <p className="text-xs text-gray-500">2 minutes ago</p>
-                    </div>
-                    <span className="text-sm text-green-600 font-medium">+₹5,000</span>
+                {loading ? (
+                  <div className="space-y-4">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="flex items-center space-x-4 animate-pulse">
+                        <div className="w-2 h-2 bg-gray-300 rounded-full"></div>
+                        <div className="flex-1">
+                          <div className="h-4 bg-gray-300 rounded w-3/4 mb-2"></div>
+                          <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                        </div>
+                        <div className="h-4 bg-gray-300 rounded w-16"></div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex items-center space-x-4">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">Monday Final settlement completed</p>
-                      <p className="text-xs text-gray-500">1 hour ago</p>
-                    </div>
-                    <span className="text-sm text-blue-600 font-medium">Settled</span>
+                ) : recentActivity.length > 0 ? (
+                  <div className="space-y-4">
+                    {recentActivity.map((activity, index) => (
+                      <div key={index} className="flex items-center space-x-4">
+                        <div className={`w-2 h-2 bg-${activity.color}-500 rounded-full`}></div>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-900">{activity.title}</p>
+                          <p className="text-xs text-gray-500">{formatTimeAgo(activity.time)}</p>
+                        </div>
+                        <span className={`text-sm text-${activity.color}-600 font-medium`}>{activity.amount}</span>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex items-center space-x-4">
-                    <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">New party "XYZ Traders" created</p>
-                      <p className="text-xs text-gray-500">3 hours ago</p>
-                    </div>
-                    <span className="text-sm text-purple-600 font-medium">New</span>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500 text-sm">No recent activity</p>
+                    <p className="text-gray-400 text-xs mt-1">Start by creating a party or adding transactions</p>
                   </div>
-                </div>
+                )}
               </div>
             </div>
 
