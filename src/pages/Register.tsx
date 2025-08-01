@@ -292,10 +292,15 @@ const Register = () => {
       }
     }
     
-    // Check for common patterns in email
+    // Check for common patterns in email - only block obvious test emails
     if (formData.email) {
       const email = formData.email.toLowerCase();
-      if (email.includes('admin') || email.includes('test') || email.includes('demo')) {
+      const emailParts = email.split('@');
+      const localPart = emailParts[0];
+      const domain = emailParts[1];
+      
+      // Only block if local part is exactly 'test', 'admin', 'demo' or domain is test.com
+      if (localPart === 'test' || localPart === 'admin' || localPart === 'demo' || domain === 'test.com') {
         errors.email = 'Please use a valid email address';
       }
     }

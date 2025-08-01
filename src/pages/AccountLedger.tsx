@@ -480,7 +480,7 @@ const AccountLedger = () => {
       });
       return;
     }
-    
+
     setActionLoading(true);
     
     try {
@@ -514,13 +514,13 @@ const AccountLedger = () => {
       toast({
         title: "Success",
           description: `Successfully deleted ${successCount} entr${successCount === 1 ? 'y' : 'ies'}`
-        });
+      });
       } else if (successCount > 0 && errorCount > 0) {
-        toast({
+      toast({
           title: "Partial Success",
           description: `Deleted ${successCount} entr${successCount === 1 ? 'y' : 'ies'}, ${errorCount} failed`,
-          variant: "destructive"
-        });
+        variant: "destructive"
+      });
       } else {
       toast({
         title: "Error",
@@ -566,7 +566,7 @@ const AccountLedger = () => {
         
         console.log('🔄 Ledger data reloaded after Monday Final');
         
-        toast({
+      toast({
           title: "Monday Final Settlement",
           description: "Settlement completed successfully. Table updated with new settlement entry."
         });
@@ -574,12 +574,12 @@ const AccountLedger = () => {
         setShowMondayFinalModal(false);
       } else {
         console.error('❌ Monday Final settlement failed:', response.message);
-        toast({
-          title: "Error",
+      toast({
+        title: "Error",
           description: response.message || "Failed to process settlement",
-          variant: "destructive"
-        });
-      }
+        variant: "destructive"
+      });
+    }
     } catch (error: any) {
       console.error('❌ Monday Final settlement error:', error);
       toast({
