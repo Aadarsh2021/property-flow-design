@@ -289,12 +289,8 @@ const AccountLedger = () => {
             // Calculate raw commission amount
             const rawCommission = (lastAmount * commissionRate) / 100;
             
-            // Apply rounding logic: 1.5+ = 2, <1.5 = 1
-            if (rawCommission >= 1.5) {
-              commissionAmount = Math.ceil(rawCommission); // Round up to next integer
-            } else {
-              commissionAmount = Math.floor(rawCommission); // Round down to previous integer
-            }
+            // Apply standard rounding logic: >= 0.5 round up, < 0.5 round down
+            commissionAmount = Math.round(rawCommission);
             
             // Ensure minimum commission is 1 if rate > 0
             if (commissionAmount < 1 && rawCommission > 0) {
@@ -304,12 +300,8 @@ const AccountLedger = () => {
             // Default to 3% if no commission settings
             const rawCommission = lastAmount * 0.03;
             
-            // Apply rounding logic: 1.5+ = 2, <1.5 = 1
-            if (rawCommission >= 1.5) {
-              commissionAmount = Math.ceil(rawCommission); // Round up to next integer
-            } else {
-              commissionAmount = Math.floor(rawCommission); // Round down to previous integer
-            }
+            // Apply standard rounding logic: >= 0.5 round up, < 0.5 round down
+            commissionAmount = Math.round(rawCommission);
             
             // Ensure minimum commission is 1 if amount > 0
             if (commissionAmount < 1 && rawCommission > 0) {
@@ -319,7 +311,7 @@ const AccountLedger = () => {
             commissionRate = 3;
           }
           
-          // Ensure commission amount is a whole number
+          // Ensure commission amount is a whole number (double-check)
           commissionAmount = Math.round(commissionAmount);
           
           console.log('🔍 Commission calculation:', {
@@ -330,7 +322,7 @@ const AccountLedger = () => {
             rawCommission: (lastAmount * commissionRate) / 100,
             roundedCommission: commissionAmount,
             isWholeNumber: Number.isInteger(commissionAmount),
-            roundingLogic: `1.5+ = ${Math.ceil((lastAmount * commissionRate) / 100)}, <1.5 = ${Math.floor((lastAmount * commissionRate) / 100)}`
+            roundingLogic: `Standard rounding: >= 0.5 = round up, < 0.5 = round down`
           });
           
           // Set commission amount based on selected party's commission system
@@ -360,7 +352,7 @@ const AccountLedger = () => {
           
           toast({
             title: "Commission Auto-Calculated",
-            description: `Commission amount: ₹${commissionAmount} (${commissionRate}% of ₹${lastAmount}) - Rounded using 1.5+ = 2, <1.5 = 1 logic`,
+            description: `Commission amount: ₹${commissionAmount} (${commissionRate}% of ₹${lastAmount}) - Rounded using standard rounding: >= 0.5 = round up, < 0.5 = round down`,
           });
         } else {
           toast({
@@ -2044,7 +2036,7 @@ const AccountLedger = () => {
                     <label className="text-sm font-medium text-gray-700">Amount (+ for Credit, - for Debit)</label>
                     {newEntry.partyName?.toLowerCase().trim() === 'commission' && !isManualCommissionAmount && (
                       <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded border border-green-200">
-                        ✅ Auto-calculated commission (rounded to whole number)
+                        ✅ Auto-calculated commission (standard rounding: &gt;=0.5=up, &lt;0.5=down)
                       </div>
                     )}
                     {newEntry.partyName?.toLowerCase().trim() === 'commission' && (
