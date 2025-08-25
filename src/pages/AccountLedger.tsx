@@ -314,17 +314,6 @@ const AccountLedger = () => {
           // Ensure commission amount is a whole number (double-check)
           commissionAmount = Math.round(commissionAmount);
           
-          console.log('🔍 Commission calculation:', {
-            selectedPartyName: selectedPartyName,
-            partyCommissionSystem: selectedParty.commiSystem,
-            commissionRate,
-            lastAmount,
-            rawCommission: (lastAmount * commissionRate) / 100,
-            roundedCommission: commissionAmount,
-            isWholeNumber: Number.isInteger(commissionAmount),
-            roundingLogic: `Standard rounding: >= 0.5 = round up, < 0.5 = round down`
-          });
-          
           // Set commission amount based on selected party's commission system
           let finalAmount = 0;
           if (selectedParty.commiSystem === 'Take') {
@@ -557,19 +546,10 @@ const AccountLedger = () => {
 
   // Handle commission auto-fill when commission is selected
   const handleCommissionAutoFill = () => {
-    console.log('🔍 Commission Auto-Fill Started:', { selectedPartyName });
-    
     if (selectedPartyName) {
       const currentParty = allPartiesForTransaction.find(party => 
         party.name === selectedPartyName || party.party_name === selectedPartyName
       );
-      
-      console.log('🔍 Current Party Found:', currentParty);
-      console.log('🔍 Commission Structure Check:', {
-        mCommission: currentParty?.mCommission,
-        rate: currentParty?.rate,
-        commiSystem: currentParty?.commiSystem
-      });
       
       if (currentParty && currentParty.mCommission === 'With Commission' && currentParty.rate) {
         const rate = parseFloat(currentParty.rate) || 0;
@@ -579,45 +559,13 @@ const AccountLedger = () => {
           let transactionCount = 0;
           
           // Get current ledger entries for the selected party
-          console.log('🔍 Commission Auto-Fill Debug - Ledger Data:', {
-            ledgerData: ledgerData,
-            selectedPartyName: selectedPartyName,
-            hasLedgerData: !!ledgerData,
-            hasLedgerEntries: !!(ledgerData && ledgerData.ledgerEntries),
-            totalEntries: ledgerData?.ledgerEntries?.length || 0
-          });
-          
           if (ledgerData && ledgerData.ledgerEntries) {
-            console.log('🔍 Commission Auto-Fill Debug - Entry Matching:', {
-              selectedPartyName: selectedPartyName,
-              allEntries: ledgerData.ledgerEntries.map(e => ({
-                partyName: e.partyName,
-                tnsType: e.tnsType,
-                credit: e.credit,
-                debit: e.debit,
-                remarks: e.remarks
-              })),
-              selectedPartyNameType: typeof selectedPartyName,
-              entryPartyNameType: ledgerData.ledgerEntries[0]?.partyName ? typeof ledgerData.ledgerEntries[0].partyName : 'undefined'
-            });
             
             const partyEntries = ledgerData.ledgerEntries.filter(entry => 
               (entry.partyName || entry.party_name) === selectedPartyName && 
               entry.tnsType !== 'Monday Settlement'
               // Include Commission transactions for calculation
             );
-            
-            console.log('🔍 Commission Auto-Fill Debug - Party Entries:', {
-              partyEntries: partyEntries,
-              entryCount: partyEntries.length,
-              entryDetails: partyEntries.map(e => ({
-                partyName: e.partyName || e.party_name,
-                tnsType: e.tnsType,
-                credit: e.credit,
-                debit: e.debit,
-                remarks: e.remarks
-              }))
-            });
             
             // Calculate total amount from previous transactions based on commission system
             // Take system → commission on incoming CR amounts
@@ -637,21 +585,6 @@ const AccountLedger = () => {
               return sum + (isTakeSystem ? (entry.credit || 0) : (entry.debit || 0));
             }, 0);
             transactionCount = baseTransactions.length;
-            
-            console.log('🔍 Commission Auto-Fill Debug - Calculation:', {
-              totalTransactionAmount: totalTransactionAmount,
-              transactionCount: transactionCount,
-              rate: rate,
-              calculatedCommission: (totalTransactionAmount * rate) / 100,
-              commissionSystem: currentParty.commiSystem,
-              filteredTransactions: baseTransactions.map(e => ({
-                partyName: e.partyName || e.party_name,
-                tnsType: e.tnsType,
-                credit: e.credit,
-                debit: e.debit,
-                remarks: e.remarks
-              }))
-            });
           }
           
           // Calculate commission based on total transaction amount
@@ -684,15 +617,6 @@ const AccountLedger = () => {
             // Give System: Party receives commission → Positive amount
             finalAmount = commissionAmount;
           }
-          
-          console.log('🔍 Commission Auto-Fill Rounding:', {
-            totalTransactionAmount,
-            rate,
-            rawCommission,
-            roundedCommission: commissionAmount,
-            isWholeNumber: Number.isInteger(commissionAmount),
-            roundingLogic: 'Standard rounding: >= 0.5 = round up, < 0.5 = round down'
-          });
           
           setNewEntry(prev => ({
             ...prev,
@@ -1082,13 +1006,6 @@ const AccountLedger = () => {
             commissionAmount = (Math.abs(amount) * rate) / 100;
             commissionType = 'Auto-calculated';
             
-            console.log('🔍 Commission Calculation Debug:', {
-              originalAmount: Math.abs(amount),
-              rate: rate,
-              calculatedCommission: commissionAmount,
-              partyCommissionSystem: selectedParty.commiSystem
-            });
-            
             // Waterfall Commission Logic
             if (selectedParty.commiSystem === 'Take') {
               // AQC takes commission from client (e.g., RAJ RTGS)
@@ -1144,12 +1061,6 @@ const AccountLedger = () => {
           }
 
           // Commission is a virtual concept, not an actual party
-          console.log('🔍 Commission System: Virtual concept, no party creation needed');
-          console.log('🔍 Commission will be handled as a system transaction, not a party transaction');
-
-          // Commission is handled as a virtual concept - no separate entry needed
-          console.log('🔍 Commission handled as virtual concept - no separate transaction entry');
-          
           const systemType = selectedParty.commiSystem || 'Default';
           const flowDescription = selectedParty.commiSystem === 'Take' 
             ? 'AQC takes commission from party'
@@ -2033,7 +1944,6 @@ const AccountLedger = () => {
                                   
                                   // Auto-fill commission if commission is selected
                                   if (partyName.toLowerCase().trim() === 'commission') {
-                                    console.log('🔍 Commission selected, calling auto-fill...');
                                     handleCommissionAutoFill();
                                   }
                                 }}
@@ -2048,23 +1958,6 @@ const AccountLedger = () => {
                 </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700">Amount (+ for Credit, - for Debit)</label>
-                    {newEntry.partyName?.toLowerCase().trim() === 'commission' && !isManualCommissionAmount && (
-                      <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded border border-green-200">
-                        ✅ Auto-calculated commission (standard rounding: &gt;=0.5=up, &lt;0.5=down)
-                      </div>
-                    )}
-                    {newEntry.partyName?.toLowerCase().trim() === 'commission' && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsManualCommissionAmount(false);
-                          calculateCommissionAmount(newEntry.partyName || '');
-                        }}
-                        className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-200 hover:bg-blue-100 transition-colors"
-                      >
-                        🔄 Recalculate Commission
-                      </button>
-                    )}
                 <input
                   type="number"
                   step="1"
