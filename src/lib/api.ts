@@ -18,7 +18,7 @@ import { ApiResponse, NewPartyData, NewParty, Party, LedgerEntry, LedgerEntryInp
  * Production: Render deployment
  */
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
-  (import.meta.env.DEV ? 'http://localhost:5000/api' : 'https://account-ledger-software-9sys.onrender.com/api');
+  (import.meta.env.DEV ? 'http://localhost:5000/api' : 'https://account-ledger-software.vercel.app/api');
 
 /**
  * 🔐 Lightweight Authentication
@@ -71,7 +71,7 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
  */
 export const checkBackendHealth = async (): Promise<boolean> => {
   try {
-    const response = await fetch('https://account-ledger-software-9sys.onrender.com/health');
+    const response = await fetch('https://account-ledger-software.vercel.app/health');
     return response.ok;
   } catch {
     return false;
