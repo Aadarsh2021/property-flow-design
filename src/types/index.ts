@@ -21,6 +21,7 @@ export interface ApiResponse<T = unknown> {
   message?: string;
   data?: T;
   errors?: string[];
+  code?: string; // Error code for specific error handling
   pagination?: {
     currentPage: number;
     totalPages: number;
@@ -182,6 +183,9 @@ export interface LedgerEntry {
   partyName?: string; // Frontend field
   party_name?: string; // Backend field
   mondayFinal?: string;
+  is_old_record?: boolean; // Indicates if entry is settled in Monday Final
+  settlement_date?: string; // Date when entry was settled
+  settlement_monday_final_id?: string; // ID of Monday Final entry that settled this transaction
 }
 
 export interface LedgerEntryInput {

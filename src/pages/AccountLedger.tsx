@@ -286,10 +286,36 @@ const AccountLedger = () => {
           
           if (selectedParty.mCommission === 'With Commission' && selectedParty.rate) {
             commissionRate = parseFloat(selectedParty.rate) || 0;
-            commissionAmount = Math.round(lastAmount * (commissionRate / 100));
+            // Calculate raw commission amount
+            const rawCommission = (lastAmount * commissionRate) / 100;
+            
+            // Apply rounding logic: 1.5+ = 2, <1.5 = 1
+            if (rawCommission >= 1.5) {
+              commissionAmount = Math.ceil(rawCommission); // Round up to next integer
+            } else {
+              commissionAmount = Math.floor(rawCommission); // Round down to previous integer
+            }
+            
+            // Ensure minimum commission is 1 if rate > 0
+            if (commissionAmount < 1 && rawCommission > 0) {
+              commissionAmount = 1;
+            }
           } else {
             // Default to 3% if no commission settings
-            commissionAmount = Math.round(lastAmount * 0.03);
+            const rawCommission = lastAmount * 0.03;
+            
+            // Apply rounding logic: 1.5+ = 2, <1.5 = 1
+            if (rawCommission >= 1.5) {
+              commissionAmount = Math.ceil(rawCommission); // Round up to next integer
+            } else {
+              commissionAmount = Math.floor(rawCommission); // Round down to previous integer
+            }
+            
+            // Ensure minimum commission is 1 if amount > 0
+            if (commissionAmount < 1 && rawCommission > 0) {
+              commissionAmount = 1;
+            }
+            
             commissionRate = 3;
           }
           
@@ -298,7 +324,9 @@ const AccountLedger = () => {
             partyCommissionSystem: selectedParty.commiSystem,
             commissionRate,
             lastAmount,
-            commissionAmount
+            rawCommission: (lastAmount * commissionRate) / 100,
+            roundedCommission: commissionAmount,
+            roundingLogic: `1.5+ = ${Math.ceil((lastAmount * commissionRate) / 100)}, <1.5 = ${Math.floor((lastAmount * commissionRate) / 100)}`
           });
           
           // Set commission amount based on selected party's commission system
@@ -314,21 +342,21 @@ const AccountLedger = () => {
             finalAmount = lastEntry.tnsType === 'CR' ? -commissionAmount : commissionAmount;
           }
           
-                  setNewEntry(prev => {
-          const updated = { 
-            ...prev, 
-            partyName: partyNameValue,
-            amount: finalAmount.toString()
-          };
-          return updated;
-        });
-        
-        // Mark as auto-calculated (not manual)
-        setIsManualCommissionAmount(false);
+          setNewEntry(prev => {
+            const updated = { 
+              ...prev, 
+              partyName: partyNameValue,
+              amount: finalAmount.toString()
+            };
+            return updated;
+          });
+          
+          // Mark as auto-calculated (not manual)
+          setIsManualCommissionAmount(false);
           
           toast({
             title: "Commission Auto-Calculated",
-            description: `Commission amount: ₹${commissionAmount} (${commissionRate}% of last transaction: ₹${lastAmount}) - Based on ${selectedPartyName} party settings`,
+            description: `Commission amount: ₹${commissionAmount} (${commissionRate}% of ₹${lastAmount}) - Rounded using 1.5+ = 2, <1.5 = 1 logic`,
           });
         } else {
           toast({
@@ -351,7 +379,7 @@ const AccountLedger = () => {
         variant: "destructive"
       });
     }
-  }, [ledgerData, selectedPartyName, allPartiesForTransaction, toast]);
+  }, [ledgerData, selectedPartyName, allPartiesForTransaction]);
 
   // Handle party name change and auto-calculate commission
   const handlePartyNameChange = (value: string) => {
@@ -1270,8 +1298,8 @@ const AccountLedger = () => {
       // Prepare update data based on transaction type using editingEntry (modified data)
       const updateData = {
         remarks: editingEntry.remarks,
-        credit: editingEntry.tnsType === 'CR' ? parseFloat(editingEntry.credit || 0) : 0,
-        debit: editingEntry.tnsType === 'DR' ? parseFloat(editingEntry.debit || 0) : 0,
+        credit: editingEntry.tnsType === 'CR' ? parseFloat(String(editingEntry.credit || '0')) : 0,
+        debit: editingEntry.tnsType === 'DR' ? parseFloat(String(editingEntry.debit || '0')) : 0,
         tnsType: editingEntry.tnsType
       };
       
@@ -1307,11 +1335,20 @@ const AccountLedger = () => {
           description: "Entry modified successfully"
         });
       } else {
-        toast({
-          title: "Error",
-          description: response.message || "Failed to modify entry",
-          variant: "destructive"
-        });
+        // Handle specific error codes
+        if (response.code === 'OLD_RECORD_PROTECTED') {
+          toast({
+            title: "Old Record Protected",
+            description: "This entry was settled in Monday Final and cannot be modified. Delete the Monday Final entry first to unsettle transactions.",
+            variant: "destructive"
+          });
+        } else {
+          toast({
+            title: "Error",
+            description: response.message || "Failed to modify entry",
+            variant: "destructive"
+          });
+        }
       }
     } catch (error: any) {
       console.error('Modify entry error:', error);
@@ -1418,7 +1455,12 @@ const AccountLedger = () => {
               successCount++;
             } else {
               errorCount++;
-              console.error(`❌ Failed to delete entry ${entryId}:`, response.message);
+              // Handle specific error codes
+              if (response.code === 'OLD_RECORD_PROTECTED') {
+                console.error(`❌ Cannot delete old record ${entryId}: Entry was settled in Monday Final`);
+              } else {
+                console.error(`❌ Failed to delete entry ${entryId}:`, response.message);
+              }
             }
           } catch (error: any) {
             errorCount++;
@@ -1446,13 +1488,13 @@ const AccountLedger = () => {
       } else if (successCount > 0 && errorCount > 0) {
         toast({
           title: "Partial Success",
-          description: `Deleted ${successCount} entr${successCount === 1 ? 'y' : 'ies'}, ${errorCount} failed`,
+          description: `Deleted ${successCount} entr${successCount === 1 ? 'y' : 'ies'}, ${errorCount} failed. Some entries may be protected as old records.`,
           variant: "destructive"
         });
       } else {
         toast({
           title: "Error",
-          description: "Failed to delete any entries",
+          description: "Failed to delete any entries. Some entries may be protected as old records after Monday Final settlement.",
           variant: "destructive"
         });
       }
@@ -1858,14 +1900,21 @@ const AccountLedger = () => {
                               key={entryIdString} 
                               className={`hover:bg-blue-50 cursor-pointer transition-colors duration-150 ${
                                 isSelected ? 'bg-blue-100' : ''
-                              }`}
+                              } ${entry.is_old_record ? 'bg-gray-50 opacity-75' : ''}`}
                               onClick={() => handleCheckboxChange(entryId, !isSelected)}
                             >
                             <td className="px-4 py-3 text-gray-700">
                               {new Date(entry.date).toLocaleDateString('en-GB')}
                             </td>
                             <td className="px-4 py-3 text-gray-800 font-medium">
-                              {entry.remarks}
+                              <div className="flex items-center space-x-2">
+                                <span>{entry.remarks}</span>
+                                {entry.is_old_record && (
+                                  <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full font-medium">
+                                    Old Record
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="px-4 py-3 text-center">
                               <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -2102,8 +2151,17 @@ const AccountLedger = () => {
                   }
                 }
               }}
-              disabled={selectedEntries.length !== 1}
+              disabled={selectedEntries.length !== 1 || selectedEntries.some(entryId => {
+                const displayEntries = showOldRecords ? ledgerData?.oldRecords : ledgerData?.ledgerEntries;
+                const entry = displayEntries?.find(e => (e.id || e._id || e.ti || '').toString() === entryId);
+                return entry?.is_old_record === true;
+              })}
                 className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
+                title={selectedEntries.some(entryId => {
+                  const displayEntries = showOldRecords ? ledgerData?.oldRecords : ledgerData?.ledgerEntries;
+                  const entry = displayEntries?.find(e => (e.id || e._id || e.ti || '').toString() === entryId);
+                  return entry?.is_old_record === true;
+                }) ? "Cannot modify old records. Delete Monday Final entry first to unsettle transactions." : ""}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -2113,8 +2171,17 @@ const AccountLedger = () => {
               
               <button
               onClick={() => setShowDeleteModal(true)}
-              disabled={selectedEntries.length === 0}
+              disabled={selectedEntries.length === 0 || selectedEntries.some(entryId => {
+                const displayEntries = showOldRecords ? ledgerData?.oldRecords : ledgerData?.ledgerEntries;
+                const entry = displayEntries?.find(e => (e.id || e._id || e.ti || '').toString() === entryId);
+                return entry?.is_old_record === true;
+              })}
                 className="w-full px-4 py-3 bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
+                title={selectedEntries.some(entryId => {
+                  const displayEntries = showOldRecords ? ledgerData?.oldRecords : ledgerData?.ledgerEntries;
+                  const entry = displayEntries?.find(e => (e.id || e._id || e.ti || '').toString() === entryId);
+                  return entry?.is_old_record === true;
+                }) ? "Cannot delete old records. Delete Monday Final entry first to unsettle transactions." : ""}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

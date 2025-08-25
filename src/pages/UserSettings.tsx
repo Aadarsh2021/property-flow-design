@@ -48,7 +48,7 @@ const UserSettings = () => {
         return;
       }
       
-      const response = await userSettingsAPI.get(user.id);
+      const response = await userSettingsAPI.getSettings(user.id);
       if (response.success) {
         // Map backend fields to frontend fields
         setSettings({

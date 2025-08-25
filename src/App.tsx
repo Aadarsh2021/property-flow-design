@@ -21,76 +21,80 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <ErrorBoundary>
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-              {/* Public Routes */}
-            <Route path="/" element={<Index />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/firebase-test" element={<FirebaseTest />} />
-              
-              {/* Protected Routes */}
-              <Route path="/dashboard" element={
-                <ProtectedRoute>
-                  <Index />
-                </ProtectedRoute>
-              } />
-              <Route path="/user-settings" element={
-                <ProtectedRoute>
-                  <UserSettings />
-                </ProtectedRoute>
-              } />
-              <Route path="/new-party" element={
-                <ProtectedRoute>
-                  <NewParty />
-                </ProtectedRoute>
-              } />
-              <Route path="/party-ledger" element={
-                <ProtectedRoute>
-                  <PartyLedger />
-                </ProtectedRoute>
-              } />
-              <Route path="/party-report" element={
-                <ProtectedRoute>
-                  <PartyReport />
-                </ProtectedRoute>
-              } />
-              <Route path="/account-ledger/:partyName" element={
-                <ProtectedRoute>
-                  <AccountLedger />
-                </ProtectedRoute>
-              } />
-              <Route path="/final-trial-balance" element={
-                <ProtectedRoute>
-                  <FinalTrialBalance />
-                </ProtectedRoute>
-              } />
-              <Route path="/profit-loss-report" element={
-                <ProtectedRoute>
-                  <div>Profit Loss Report - Coming Soon</div>
-                </ProtectedRoute>
-              } />
-              <Route path="/transaction-report" element={
-                <ProtectedRoute>
-                  <div>Transaction Report - Coming Soon</div>
-                </ProtectedRoute>
-              } />
-              
-              {/* Catch-all route */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-      </AuthProvider>
-    </QueryClientProvider>
-  </ErrorBoundary>
-);
+const App = () => {
+  return (
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <div className="min-h-screen bg-gray-50">
+                <Routes>
+                    {/* Public Routes */}
+                  <Route path="/" element={<Index />} />
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/register" element={<Register />} />
+                    <Route path="/firebase-test" element={<FirebaseTest />} />
+                    
+                    {/* Protected Routes */}
+                    <Route path="/dashboard" element={
+                      <ProtectedRoute>
+                        <Index />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/user-settings" element={
+                      <ProtectedRoute>
+                        <UserSettings />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/new-party" element={
+                      <ProtectedRoute>
+                        <NewParty />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/party-ledger" element={
+                      <ProtectedRoute>
+                        <PartyLedger />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/party-report" element={
+                      <ProtectedRoute>
+                        <PartyReport />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/account-ledger/:partyName" element={
+                      <ProtectedRoute>
+                        <AccountLedger />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/final-trial-balance" element={
+                      <ProtectedRoute>
+                        <FinalTrialBalance />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/profit-loss-report" element={
+                      <ProtectedRoute>
+                        <div>Profit Loss Report - Coming Soon</div>
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/transaction-report" element={
+                      <ProtectedRoute>
+                        <div>Transaction Report - Coming Soon</div>
+                      </ProtectedRoute>
+                    } />
+                    
+                    {/* Catch-all route */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </div>
+            </BrowserRouter>
+          </TooltipProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
+  );
+};
 
 export default App;

@@ -33,6 +33,17 @@ interface DashboardStats {
     totalDebit: number;
     totalBalance: number;
   };
+  companyBalance?: {
+    netBalance?: number;
+    commissionCollected?: number;
+    commissionPaid?: number;
+    netCommissionProfit?: number;
+    totalCredits?: number;
+    totalDebits?: number;
+    commissionTransactionCount?: number;
+    businessActivity?: number;
+    autoCalculated?: boolean;
+  };
   recentActivity: Array<{
     id: string;
     partyName: string;
@@ -85,6 +96,7 @@ const Index = () => {
         console.log('💰 Total Balance:', statsResponse.data.overview?.totalBalance);
         console.log('📊 Total Parties:', statsResponse.data.overview?.totalParties);
         console.log('📝 Total Transactions:', statsResponse.data.overview?.totalTransactions);
+        console.log('💳 Company Balance Data:', statsResponse.data.companyBalance);
         setStats(statsResponse.data);
       } else {
         console.error('❌ Dashboard API Error:', statsResponse);
@@ -116,7 +128,10 @@ const Index = () => {
   }, [isAuthenticated]);
 
   // Format currency
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number | undefined | null) => {
+    if (amount === undefined || amount === null || isNaN(amount)) {
+      return '₹0';
+    }
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
@@ -279,7 +294,7 @@ const Index = () => {
                     <div>
                       <p className="text-sm font-medium text-blue-100">Company Net Balance</p>
                       <p className="text-2xl font-bold">
-                        {loading ? '...' : stats?.companyBalance ? formatCurrency(stats.companyBalance.netBalance) : '₹0'}
+                        {loading ? '...' : formatCurrency(stats?.overview?.totalBalance)}
                       </p>
                     </div>
                     <div className="bg-blue-400 p-3 rounded-lg">
@@ -296,7 +311,7 @@ const Index = () => {
                     <div>
                       <p className="text-sm font-medium text-green-100">Commission Collected</p>
                       <p className="text-2xl font-bold">
-                        {loading ? '...' : stats?.companyBalance ? formatCurrency(stats.companyBalance.commissionCollected) : '₹0'}
+                        {loading ? '...' : formatCurrency(stats?.companyBalance?.commissionCollected || 0)}
                       </p>
                     </div>
                     <div className="bg-green-400 p-3 rounded-lg">
@@ -313,7 +328,7 @@ const Index = () => {
                     <div>
                       <p className="text-sm font-medium text-red-100">Commission Paid</p>
                       <p className="text-2xl font-bold">
-                        {loading ? '...' : stats?.companyBalance ? formatCurrency(stats.companyBalance.commissionPaid) : '₹0'}
+                        {loading ? '...' : formatCurrency(stats?.companyBalance?.commissionPaid || 0)}
                       </p>
                     </div>
                     <div className="bg-red-400 p-3 rounded-lg">
@@ -330,7 +345,7 @@ const Index = () => {
                     <div>
                       <p className="text-sm font-medium text-purple-100">Net Commission Profit</p>
                       <p className="text-2xl font-bold">
-                        {loading ? '...' : stats?.companyBalance ? formatCurrency(stats.companyBalance.netCommissionProfit) : '₹0'}
+                        {loading ? '...' : formatCurrency(stats?.companyBalance?.netCommissionProfit || 0)}
                       </p>
                     </div>
                     <div className="bg-purple-400 p-3 rounded-lg">
@@ -351,7 +366,7 @@ const Index = () => {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Total Credits (Received)</p>
                     <p className="text-xl font-bold text-green-600">
-                      {loading ? '...' : stats?.companyBalance ? formatCurrency(stats.companyBalance.totalCredits) : '₹0'}
+                      {loading ? '...' : formatCurrency(stats?.overview?.totalCredit)}
                     </p>
                   </div>
                   <div className="bg-green-100 p-3 rounded-lg">
@@ -368,7 +383,7 @@ const Index = () => {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Total Debits (Paid)</p>
                     <p className="text-xl font-bold text-red-600">
-                      {loading ? '...' : stats?.companyBalance ? formatCurrency(stats.companyBalance.totalDebits) : '₹0'}
+                      {loading ? '...' : formatCurrency(stats?.overview?.totalDebit)}
                     </p>
                   </div>
                   <div className="bg-red-100 p-3 rounded-lg">
@@ -385,7 +400,7 @@ const Index = () => {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Commission Transactions</p>
                     <p className="text-xl font-bold text-blue-600">
-                      {loading ? '...' : stats?.companyBalance ? stats.companyBalance.commissionTransactionCount : 0}
+                      {loading ? '...' : stats?.companyBalance?.commissionTransactionCount || 0}
                     </p>
                   </div>
                   <div className="bg-blue-100 p-3 rounded-lg">
@@ -402,7 +417,7 @@ const Index = () => {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Business Activity</p>
                     <p className="text-xl font-bold text-purple-600">
-                      {loading ? '...' : stats?.companyBalance ? formatCurrency(stats.companyBalance.businessActivity || 0) : '₹0'}
+                      {loading ? '...' : formatCurrency(stats?.overview?.totalCredit + stats?.overview?.totalDebit || 0)}
                     </p>
                   </div>
                   <div className="bg-purple-100 p-3 rounded-lg">

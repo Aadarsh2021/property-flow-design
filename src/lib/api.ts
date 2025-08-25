@@ -1,40 +1,19 @@
 /**
- * 🚀 Lightweight API Client - Account Ledger Software
- * 
- * Optimized for performance and minimal bundle size
- * Uses native fetch() API with smart error handling
+ * API Client - Account Ledger Software
  * 
  * @author Account Ledger Team
- * @version 2.0.0 - Lightweight Edition
+ * @version 2.0.0
  */
 
 import { ApiResponse, NewPartyData, NewParty, Party, LedgerEntry, LedgerEntryInput, UserSettings, TrialBalanceEntry, GoogleUserData, GoogleAuthResponse } from '../types';
 
-/**
- * 🌐 API Configuration
- * 
- * Smart environment detection for optimal performance
- * Development: localhost:5000
- * Production: Render deployment
- */
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
   (import.meta.env.DEV ? 'http://localhost:5000/api' : 'https://account-ledger-software.vercel.app/api');
 
-/**
- * 🔐 Lightweight Authentication
- * 
- * Minimal token management with localStorage
- */
 const getAuthToken = (): string | null => {
   return localStorage.getItem('token');
 };
 
-/**
- * 🚀 Ultra-Light API Call Function
- * 
- * Optimized for speed and minimal overhead
- * No complex retry logic - just fast, reliable requests
- */
 const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> => {
   const url = `${API_BASE_URL}${endpoint}`;
   const token = getAuthToken();
@@ -58,7 +37,6 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
     
     return await response.json();
   } catch (error: any) {
-    // Smart error handling without heavy logging
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
       throw new Error('Network error. Please check your connection.');
     }
@@ -66,9 +44,6 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
   }
 };
 
-/**
- * 🏥 Health Check - Minimal Version
- */
 export const checkBackendHealth = async (): Promise<boolean> => {
   try {
     const response = await fetch('https://account-ledger-software.vercel.app/health');
@@ -78,9 +53,6 @@ export const checkBackendHealth = async (): Promise<boolean> => {
   }
 };
 
-/**
- * 👥 New Party API - Lightweight
- */
 export const newPartyAPI = {
   getAll: () => apiCall<NewParty[]>('/new-party'),
   getById: (id: string) => apiCall<NewParty>(`/new-party/${id}`),
@@ -98,9 +70,6 @@ export const newPartyAPI = {
   getNextSrNo: () => apiCall<{ nextSrNo: string }>('/new-party/next-sr-no'),
 };
 
-/**
- * 📊 Party Ledger API - Lightweight
- */
 export const partyLedgerAPI = {
   getAllParties: () => apiCall<Party[]>('/party-ledger/parties'),
   getPartyLedger: (partyName: string) => apiCall<LedgerEntry[]>(`/party-ledger/${encodeURIComponent(partyName)}`),
@@ -142,9 +111,6 @@ export const partyLedgerAPI = {
   }),
 };
 
-/**
- * ⚙️ User Settings API - Lightweight
- */
 export const userSettingsAPI = {
   getSettings: (userId: string) => apiCall<UserSettings>(`/user-settings/${userId}`),
   updateSettings: (userId: string, settings: Partial<UserSettings>) => apiCall<UserSettings>(`/user-settings/${userId}`, {
@@ -153,9 +119,6 @@ export const userSettingsAPI = {
   }),
 };
 
-/**
- * 📈 Final Trial Balance API - Lightweight
- */
 export const finalTrialBalanceAPI = {
   generateReport: (reportData: { startDate: string; endDate: string; partyName?: string }) => apiCall<TrialBalanceEntry[]>('/final-trial-balance', {
     method: 'POST',
@@ -163,9 +126,6 @@ export const finalTrialBalanceAPI = {
   }),
 };
 
-/**
- * 🔐 Authentication API - Lightweight
- */
 export const authAPI = {
   login: (credentials: { email: string; password: string }) => apiCall<{ token: string; user: any }>('/authentication/login', {
     method: 'POST',
@@ -193,18 +153,12 @@ export const authAPI = {
   }),
 };
 
-/**
- * 📊 Dashboard API - Lightweight
- */
 export const dashboardAPI = {
   getStats: () => apiCall<any>('/dashboard/stats'),
   getRecentActivity: () => apiCall<any>('/dashboard/recent-activity'),
   getSummary: () => apiCall<any>('/dashboard/summary'),
 };
 
-/**
- * 💰 Commission Transaction API - Lightweight
- */
 export const commissionTransactionAPI = {
   getAll: () => apiCall<any[]>('/commission-transactions'),
   getById: (id: string) => apiCall<any>(`/commission-transactions/${id}`),
