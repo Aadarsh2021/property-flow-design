@@ -120,6 +120,21 @@ export const userSettingsAPI = {
 };
 
 export const finalTrialBalanceAPI = {
+  getAll: () => apiCall<{
+    parties: Array<{
+      name: string;
+      creditTotal: number;
+      debitTotal: number;
+      balance: number;
+    }>;
+    totals: {
+      totalCredit: number;
+      totalDebit: number;
+      totalBalance: number;
+    };
+  }>('/final-trial-balance', {
+    method: 'GET',
+  }),
   generateReport: (reportData: { startDate: string; endDate: string; partyName?: string }) => apiCall<TrialBalanceEntry[]>('/final-trial-balance', {
     method: 'POST',
     body: JSON.stringify(reportData),

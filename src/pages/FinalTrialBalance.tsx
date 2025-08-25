@@ -119,10 +119,47 @@ const FinalTrialBalance = () => {
   const loadTrialBalance = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await finalTrialBalanceAPI.get();
+      const response = await finalTrialBalanceAPI.getAll();
       if (response.success) {
         console.log('📊 Trial balance data received:', response.data);
-        setTrialBalanceData(response.data);
+        
+        // Transform backend data to frontend format
+        const backendData = response.data;
+        const parties = backendData.parties || [];
+        
+        // Separate credit and debit entries based on party balances
+        const creditEntries: TrialBalanceEntry[] = [];
+        const debitEntries: TrialBalanceEntry[] = [];
+        
+        parties.forEach((party) => {
+          if (party.creditTotal > 0) {
+            creditEntries.push({
+              id: party.name,
+              name: party.name,
+              amount: party.creditTotal,
+              type: 'credit'
+            });
+          }
+          
+          if (party.debitTotal > 0) {
+            debitEntries.push({
+              id: party.name,
+              name: party.name,
+              amount: party.debitTotal,
+              type: 'debit'
+            });
+          }
+        });
+        
+        const transformedData: TrialBalanceData = {
+          creditEntries,
+          debitEntries,
+          creditTotal: backendData.totals?.totalCredit || 0,
+          debitTotal: backendData.totals?.totalDebit || 0,
+          balanceDifference: backendData.totals?.totalBalance || 0
+        };
+        
+        setTrialBalanceData(transformedData);
       } else {
         console.error('❌ Failed to load trial balance:', response.message);
         toast({
@@ -316,7 +353,7 @@ const FinalTrialBalance = () => {
                 </button>
                 <button
                   onClick={handleExit}
-                  className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors"
+                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
                 >
                   Exit
                 </button>
@@ -338,10 +375,10 @@ const FinalTrialBalance = () => {
               {/* Two Tables Layout */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 
-                {/* Credit Table */}
+                {/* Credit Table - Left Side */}
                 <div className="bg-white border border-gray-200 rounded-lg">
                   <div className="bg-green-50 border-b border-green-200 px-4 py-2 rounded-t-lg">
-                    <h3 className="text-sm font-semibold text-green-800">Amount (Cr)</h3>
+                    <h3 className="text-sm font-semibold text-green-800">Credit / Jama / Dena</h3>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="min-w-full">
@@ -351,7 +388,7 @@ const FinalTrialBalance = () => {
                             Name
                           </th>
                           <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Amount
+                            Amount (Cr)
                           </th>
                         </tr>
                       </thead>
@@ -368,7 +405,7 @@ const FinalTrialBalance = () => {
                               {entry.name}
                             </td>
                             <td className="px-4 py-2 whitespace-nowrap text-sm text-green-600 font-semibold">
-                              ₹{entry.amount.toLocaleString()}
+                              {entry.amount.toLocaleString()}
                             </td>
                           </tr>
                         ))}
@@ -377,10 +414,10 @@ const FinalTrialBalance = () => {
                   </div>
                 </div>
 
-                {/* Debit Table */}
+                {/* Debit Table - Right Side */}
                 <div className="bg-white border border-gray-200 rounded-lg">
                   <div className="bg-red-50 border-b border-red-200 px-4 py-2 rounded-t-lg">
-                    <h3 className="text-sm font-semibold text-red-800">Amount (Dr)</h3>
+                    <h3 className="text-sm font-semibold text-red-800">Debit / Name / Lena</h3>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="min-w-full">
@@ -390,7 +427,7 @@ const FinalTrialBalance = () => {
                             Name
                           </th>
                           <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Amount
+                            Amount (Dr)
                           </th>
                         </tr>
                       </thead>
@@ -407,7 +444,7 @@ const FinalTrialBalance = () => {
                               {entry.name}
                             </td>
                             <td className="px-4 py-2 whitespace-nowrap text-sm text-red-600 font-semibold">
-                              -₹{entry.amount.toLocaleString()}
+                              -{entry.amount.toLocaleString()}
                             </td>
                           </tr>
                         ))}
@@ -421,10 +458,10 @@ const FinalTrialBalance = () => {
               <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div className="flex justify-between items-center">
                   <div className="text-sm font-medium text-blue-800">
-                    Credit / Jama Total: {creditTotal.toLocaleString()}
+                    Credit / Jama / Dena Total: {creditTotal.toLocaleString()}
                   </div>
                   <div className="text-sm font-medium text-blue-800">
-                    Debit / Lena Total: {debitTotal.toLocaleString()}
+                    Debit / Name / Lena Total: -{debitTotal.toLocaleString()}
                   </div>
                 </div>
                 {balanceDifference !== 0 && (
