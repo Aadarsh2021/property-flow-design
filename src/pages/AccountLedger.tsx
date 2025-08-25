@@ -319,6 +319,9 @@ const AccountLedger = () => {
             commissionRate = 3;
           }
           
+          // Ensure commission amount is a whole number
+          commissionAmount = Math.round(commissionAmount);
+          
           console.log('🔍 Commission calculation:', {
             selectedPartyName: selectedPartyName,
             partyCommissionSystem: selectedParty.commiSystem,
@@ -326,6 +329,7 @@ const AccountLedger = () => {
             lastAmount,
             rawCommission: (lastAmount * commissionRate) / 100,
             roundedCommission: commissionAmount,
+            isWholeNumber: Number.isInteger(commissionAmount),
             roundingLogic: `1.5+ = ${Math.ceil((lastAmount * commissionRate) / 100)}, <1.5 = ${Math.floor((lastAmount * commissionRate) / 100)}`
           });
           
@@ -391,6 +395,8 @@ const AccountLedger = () => {
     // Auto-calculate commission when typing "commission"
     if (value.toLowerCase().trim() === 'commission') {
       calculateCommissionAmount(value);
+      // Clear any existing amount when switching to commission
+      setNewEntry(prev => ({ ...prev, amount: '' }));
     }
   };
 
@@ -2036,8 +2042,26 @@ const AccountLedger = () => {
                 </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700">Amount (+ for Credit, - for Debit)</label>
+                    {newEntry.partyName?.toLowerCase().trim() === 'commission' && !isManualCommissionAmount && (
+                      <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded border border-green-200">
+                        ✅ Auto-calculated commission (rounded to whole number)
+                      </div>
+                    )}
+                    {newEntry.partyName?.toLowerCase().trim() === 'commission' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsManualCommissionAmount(false);
+                          calculateCommissionAmount(newEntry.partyName || '');
+                        }}
+                        className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-200 hover:bg-blue-100 transition-colors"
+                      >
+                        🔄 Recalculate Commission
+                      </button>
+                    )}
                 <input
                   type="number"
+                  step="1"
                   value={newEntry.amount}
                       onChange={(e) => {
                         setNewEntry(prev => ({ ...prev, amount: e.target.value }));
