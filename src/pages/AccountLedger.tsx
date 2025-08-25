@@ -655,7 +655,10 @@ const AccountLedger = () => {
           }
           
           // Calculate commission based on total transaction amount
-          const commissionAmount = (totalTransactionAmount * rate) / 100;
+          const rawCommission = (totalTransactionAmount * rate) / 100;
+          
+          // Apply standard rounding logic: >= 0.5 round up, < 0.5 round down
+          const commissionAmount = Math.round(rawCommission);
           
           // Prepare smart remarks
           let remarks = `Commission for ${selectedPartyName} (${rate}%)`;
@@ -682,6 +685,15 @@ const AccountLedger = () => {
             finalAmount = commissionAmount;
           }
           
+          console.log('🔍 Commission Auto-Fill Rounding:', {
+            totalTransactionAmount,
+            rate,
+            rawCommission,
+            roundedCommission: commissionAmount,
+            isWholeNumber: Number.isInteger(commissionAmount),
+            roundingLogic: 'Standard rounding: >= 0.5 = round up, < 0.5 = round down'
+          });
+          
           setNewEntry(prev => ({
             ...prev,
             amount: finalAmount.toString(),
@@ -697,9 +709,11 @@ const AccountLedger = () => {
           } else if (transactionCount === 1) {
             const transactionType = currentParty.commiSystem === 'Take' ? 'CR' : 'DR';
             notificationMessage += `\n📊 Based on 1 ${transactionType} transaction: ₹${totalTransactionAmount.toLocaleString()}`;
+            notificationMessage += `\n🔢 Raw: ₹${rawCommission.toFixed(2)} → Rounded: ₹${commissionAmount}`;
           } else {
             const transactionType = currentParty.commiSystem === 'Take' ? 'CR' : 'DR';
             notificationMessage += `\n📊 Based on ${transactionCount} ${transactionType} transactions: ₹${totalTransactionAmount.toLocaleString()}`;
+            notificationMessage += `\n🔢 Raw: ₹${rawCommission.toFixed(2)} → Rounded: ₹${commissionAmount}`;
           }
           
           toast({
