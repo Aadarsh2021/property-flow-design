@@ -121,7 +121,7 @@ const FinalTrialBalance = () => {
     try {
       const response = await finalTrialBalanceAPI.getAll();
       if (response.success) {
-        console.log('📊 Trial balance data received:', response.data);
+        // Trial balance data received
         
         // Transform backend data to frontend format
         const backendData = response.data;

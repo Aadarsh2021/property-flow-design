@@ -32,7 +32,8 @@ export interface ApiResponse<T = unknown> {
 
 // User Types
 export interface User {
-  id: string;
+  id?: string;
+  _id?: string; // Backend compatibility
   fullname: string;
   email: string;
   phone: string;
@@ -89,37 +90,7 @@ export interface LedgerData {
   commissionDetails?: CommissionDetails;
 }
 
-// New Party Types
-export interface SelfLD {
-  M: string;
-  S: string;
-  A: string;
-  T: string;
-  C: string;
-}
 
-export interface AgentLD {
-  name: string;
-  M: string;
-  S: string;
-  A: string;
-  T: string;
-  C: string;
-}
-
-export interface ThirdPartyLD {
-  name: string;
-  M: string;
-  S: string;
-  A: string;
-  T: string;
-  C: string;
-}
-
-export interface Commission {
-  M: string;
-  S: string;
-}
 
 export interface NewPartyData {
   srNo: string;
@@ -130,12 +101,7 @@ export interface NewPartyData {
   mCommission: 'No Commission' | 'With Commission';
   rate: string;
   mondayFinal: 'Yes' | 'No';
-  selfLD: SelfLD;
-  agentLD: AgentLD;
-  thirdPartyLD: ThirdPartyLD;
-  selfCommission: Commission;
-  agentCommission: Commission;
-  thirdPartyCommission: Commission;
+
 }
 
 export interface NewParty extends NewPartyData {
@@ -158,14 +124,7 @@ export interface Party {
   rate?: string;
   commiSystem?: string;
   companyName?: string; // Backend field
-  selfLD?: number;
-  selfMCommi?: number;
-  agentParty?: string;
-  agentLD?: number;
-  agentMCommi?: number;
-  thirdParty?: string;
-  thirdPartyLD?: number;
-  thirdPartyMCommi?: number;
+
 }
 
 export interface LedgerEntry {

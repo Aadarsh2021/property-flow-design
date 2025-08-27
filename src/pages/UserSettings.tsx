@@ -102,7 +102,7 @@ const UserSettings = () => {
         password: settings.password
       };
       
-      const response = await userSettingsAPI.update(user.id, cleanSettings);
+      const response = await userSettingsAPI.updateSettings(user.id, cleanSettings);
       if (response.success) {
         toast({
           title: "Success",

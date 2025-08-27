@@ -19,7 +19,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import TopNavigation from '@/components/TopNavigation';
-import { newPartyAPI } from '@/lib/api';
+import { newPartyAPI, partyLedgerAPI } from '@/lib/api';
 import { Party } from '@/types';
 import { Search, Filter, Download, Printer, RefreshCw, Eye, Edit, Trash2, Plus, X } from 'lucide-react';
 
@@ -45,7 +45,7 @@ const PartyReport = () => {
     if (searchTerm) {
       filtered = filtered.filter(party => 
         party.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (party.srNo && party.srNo.toLowerCase().includes(searchTerm.toLowerCase()))
+        (party.srNo && party.srNo.toString().toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
 
@@ -55,26 +55,20 @@ const PartyReport = () => {
   const loadParties = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await newPartyAPI.getAll();
+      const response = await partyLedgerAPI.getAllParties();
       if (response.success) {
         const mappedParties = (response.data || []).map((party: any) => ({
-          _id: party._id,
+          _id: party.id,
           name: party.partyName,
           srNo: party.srNo,
           status: party.status,
           balanceLimit: parseFloat(party.balanceLimit) || 0,
           mCommission: party.mCommission || 'No Commission',
-          selfLD: parseFloat(party.selfLD) || 0,
-          selfMCommi: parseFloat(party.selfMCommi) || 0,
-          agentParty: party.agentParty || '',
-          agentLD: parseFloat(party.agentLD) || 0,
-          agentMCommi: parseFloat(party.agentMCommi) || 0,
-          thirdParty: party.thirdParty || '',
-          thirdPartyLD: parseFloat(party.thirdPartyLD) || 0,
-          thirdPartyMCommi: parseFloat(party.thirdPartyMCommi) || 0
+          commiSystem: party.commiSystem,
+          rate: party.rate,
+          mondayFinal: party.mondayFinal,
         }));
         setParties(mappedParties);
-        console.log('📋 Loaded parties for report:', mappedParties);
       } else {
         console.error('❌ Failed to load parties:', response.message);
         toast({
@@ -269,35 +263,21 @@ const PartyReport = () => {
                     M Commission Type
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
-                    Self LD
+                    Commission System
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
-                    Self M Commi
+                    Rate
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
-                    Agent Party
+                    Monday Final
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
-                    Agent LD
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
-                    Agent M Commi
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
-                    ThirdParty
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
-                    ThirdParty LD
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
-                    ThirdParty M Commi
-                  </th>
+
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {loading ? (
                   <tr>
-                    <td colSpan={11} className="px-4 py-4 text-center">
+                    <td colSpan={8} className="px-4 py-4 text-center">
                       <div className="flex items-center justify-center space-x-2">
                         <RefreshCw className="w-4 h-4 animate-spin" />
                         <span>Loading parties...</span>
@@ -306,7 +286,7 @@ const PartyReport = () => {
                   </tr>
                 ) : filteredParties.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="px-4 py-4 text-center text-gray-500">
+                    <td colSpan={8} className="px-4 py-4 text-center text-gray-500">
                       No parties found
                     </td>
                   </tr>
@@ -332,29 +312,19 @@ const PartyReport = () => {
                         {party.mCommission}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        {formatNumber(party.selfLD)}
+                        {party.commiSystem || 'N/A'}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        {formatNumber(party.selfMCommi)}
+                        {party.rate || '0'}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        {party.agentParty || ''}
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          party.mondayFinal === 'Yes' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
+                        }`}>
+                          {party.mondayFinal || 'No'}
+                        </span>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        {formatNumber(party.agentLD)}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        {formatNumber(party.agentMCommi)}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        {party.thirdParty || ''}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        {formatNumber(party.thirdPartyLD)}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        {formatNumber(party.thirdPartyMCommi)}
-                      </td>
+
                     </tr>
                   ))
                 )}

@@ -32,11 +32,27 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
+      console.error('❌ HTTP Error:', {
+        status: response.status,
+        statusText: response.statusText,
+        endpoint,
+        url,
+        errorData
+      });
       throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
     }
     
-    return await response.json();
+    const responseData = await response.json();
+    return responseData;
   } catch (error: any) {
+    console.error('💥 API Call Error:', {
+      name: error.name,
+      message: error.message,
+      endpoint,
+      url,
+      stack: error.stack
+    });
+    
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
       throw new Error('Network error. Please check your connection.');
     }
@@ -71,7 +87,7 @@ export const newPartyAPI = {
 };
 
 export const partyLedgerAPI = {
-  getAllParties: () => apiCall<Party[]>('/party-ledger/parties'),
+  getAllParties: () => apiCall<Party[]>('/parties'),
   getPartyLedger: (partyName: string) => apiCall<LedgerEntry[]>(`/party-ledger/${encodeURIComponent(partyName)}`),
   addEntry: (entryData: LedgerEntryInput) => apiCall<LedgerEntry>('/party-ledger/entry', {
     method: 'POST',
@@ -84,7 +100,7 @@ export const partyLedgerAPI = {
   deleteEntry: (id: string) => apiCall<{ message: string }>(`/party-ledger/entry/${id}`, {
     method: 'DELETE',
   }),
-  deleteParties: (partyNames: string[]) => apiCall<{ deleted: number }>('/party-ledger/parties', {
+  deleteParties: (partyNames: string[]) => apiCall<{ deleted: number }>('/parties', {
     method: 'DELETE',
     body: JSON.stringify({ partyNames }),
   }),
@@ -112,8 +128,8 @@ export const partyLedgerAPI = {
 };
 
 export const userSettingsAPI = {
-  getSettings: (userId: string) => apiCall<UserSettings>(`/user-settings/${userId}`),
-  updateSettings: (userId: string, settings: Partial<UserSettings>) => apiCall<UserSettings>(`/user-settings/${userId}`, {
+  getSettings: (userId: string) => apiCall<UserSettings>(`/settings/${userId}`),
+  updateSettings: (userId: string, settings: Partial<UserSettings>) => apiCall<UserSettings>(`/settings/${userId}`, {
     method: 'PUT',
     body: JSON.stringify(settings),
   }),

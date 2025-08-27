@@ -22,7 +22,7 @@ import TopNavigation from '../components/TopNavigation';
 import { Link } from 'react-router-dom';
 import { Settings, FileText, BarChart3, Users, TrendingUp, DollarSign, LogIn, UserPlus, ArrowRight, Plus, ChartBar, Calculator } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { dashboardAPI } from '@/lib/api';
+import { dashboardAPI, userSettingsAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
 interface DashboardStats {
@@ -78,10 +78,35 @@ const Index = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(false);
+  const [companyAccount, setCompanyAccount] = useState<string>('Company');
+
+  // Load user settings to get company account
+  const loadUserSettings = async () => {
+    if (!isAuthenticated) return;
+    
+    try {
+      // Get user ID from context or localStorage
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      if (user.id) {
+        const settingsResponse = await userSettingsAPI.getSettings(user.id);
+        if (settingsResponse.success && settingsResponse.data?.company_account) {
+          setCompanyAccount(settingsResponse.data.company_account);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading user settings:', error);
+      // Keep default company name
+    }
+  };
 
   // Fetch dashboard statistics
   const fetchDashboardStats = async () => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated) {
+      // Don't make API calls if user is not authenticated
+      setStats(null);
+      setRecentActivity([]);
+      return;
+    }
     
     setLoading(true);
     try {
@@ -91,12 +116,7 @@ const Index = () => {
       ]);
       
       if (statsResponse.success) {
-        console.log('📊 Frontend Received Dashboard Data:', statsResponse.data);
-        console.log('📈 Overview Data:', statsResponse.data.overview);
-        console.log('💰 Total Balance:', statsResponse.data.overview?.totalBalance);
-        console.log('📊 Total Parties:', statsResponse.data.overview?.totalParties);
-        console.log('📝 Total Transactions:', statsResponse.data.overview?.totalTransactions);
-        console.log('💳 Company Balance Data:', statsResponse.data.companyBalance);
+        // Dashboard data received successfully
         setStats(statsResponse.data);
       } else {
         console.error('❌ Dashboard API Error:', statsResponse);
@@ -122,9 +142,10 @@ const Index = () => {
     }
   };
 
-  // Load stats when component mounts
+  // Load stats and user settings when component mounts
   useEffect(() => {
     fetchDashboardStats();
+    loadUserSettings();
   }, [isAuthenticated]);
 
   // Format currency
@@ -278,16 +299,16 @@ const Index = () => {
         ) : (
           // Dashboard - Logged In User
           <>
-            {/* Company Balance Dashboard */}
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">AQC Company Balance</h2>
-                {stats?.companyBalance?.autoCalculated && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-1">
-                    <span className="text-xs font-medium text-blue-700">Auto Calculated</span>
-                  </div>
-                )}
-              </div>
+            {/* Balance Dashboard */}
+                         <div className="mb-8">
+               <div className="flex items-center justify-between mb-6">
+                 <h2 className="text-2xl font-bold text-gray-900">{companyAccount} Balance</h2>
+                 {stats?.companyBalance?.autoCalculated && (
+                   <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-1">
+                     <span className="text-xs font-medium text-blue-700">Auto Calculated</span>
+                   </div>
+                 )}
+               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white p-6">
                   <div className="flex items-center justify-between">
@@ -373,9 +394,9 @@ const Index = () => {
                     <TrendingUp className="w-6 h-6 text-green-600" />
                   </div>
                 </div>
-                <div className="mt-4">
-                  <span className="text-sm text-gray-500">Money received by AQC</span>
-                </div>
+                                 <div className="mt-4">
+                   <span className="text-sm text-gray-500">Money received by {companyAccount}</span>
+                 </div>
               </div>
 
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -390,9 +411,9 @@ const Index = () => {
                     <BarChart3 className="w-6 h-6 text-red-600" />
                   </div>
                 </div>
-                <div className="mt-4">
-                  <span className="text-sm text-gray-500">Money paid by AQC</span>
-                </div>
+                                 <div className="mt-4">
+                   <span className="text-sm text-gray-500">Money paid by {companyAccount}</span>
+                 </div>
               </div>
 
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">

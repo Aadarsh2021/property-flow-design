@@ -328,7 +328,7 @@ const Register = () => {
 
     try {
       // Step 1: Create Firebase user account (Authentication)
-      console.log('🔥 Creating Firebase user for authentication...');
+      // Creating Firebase user for authentication...
       const firebaseResult = await signUpWithEmail(
         formData.email.trim().toLowerCase(),
         formData.password
@@ -339,7 +339,7 @@ const Register = () => {
         return;
       }
 
-      console.log('✅ Firebase user created successfully (Authentication)');
+              // Firebase user created successfully (Authentication)
 
       // Step 2: Format phone number
       const cleanPhone = formData.phone.replace(/\D/g, '');
@@ -356,7 +356,7 @@ const Register = () => {
       }
       
       // Step 3: Create user in PostgreSQL (Business Data)
-      console.log('🗄️ Creating user in PostgreSQL for business data...');
+              // Creating user in PostgreSQL for business data...
       const response = await authAPI.register({
         fullname: formData.fullname.trim(),
         email: formData.email.trim().toLowerCase(),
@@ -365,7 +365,7 @@ const Register = () => {
       });
       
       if (response.success) {
-        console.log('✅ PostgreSQL user created successfully (Business Data)');
+        // PostgreSQL user created successfully (Business Data)
         
         // Step 4: Auto-login after successful registration
         login(response.data.token, response.data.user);
@@ -412,7 +412,7 @@ const Register = () => {
     setError('');
     
     try {
-      console.log('🔐 Starting Google registration...');
+              // Starting Google registration...
       
       // Step 1: Authenticate with Google via Firebase
       const googleResult = await signInWithGoogle();
@@ -423,7 +423,7 @@ const Register = () => {
         return;
       }
 
-      console.log('✅ Google authentication successful:', googleResult.user);
+              // Google authentication successful
       
       // Step 2: Check if user already exists
       const userEmail = googleResult.user.email;
@@ -445,7 +445,7 @@ const Register = () => {
          });
         
         if (createResponse.success) {
-          console.log('✅ Google user account created successfully');
+          // Google user account created successfully
           
           // Login with newly created account
           login(createResponse.data.token, createResponse.data.user);
@@ -465,7 +465,7 @@ const Register = () => {
         
         // If backend is not available, create a temporary session
         if (backendError.message.includes('Network error') || backendError.message.includes('Failed to fetch')) {
-          console.log('⚠️ Backend unavailable, creating temporary session...');
+          // Backend unavailable, creating temporary session...
           
           // Create temporary user object from Google data
           const tempUser = {

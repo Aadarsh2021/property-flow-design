@@ -17,7 +17,7 @@ export const usePerformance = (componentName: string) => {
     mountTime.current = endTime - startTime.current;
     
     if (import.meta.env.DEV) {
-      console.log(`🚀 ${componentName} mounted in ${mountTime.current}ms`);
+      // Component mounted successfully
     }
   }, []);
 

@@ -48,7 +48,21 @@ const Login = () => {
   const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
 
   // Get the page user was trying to access
-  const from = location.state?.from?.pathname || '/user-settings';
+  const from = location.state?.from?.pathname || '/dashboard';
+
+  // Redirect authenticated users to dashboard
+  useEffect(() => {
+    if (login && typeof login === 'function') {
+      // Check if user is already authenticated
+      const token = localStorage.getItem('token');
+      const user = localStorage.getItem('user');
+      
+      if (token && user) {
+        // User is already authenticated, redirect to dashboard
+        navigate('/dashboard', { replace: true });
+      }
+    }
+  }, [login, navigate]);
 
   // Validation function
   const validateField = useCallback((name: string, value: string) => {
@@ -167,7 +181,7 @@ const Login = () => {
     setError('');
     
     try {
-      console.log('🔐 Starting Google authentication...');
+      // Starting Google authentication...
       
       // Step 1: Authenticate with Google via Firebase
       const googleResult = await signInWithGoogle();
@@ -178,7 +192,7 @@ const Login = () => {
         return;
       }
 
-      console.log('✅ Google authentication successful:', googleResult.user);
+              // Google authentication successful
       
       // Step 2: Check if user exists in PostgreSQL backend
       const userEmail = googleResult.user.email;
@@ -197,7 +211,7 @@ const Login = () => {
         });
         
         if (response.success) {
-          console.log('✅ Backend authentication successful');
+          // Backend authentication successful
           
           // Use AuthContext to handle login
           login(response.data.token, response.data.user);
@@ -211,7 +225,7 @@ const Login = () => {
           navigate(from, { replace: true });
         } else {
           // User doesn't exist in backend, create account
-          console.log('📝 Creating new user account for Google user...');
+          // Creating new user account for Google user...
           
           const createResponse = await authAPI.register({
             fullname: googleResult.user.displayName || 'Google User',
@@ -223,7 +237,7 @@ const Login = () => {
           });
           
           if (createResponse.success) {
-            console.log('✅ New user account created successfully');
+            // New user account created successfully
             
             // Login with newly created account
             login(createResponse.data.token, createResponse.data.user);
@@ -243,7 +257,7 @@ const Login = () => {
         
         // If backend is not available, create a temporary session
         if (backendError.message.includes('Network error') || backendError.message.includes('Failed to fetch')) {
-          console.log('⚠️ Backend unavailable, creating temporary session...');
+          // Backend unavailable, creating temporary session...
           
           // Create temporary user object from Google data
           const tempUser = {
@@ -325,7 +339,7 @@ const Login = () => {
 
     try {
       // Step 1: Authenticate with Firebase (Authentication)
-      console.log('🔥 Authenticating with Firebase...');
+      // Authenticating with Firebase...
       const firebaseResult = await signInWithEmail(email, password);
       
       if (!firebaseResult.success) {
@@ -334,17 +348,17 @@ const Login = () => {
         return;
       }
 
-      console.log('✅ Firebase authentication successful');
+              // Firebase authentication successful
 
       // Step 2: Authenticate with PostgreSQL (Business Data)
-      console.log('🗄️ Authenticating with PostgreSQL...');
+              // Authenticating with PostgreSQL...
       const response = await authAPI.login({
         email: email,
         password: password
       });
       
       if (response.success) {
-        console.log('✅ PostgreSQL authentication successful');
+        // PostgreSQL authentication successful
         
         // Use AuthContext to handle login
         login(response.data.token, response.data.user);

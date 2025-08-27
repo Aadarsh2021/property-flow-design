@@ -42,7 +42,7 @@ const PartyLedger = () => {
 
   // Helper function to format party display name
   const formatPartyDisplayName = (party: Party) => {
-    return party.party_name || party.name || 'Unknown Party';
+    return party.partyName || party.party_name || party.name || 'Unknown Party';
   };
 
   // Helper function to extract party name from display format
@@ -52,7 +52,7 @@ const PartyLedger = () => {
 
   // Helper function to find party by display name
   const findPartyByDisplayName = (displayName: string) => {
-    return parties.find(party => (party.party_name || party.name) === displayName);
+    return parties.find(party => (party.partyName || party.party_name || party.name) === displayName);
   };
 
   useEffect(() => {
@@ -71,9 +71,11 @@ const PartyLedger = () => {
     setLoading(true);
     try {
       const response = await partyLedgerAPI.getAllParties();
+      
       if (response.success) {
         setParties(response.data || []);
       } else {
+        console.error('❌ API returned error:', response.message);
         toast({
           title: 'Error',
           description: response.message || 'Failed to fetch parties.',
@@ -81,6 +83,7 @@ const PartyLedger = () => {
         });
       }
     } catch (error) {
+      console.error('💥 Exception occurred while fetching parties:', error);
       toast({
         title: 'Error',
         description: 'Failed to fetch parties.',
@@ -89,7 +92,7 @@ const PartyLedger = () => {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, isAuthenticated, user]);
 
   useEffect(() => {
     fetchParties();
@@ -111,7 +114,7 @@ const PartyLedger = () => {
     if (selectedParties.length === filteredParties.length) {
       setSelectedParties([]);
     } else {
-      setSelectedParties(filteredParties.map((party) => party.party_name || party.name));
+      setSelectedParties(filteredParties.map((party) => party.partyName || party.party_name || party.name));
     }
   };
 
@@ -125,7 +128,7 @@ const PartyLedger = () => {
     try {
       // Only process parties that haven't been settled yet
       const unsettledParties = parties.filter(party => party.mondayFinal !== 'Yes');
-      const unsettledPartyNames = unsettledParties.map(party => party.party_name || party.name);
+      const unsettledPartyNames = unsettledParties.map(party => party.partyName || party.party_name || party.name);
       
       if (unsettledParties.length === 0) {
         toast({
@@ -241,10 +244,10 @@ const PartyLedger = () => {
                 </tr>
               ) : (
                 filteredParties.map((party) => (
-                  <tr key={party.party_name || party.name} className="hover:bg-blue-50 cursor-pointer">
-                    <td className="border border-gray-300 px-2 py-1 font-medium" onClick={() => navigate(`/account-ledger/${encodeURIComponent(party.party_name || party.name)}`)}>{formatPartyDisplayName(party)}</td>
+                  <tr key={party.partyName || party.party_name || party.name} className="hover:bg-blue-50 cursor-pointer">
+                    <td className="border border-gray-300 px-2 py-1 font-medium" onClick={() => navigate(`/account-ledger/${encodeURIComponent(party.partyName || party.party_name || party.name)}`)}>{formatPartyDisplayName(party)}</td>
                     <td className="border border-gray-300 px-2 py-1 text-center text-sm">
-                      {party.companyName || party.party_name || party.name || 'N/A'}
+                      {party.partyName || party.party_name || party.name || 'N/A'}
                     </td>
                     <td className="border border-gray-300 px-2 py-1 text-center text-sm">
                       <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
@@ -261,8 +264,8 @@ const PartyLedger = () => {
                     <td className="border border-gray-300 px-2 py-1 text-center">
                       <input
                         type="checkbox"
-                        checked={selectedParties.includes(party.party_name || party.name)}
-                        onChange={(e) => handleCheckboxChange(party.party_name || party.name, e.target.checked)}
+                        checked={selectedParties.includes(party.partyName || party.party_name || party.name)}
+                        onChange={(e) => handleCheckboxChange(party.partyName || party.party_name || party.name, e.target.checked)}
                         onClick={(e) => e.stopPropagation()}
                       />
                     </td>

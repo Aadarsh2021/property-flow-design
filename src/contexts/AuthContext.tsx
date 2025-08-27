@@ -85,10 +85,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = (newToken: string, newUser: User) => {
     try {
+      // Ensure user has an id field (map from _id if needed)
+      const userWithId = {
+        ...newUser,
+        id: newUser.id || newUser._id || ''
+      };
+      
       setToken(newToken);
-      setUser(newUser);
+      setUser(userWithId);
       localStorage.setItem('token', newToken);
-      localStorage.setItem('user', JSON.stringify(newUser));
+      localStorage.setItem('user', JSON.stringify(userWithId));
     } catch (error) {
       console.error('Error saving auth data:', error);
     }

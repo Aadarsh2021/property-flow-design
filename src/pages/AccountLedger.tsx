@@ -13,8 +13,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { newPartyAPI } from '@/lib/api';
-import { partyLedgerAPI } from '@/lib/api';
+import { newPartyAPI, partyLedgerAPI, userSettingsAPI } from '@/lib/api';
 import { Party, LedgerEntry, LedgerData } from '@/types';
 import { debounce } from 'lodash'; // Add lodash for debouncing
 
@@ -86,12 +85,32 @@ const AccountLedger = () => {
   
   // Track if user manually entered commission amount
   const [isManualCommissionAmount, setIsManualCommissionAmount] = useState(false);
+  
+  // Company account from user settings
+  const [companyAccount, setCompanyAccount] = useState<string>('Company');
+
+  // Load user settings to get company account
+  const loadUserSettings = useCallback(async () => {
+    try {
+      // Get user ID from localStorage
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      if (user.id) {
+        const settingsResponse = await userSettingsAPI.getSettings(user.id);
+        if (settingsResponse.success && settingsResponse.data?.companyAccount) {
+          setCompanyAccount(settingsResponse.data.companyAccount);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading user settings:', error);
+      // Keep default company name
+    }
+  }, []);
 
   // Load available parties for dropdown
   const loadAvailableParties = useCallback(async () => {
     setPartiesLoading(true);
     try {
-      const response = await newPartyAPI.getAll();
+      const response = await partyLedgerAPI.getAllParties();
       if (response.success) {
         // Map backend party data to frontend Party type
         const mappedParties = (response.data || []).map((party: any) => ({
@@ -106,8 +125,9 @@ const AccountLedger = () => {
           mondayFinal: party.mondayFinal || party.monday_final || 'No',
           companyName: party.companyName || party.company_name || party.party_name || party.partyName
         }));
-        // Add virtual parties (Commission and AQC) for transaction creation
-        const virtualParties = [
+        
+        // Create virtual parties with current company account
+        const createVirtualParties = () => [
           {
             _id: 'virtual_commission',
             name: 'Commission',
@@ -119,8 +139,8 @@ const AccountLedger = () => {
             mondayFinal: 'No' as 'No'
           },
           {
-            _id: 'virtual_aqc',
-            name: 'AQC',
+            _id: 'virtual_company',
+            name: companyAccount,
             srNo: 998,
             status: 'Active',
             mCommission: 'With Commission',
@@ -130,25 +150,16 @@ const AccountLedger = () => {
           }
         ];
         
+        // Add virtual parties (Commission and Company) for transaction creation
+        const virtualParties = createVirtualParties();
+        
         // Combined parties for different purposes
         const allPartiesWithVirtual = [...mappedParties, ...virtualParties];
-        
-        console.log('🔍 Parties loaded:', {
-          backendData: response.data,
-          mappedParties,
-          virtualParties,
-          allPartiesWithVirtual
-        });
         
         setAvailableParties(mappedParties); // Only real parties for top selection
         setAllPartiesForTransaction(allPartiesWithVirtual); // Store all parties for transaction dropdown
         setFilteredParties(allPartiesWithVirtual); // All parties (including virtual) for bottom dropdown
         setFilteredTopParties(mappedParties); // Only real parties for top dropdown
-        
-        console.log('📊 State updated:', {
-          availableParties: mappedParties.length,
-          filteredTopParties: mappedParties.length
-        });
       } else {
         console.error('❌ Failed to load parties:', response.message);
         toast({
@@ -167,7 +178,7 @@ const AccountLedger = () => {
     } finally {
       setPartiesLoading(false);
     }
-  }, [toast]);
+  }, [toast, companyAccount]);
 
   // State for storing all parties including virtual ones for bottom dropdown
   const [allPartiesForTransaction, setAllPartiesForTransaction] = useState<Party[]>([]);
@@ -317,10 +328,10 @@ const AccountLedger = () => {
           // Set commission amount based on selected party's commission system
           let finalAmount = 0;
           if (selectedParty.commiSystem === 'Take') {
-            // Take System: AQC takes commission from party → Party debit (negative)
+            // Take System: Company takes commission from party → Party debit (negative)
             finalAmount = -commissionAmount;
           } else if (selectedParty.commiSystem === 'Give') {
-            // Give System: AQC gives commission to party → Party credit (positive)
+            // Give System: Company gives commission to party → Party credit (positive)
             finalAmount = commissionAmount;
           } else {
             // Default system: opposite logic based on last transaction
@@ -405,13 +416,10 @@ const AccountLedger = () => {
     }
     
     try {
-      console.log('🔄 Loading ledger data for party:', selectedPartyName);
       const response = await partyLedgerAPI.getPartyLedger(selectedPartyName);
       
       if (response.success && response.data) {
         const responseData = response.data as any; // Type assertion for API response
-        
-        console.log('🔍 Raw API Response Data:', responseData);
         
         // Transform backend data to frontend format
         const transformEntry = (entry: any) => ({
@@ -452,40 +460,25 @@ const AccountLedger = () => {
           }
         };
         
-        console.log('🔍 Transformed Data:', transformedData);
-        console.log('🔍 Ledger Entries Details:', transformedData.ledgerEntries.map(entry => ({
-          id: entry.id,
-          remarks: entry.remarks,
-          credit: entry.credit,
-          debit: entry.debit,
-          tnsType: entry.tnsType
-        })));
-        
         setLedgerData(transformedData);
-        
-        // Debug auto-view logic
-        console.log('🔍 Auto-view logic check:', {
-          ledgerEntriesLength: transformedData.ledgerEntries.length,
-          oldRecordsLength: transformedData.oldRecords.length,
-          shouldEnableOldRecords: transformedData.ledgerEntries.length === 0 && transformedData.oldRecords.length > 0
-        });
         
         // Auto-enable old records view if all transactions are settled
         if (transformedData.ledgerEntries.length === 0 && transformedData.oldRecords.length > 0) {
           setShowOldRecords(true);
-          console.log('🔄 Auto-enabling old records view - all transactions settled');
         } else if (transformedData.ledgerEntries.length > 0) {
           // If there are current entries (like settlement transactions), show current records
           setShowOldRecords(false);
-          console.log('🔄 Auto-enabling current records view - settlement transactions exist');
         }
         
         // Force table refresh after data update
         setTableRefreshKey(prev => prev + 1);
-        
-        console.log('✅ Ledger data loaded successfully:', transformedData);
       } else {
-        console.error('❌ Failed to load ledger data:', response.message);
+        console.error('❌ Failed to load ledger data:', {
+          message: response.message,
+          success: response.success,
+          data: response.data,
+          partyName: selectedPartyName
+        });
         toast({
           title: "Error",
           description: response.message || "Failed to load ledger data",
@@ -493,7 +486,11 @@ const AccountLedger = () => {
         });
       }
     } catch (error: any) {
-      console.error('❌ Error loading ledger data:', error);
+      console.error('❌ Error loading ledger data:', {
+        error: error.message,
+        partyName: selectedPartyName,
+        stack: error.stack
+      });
       toast({
         title: "Error",
         description: "Failed to load ledger data",
@@ -577,7 +574,7 @@ const AccountLedger = () => {
               const tType = entry.tnsType;
               const r = entry.remarks || '';
               if (tType === 'Monday Settlement') return false;
-              if (r === 'AQC' || r === 'Commission') return false;
+              if (r === companyAccount || r === 'Commission') return false;
               return isTakeSystem ? tType === 'CR' : tType === 'DR';
             });
 
@@ -629,7 +626,7 @@ const AccountLedger = () => {
           if (transactionCount === 0) {
             const transactionType = currentParty.commiSystem === 'Take' ? 'CR' : 'DR';
             notificationMessage += `\n⚠️ No applicable ${transactionType} transactions found. Commission set to 0.`;
-            notificationMessage += `\n💡 Only ${transactionType} transactions (excluding AQC, Commission, Monday Settlement) are considered.`;
+            notificationMessage += `\n💡 Only ${transactionType} transactions (excluding ${companyAccount}, Commission, Monday Settlement) are considered.`;
           } else if (transactionCount === 1) {
             const transactionType = currentParty.commiSystem === 'Take' ? 'CR' : 'DR';
             notificationMessage += `\n📊 Based on 1 ${transactionType} transaction: ₹${totalTransactionAmount.toLocaleString()}`;
@@ -856,7 +853,6 @@ const AccountLedger = () => {
 
         // 3. Monday Final Check - Only show warning, not alert
         if (selectedParty.mondayFinal === 'Yes') {
-          console.log('🔍 Party already settled for Monday Final:', selectedPartyName);
           // Don't show alert - user already knows party is settled
         }
       }
@@ -868,7 +864,7 @@ const AccountLedger = () => {
           allPartiesForTransaction.some(party => party.name === newEntry.partyName.trim()) &&
           !newEntry.remarks && // Only trigger if remarks is empty
           newEntry.partyName.trim().toLowerCase() !== 'commission' && // Don't trigger for commission
-          newEntry.partyName.trim().toLowerCase() !== 'aqc' && // Don't trigger for AQC
+                      newEntry.partyName.trim().toLowerCase() !== companyAccount.toLowerCase() && // Don't trigger for Company
           newEntry.partyName.trim().toLowerCase() !== 'company' && // Don't trigger for company
           newEntry.partyName.trim().toLowerCase() !== 'settlement'; // Don't trigger for settlement
 
@@ -893,12 +889,7 @@ const AccountLedger = () => {
           return;
         }
 
-        console.log('🔄 Processing dual-party transaction:', {
-          from: selectedPartyName,
-          to: otherPartyName,
-          amount: Math.abs(amount),
-          type: tnsType
-        });
+
 
         // Create only 2 entries for dual-party transaction
         const entries = [];
@@ -950,9 +941,9 @@ const AccountLedger = () => {
             const commissionAmount = (Math.abs(amount) * rate) / 100;
             
             if (selectedParty.commiSystem === 'Take') {
-              successMessage += `\n💼 AQC takes ₹${commissionAmount.toLocaleString()} (${rate}%) commission`;
+              successMessage += `\n💼 ${companyAccount} takes ₹${commissionAmount.toLocaleString()} (${rate}%) commission`;
             } else if (selectedParty.commiSystem === 'Give') {
-              successMessage += `\n💼 AQC pays ₹${commissionAmount.toLocaleString()} (${rate}%) incentive`;
+              successMessage += `\n💼 ${companyAccount} pays ₹${commissionAmount.toLocaleString()} (${rate}%) incentive`;
             }
           }
           
@@ -1008,12 +999,12 @@ const AccountLedger = () => {
             
             // Waterfall Commission Logic
             if (selectedParty.commiSystem === 'Take') {
-              // AQC takes commission from client (e.g., RAJ RTGS)
+              // Company takes commission from client (e.g., RAJ RTGS)
               const netAmount = Math.abs(amount) - commissionAmount;
-              waterfallDetails = `AQC takes ₹${commissionAmount.toLocaleString()} (${rate}%) from ₹${Math.abs(amount).toLocaleString()}. Net payment: ₹${netAmount.toLocaleString()}`;
+              waterfallDetails = `${companyAccount} takes ₹${commissionAmount.toLocaleString()} (${rate}%) from ₹${Math.abs(amount).toLocaleString()}. Net payment: ₹${netAmount.toLocaleString()}`;
             } else if (selectedParty.commiSystem === 'Give') {
-              // AQC gives commission to vendor (e.g., SS Enterprise)
-              waterfallDetails = `AQC pays ₹${commissionAmount.toLocaleString()} (${rate}%) incentive to vendor. Total transaction: ₹${Math.abs(amount).toLocaleString()}`;
+              // Company gives commission to vendor (e.g., SS Enterprise)
+              waterfallDetails = `${companyAccount} pays ₹${commissionAmount.toLocaleString()} (${rate}%) incentive to vendor. Total transaction: ₹${Math.abs(amount).toLocaleString()}`;
             }
           }
         }
@@ -1048,12 +1039,12 @@ const AccountLedger = () => {
           let commissionTnsType = '';
           
           if (selectedParty.commiSystem === 'Take') {
-            // Take System: AQC takes commission from party
-            // Party DR (debit) → Commission CR (AQC receives commission)
+            // Take System: Company takes commission from party
+            // Party DR (debit) → Commission CR (Company receives commission)
             commissionTnsType = 'CR';
           } else if (selectedParty.commiSystem === 'Give') {
-            // Give System: AQC gives commission to party
-            // AQC DR (debit) → Commission DR (debit from AQC)
+            // Give System: Company gives commission to party
+            // Company DR (debit) → Commission DR (debit from Company)
             commissionTnsType = 'DR';
           } else {
             // Default: opposite logic (backward compatibility)
@@ -1063,9 +1054,9 @@ const AccountLedger = () => {
           // Commission is a virtual concept, not an actual party
           const systemType = selectedParty.commiSystem || 'Default';
           const flowDescription = selectedParty.commiSystem === 'Take' 
-            ? 'AQC takes commission from party'
+            ? `${companyAccount} takes commission from party`
             : selectedParty.commiSystem === 'Give'
-            ? 'AQC gives commission to party'
+            ? `${companyAccount} gives commission to party`
             : 'Standard flow';
             
           toast({
@@ -1145,12 +1136,10 @@ const AccountLedger = () => {
       await loadLedgerData(false);
       
       // Enhanced balance refresh with multiple attempts
-      console.log('🔄 Refreshing balance column...');
       await refreshBalanceColumn();
       
       // Additional refresh after a delay to ensure backend processing
       setTimeout(async () => {
-        console.log('🔄 Final balance refresh...');
         await refreshBalanceColumn();
       }, 2000);
     } catch (error: any) {
@@ -1168,15 +1157,11 @@ const AccountLedger = () => {
   // Enhanced balance refresh function
   const refreshBalanceColumn = async () => {
     try {
-      console.log('💰 Refreshing balance column for party:', selectedPartyName);
-      
       // Reload ledger data to get updated balances
       await loadLedgerData(false);
       
       // Force table re-render
       setForceUpdate(prev => prev + 1);
-      
-      console.log('✅ Balance column refreshed successfully!');
     } catch (error) {
       console.error('❌ Balance refresh error:', error);
     }
@@ -1226,21 +1211,11 @@ const AccountLedger = () => {
         tnsType: editingEntry.tnsType
       };
       
-      console.log('🔍 Sending Update Data:', updateData);
-      console.log('🔍 Modified Entry Data:', editingEntry);
-      console.log('🔍 Entry ID:', entryId);
-      console.log('🔍 Transaction Type:', editingEntry.tnsType);
-      console.log('🔍 Credit Amount:', editingEntry.credit);
-      console.log('🔍 Debit Amount:', editingEntry.debit);
-      
       const response = await partyLedgerAPI.updateEntry(entryId, updateData as any);
-      console.log('🔍 API Response:', response);
       
       if (response.success) {
-        console.log('✅ Entry modified successfully, refreshing data...');
         // Reload data without showing loading spinner
         await loadLedgerData(false);
-        console.log('✅ Data refreshed, clearing UI state...');
         
         // Clear UI state
         setEditingEntry(null);
@@ -1316,16 +1291,7 @@ const AccountLedger = () => {
       const mondayFinalEntries = entriesToDelete.filter(entry => entry.remarks?.includes('Monday Final Settlement'));
       const regularEntries = entriesToDelete.filter(entry => !entry.remarks?.includes('Monday Final Settlement'));
 
-      // Strategic logging for Monday Final detection debugging
-      if (entriesToDelete.length > 0) {
-        console.log('🔍 Monday Final Detection Debug:', {
-          totalEntries: entriesToDelete.length,
-          mondayFinalCount: mondayFinalEntries.length,
-          regularCount: regularEntries.length,
-          firstEntryRemarks: entriesToDelete[0].remarks,
-          hasRemarks: !!entriesToDelete[0].remarks
-        });
-      }
+
 
       let successCount = 0;
       let errorCount = 0;
@@ -1425,7 +1391,6 @@ const AccountLedger = () => {
       // Reload data with proper delay for Monday Final deletions
       if (mondayFinalEntries.length > 0) {
         // For Monday Final deletions, add a delay and force refresh
-        console.log('🔄 Monday Final deleted - performing enhanced refresh...');
         
         // Wait a bit for database to fully update
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -1438,8 +1403,6 @@ const AccountLedger = () => {
         
         // Clear view state to ensure proper rendering
         setShowOldRecords(false);
-        
-        console.log('✅ Enhanced refresh completed for Monday Final deletion');
       } else {
         // Regular deletion - standard refresh
         await loadLedgerData(false);
@@ -1461,10 +1424,7 @@ const AccountLedger = () => {
 
   // Handle Monday Final settlement
   const handleMondayFinal = async () => {
-    console.log('🔍 handleMondayFinal called with selectedPartyName:', selectedPartyName);
-    
     if (!selectedPartyName) {
-      console.log('❌ No selectedPartyName, showing error toast');
       toast({
         title: "Error",
         description: "Please select a party first",
@@ -1473,10 +1433,8 @@ const AccountLedger = () => {
       return;
     }
     
-    console.log('✅ Party selected, proceeding with Monday Final...');
     setActionLoading(true);
     try {
-      console.log('🔄 Starting Monday Final for party:', selectedPartyName);
       
       const response = await partyLedgerAPI.updateMondayFinal([selectedPartyName]);
       
@@ -1486,7 +1444,7 @@ const AccountLedger = () => {
           description: `Settlement completed! ${response.data?.settledEntries || 0} transactions settled.`,
         });
         
-        console.log('🔄 Monday Final completed, response:', response.data);
+        // Monday Final completed successfully
         
         // Close the modal
         setShowMondayFinalModal(false);
@@ -1499,7 +1457,6 @@ const AccountLedger = () => {
         }));
         
         // 2. Immediate reload for fast response
-        console.log('🔄 Reloading ledger data immediately...');
         await loadLedgerData(false);
         
         // 3. Force table re-render immediately
@@ -1514,12 +1471,9 @@ const AccountLedger = () => {
         
         // 6. Quick final refresh (reduced from 1500ms to 200ms)
         setTimeout(async () => {
-          console.log('🔄 Quick final refresh...');
           await loadLedgerData(false);
           setForceUpdate(prev => prev + 1);
           setTableRefreshKey(prev => prev + 1);
-          
-          console.log('✅ Monday Final table refresh completed!');
         }, 200); // Reduced from 1500ms to 200ms
         
       } else {
@@ -1572,12 +1526,20 @@ const AccountLedger = () => {
 
   // Load data on component mount
   useEffect(() => {
+    loadUserSettings(); // Load company account first
     loadAvailableParties();
     // Load initial ledger data if party name is available
     if (selectedPartyName) {
       loadLedgerData(true);
     }
   }, [selectedPartyName]); // Removed loadAvailableParties from dependency to prevent infinite re-renders
+
+  // Reload parties when company account changes
+  useEffect(() => {
+    if (companyAccount !== 'Company') {
+      loadAvailableParties();
+    }
+  }, [companyAccount]);
 
   // Handle click outside to close dropdown
   useEffect(() => {
@@ -1631,15 +1593,6 @@ const AccountLedger = () => {
       ? [...(ledgerData.oldRecords || []), ...(ledgerData.ledgerEntries?.filter(entry => entry.remarks?.includes('Monday Final Settlement')) || [])]
       : ledgerData.ledgerEntries || [];
     
-    console.log('🔄 Table re-rendering with entries:', {
-      showOldRecords,
-      ledgerEntriesLength: ledgerData?.ledgerEntries?.length || 0,
-      oldRecordsLength: ledgerData?.oldRecords?.length || 0,
-      memoizedEntriesLength: entries.length,
-      tableRefreshKey,
-      forceUpdate
-    });
-    
     return entries;
   }, [ledgerData, showOldRecords, tableRefreshKey, forceUpdate]);
 
@@ -1687,6 +1640,23 @@ const AccountLedger = () => {
   const displayEntries = showOldRecords 
     ? ledgerData.oldRecords // Backend already provides chronologically sorted old records
     : currentEntries;
+
+  // Check if party is already settled for Monday Final
+  if (ledgerData && ledgerData.oldRecords.length > 0) {
+    const mondayFinalEntries = ledgerData.oldRecords.filter(entry => 
+      entry.remarks?.includes('Monday Final Settlement')
+    );
+    
+    if (mondayFinalEntries.length > 0) {
+      // Party is already settled, show message
+      toast({
+        title: "Party Already Settled",
+        description: `${selectedPartyName} is already settled in Monday Final. No new transactions can be added.`,
+        variant: "destructive"
+      });
+      return;
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -2038,9 +2008,7 @@ const AccountLedger = () => {
               
                           <button
               onClick={() => {
-                console.log('🔍 Monday Final button clicked, current modal state:', showMondayFinalModal);
                 setShowMondayFinalModal(true);
-                console.log('🔍 Modal state set to true');
               }}
               disabled={actionLoading}
               className="w-full px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
@@ -2178,10 +2146,9 @@ const AccountLedger = () => {
       )}
 
       {/* Original AlertDialog - Commented Out for Testing */}
-      {/* <AlertDialog open={showMondayFinalModal} onOpenChange={(open) => {
-        console.log('🔍 Modal onOpenChange called with:', open);
-        setShowMondayFinalModal(open);
-      }}>
+      {/* <AlertDialog open={showMondayFinalModal}         onOpenChange={(open) => {
+          setShowMondayFinalModal(open);
+        }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Monday Final Settlement</AlertDialogTitle>

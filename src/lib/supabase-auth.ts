@@ -14,7 +14,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 // Email/Password Authentication functions
 export const signUpWithEmail = async (email: string, password: string) => {
   try {
-    console.log('🔥 Creating Supabase user...');
+    // Creating Supabase user...
     const { data, error } = await supabase.auth.signUp({
       email: email.toLowerCase(),
       password: password,
@@ -28,7 +28,7 @@ export const signUpWithEmail = async (email: string, password: string) => {
       };
     }
 
-    console.log('✅ Supabase user created successfully');
+          // Supabase user created successfully
     return {
       success: true,
       user: data.user
@@ -44,7 +44,7 @@ export const signUpWithEmail = async (email: string, password: string) => {
 
 export const signInWithEmail = async (email: string, password: string) => {
   try {
-    console.log('🔥 Authenticating with Supabase...');
+    // Authenticating with Supabase...
     const { data, error } = await supabase.auth.signInWithPassword({
       email: email.toLowerCase(),
       password: password,
@@ -58,7 +58,7 @@ export const signInWithEmail = async (email: string, password: string) => {
       };
     }
 
-    console.log('✅ Supabase authentication successful');
+          // Supabase authentication successful
     return {
       success: true,
       user: data.user,
