@@ -253,7 +253,7 @@ const AccountLedger = () => {
         if (party._id === 'virtual_company') {
           return {
             ...party,
-            name: companyAccount
+            name: companyName
           };
         }
         return party;
@@ -262,14 +262,14 @@ const AccountLedger = () => {
       setAllPartiesForTransaction(updatedParties);
       setFilteredParties(updatedParties);
     }
-  }, [allPartiesForTransaction, companyAccount]);
+  }, [companyName]);
 
   // Update virtual parties when company account changes
   useEffect(() => {
-    if (companyAccount !== 'Company' && allPartiesForTransaction.length > 0) {
+    if (companyName !== 'Company' && allPartiesForTransaction.length > 0) {
       updateVirtualParties();
     }
-  }, [companyAccount, updateVirtualParties]);
+  }, [companyName, updateVirtualParties]);
 
   // Filter parties based on search input (bottom section) - Exclude current party
   const filterParties = useCallback((searchTerm: string) => {
@@ -1619,7 +1619,7 @@ const AccountLedger = () => {
     } finally {
       setActionLoading(false);
     }
-  }, [selectedPartyName, loadLedgerData]);
+  }, [selectedPartyName]);
 
   // Handle exit functionality
   const handleExit = () => {
