@@ -21,6 +21,7 @@ import { ChevronDown, Settings, FileText, BarChart3, Database, Home, LogOut, Use
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { useCompanyName } from '@/hooks/useCompanyName';
 
 const TopNavigation = () => {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
@@ -28,6 +29,7 @@ const TopNavigation = () => {
   const navigate = useNavigate();
   const { user, logout, isAuthenticated } = useAuth();
   const { toast } = useToast();
+  const { companyName } = useCompanyName();
 
   const toggleDropdown = (dropdown: string) => {
     setActiveDropdown(activeDropdown === dropdown ? null : dropdown);
@@ -43,7 +45,7 @@ const TopNavigation = () => {
       title: "Logged Out",
       description: "You have been successfully logged out.",
     });
-    navigate('/');
+    navigate('/'); // Root path pe Index (Home) page render hoga
   };
 
   return (
@@ -56,22 +58,22 @@ const TopNavigation = () => {
             <div className="flex items-center">
               <Link to="/" className="flex items-center space-x-2">
                 <Database className="w-8 h-8 text-blue-600" />
-                <span className="text-xl font-bold text-gray-900">Account Ledger</span>
+                <span className="text-xl font-bold text-gray-900">{companyName}</span>
               </Link>
             </div>
 
             {/* Navigation Links */}
             <div className="hidden md:flex items-center space-x-8">
-              {/* Menu 1 */}
+              {/* Configure Menu - Only User Settings */}
               <div className="relative">
                 <button
-                  onClick={() => toggleMenuDropdown('menu1')}
+                  onClick={() => toggleMenuDropdown('configure')}
                   className="flex items-center space-x-1 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 px-3 py-2 rounded-md transition-colors"
                 >
                   <span>Configure</span>
                   <ChevronDown className="w-3 h-3" />
                 </button>
-                {activeMenuDropdown === 'menu1' && (
+                {activeMenuDropdown === 'configure' && (
                   <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50">
                     <div className="py-1">
                       <Link
@@ -81,40 +83,21 @@ const TopNavigation = () => {
                       >
                         User Settings
                       </Link>
-                      <div className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900">
-                        Backup
-                      </div>
-                      <div className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900">
-                        Online Backup
-                      </div>
-                      <div className="border-t border-gray-200 my-1"></div>
-                      <div className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900">
-                        Clear Data & Keep Balance
-                      </div>
-                      <div className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900">
-                        Clear All Balance
-                      </div>
-                      <div className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900">
-                        Clear All Programme
-                      </div>
-                      <div className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900">
-                        Clear Backup
-                      </div>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Menu 2 */}
+              {/* Create Menu - Only Essential Items */}
               <div className="relative">
                 <button
-                  onClick={() => toggleMenuDropdown('menu2')}
+                  onClick={() => toggleMenuDropdown('create')}
                   className="flex items-center space-x-1 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 px-3 py-2 rounded-md transition-colors"
                 >
                   <span>Create</span>
                   <ChevronDown className="w-3 h-3" />
                 </button>
-                {activeMenuDropdown === 'menu2' && (
+                {activeMenuDropdown === 'create' && (
                   <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50">
                     <div className="py-1">
                       <Link
@@ -131,38 +114,23 @@ const TopNavigation = () => {
                       >
                         Party Report F1
                       </Link>
-                      <div className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900">
-                        New M F2
-                      </div>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Menu 3 */}
+              {/* Data Entry Menu - Only Essential Items */}
               <div className="relative">
                 <button
-                  onClick={() => toggleMenuDropdown('menu3')}
+                  onClick={() => toggleMenuDropdown('dataEntry')}
                   className="flex items-center space-x-1 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 px-3 py-2 rounded-md transition-colors"
                 >
                   <span>Data Entry</span>
                   <ChevronDown className="w-3 h-3" />
                 </button>
-                {activeMenuDropdown === 'menu3' && (
+                {activeMenuDropdown === 'dataEntry' && (
                   <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50">
                     <div className="py-1">
-                      <div className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900">
-                        M Report F3
-                      </div>
-                      <div className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900">
-                        S Report F4
-                      </div>
-                      <div className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900">
-                        C Report F5
-                      </div>
-                      <div className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900">
-                        T Reports
-                      </div>
                       <Link
                         to="/party-ledger"
                         className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900"
@@ -175,21 +143,18 @@ const TopNavigation = () => {
                 )}
               </div>
 
-              {/* Menu 4 */}
+              {/* Report Menu - Only Essential Items */}
               <div className="relative">
                 <button
-                  onClick={() => toggleMenuDropdown('menu4')}
+                  onClick={() => toggleMenuDropdown('report')}
                   className="flex items-center space-x-1 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 px-3 py-2 rounded-md transition-colors"
                 >
                   <span>Report</span>
                   <ChevronDown className="w-3 h-3" />
                 </button>
-                {activeMenuDropdown === 'menu4' && (
+                {activeMenuDropdown === 'report' && (
                   <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50">
                     <div className="py-1">
-                      <div className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900">
-                        Profit / Loss Report F6
-                      </div>
                       <Link
                         to="/final-trial-balance"
                         className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900"
@@ -197,9 +162,6 @@ const TopNavigation = () => {
                       >
                         Final Trial Balance F12
                       </Link>
-                      <div className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900">
-                        Transaction Report F9
-                      </div>
                     </div>
                   </div>
                 )}

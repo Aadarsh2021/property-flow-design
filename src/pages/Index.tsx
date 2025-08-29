@@ -22,8 +22,9 @@ import TopNavigation from '../components/TopNavigation';
 import { Link } from 'react-router-dom';
 import { Settings, FileText, BarChart3, Users, TrendingUp, DollarSign, LogIn, UserPlus, ArrowRight, Plus, ChartBar, Calculator } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { dashboardAPI, userSettingsAPI } from '@/lib/api';
+import { dashboardAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
+import { useCompanyName } from '@/hooks/useCompanyName';
 
 interface DashboardStats {
   overview: {
@@ -78,26 +79,9 @@ const Index = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(false);
-  const [companyAccount, setCompanyAccount] = useState<string>('Company');
-
-  // Load user settings to get company account
-  const loadUserSettings = async () => {
-    if (!isAuthenticated) return;
-    
-    try {
-      // Get user ID from context or localStorage
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      if (user.id) {
-        const settingsResponse = await userSettingsAPI.getSettings(user.id);
-        if (settingsResponse.success && settingsResponse.data?.company_account) {
-          setCompanyAccount(settingsResponse.data.company_account);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading user settings:', error);
-      // Keep default company name
-    }
-  };
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(5);
+  const { companyName } = useCompanyName();
 
   // Fetch dashboard statistics
   const fetchDashboardStats = async () => {
@@ -129,6 +113,7 @@ const Index = () => {
       
       if (activityResponse.success) {
         setRecentActivity(activityResponse.data);
+        setCurrentPage(1); // Reset to first page when new data loads
       }
     } catch (error) {
       console.error('Dashboard data error:', error);
@@ -142,10 +127,9 @@ const Index = () => {
     }
   };
 
-  // Load stats and user settings when component mounts
+  // Load stats when component mounts
   useEffect(() => {
     fetchDashboardStats();
-    loadUserSettings();
   }, [isAuthenticated]);
 
   // Format currency
@@ -163,7 +147,7 @@ const Index = () => {
 
 
 
-  // Format time ago
+  // Format time ago with real-time updates
   const formatTimeAgo = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -179,6 +163,53 @@ const Index = () => {
     if (diffInDays < 7) return `${diffInDays} days ago`;
     
     return date.toLocaleDateString();
+  };
+
+  // Real-time timing update effect
+  useEffect(() => {
+    if (recentActivity.length === 0) return;
+
+    // Update timing every 10 seconds for more real-time feel
+    const interval = setInterval(() => {
+      // Force re-render to update timing
+      setRecentActivity(prev => [...prev]);
+    }, 10000); // Update every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [recentActivity.length]);
+
+  // Enhanced time formatting with more precision
+  const formatTimeAgoEnhanced = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    
+    if (diffInSeconds < 60) return `${diffInSeconds} seconds ago`;
+    
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    if (diffInMinutes < 60) return `${diffInMinutes} minutes ago`;
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours} hours ago`;
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `${diffInDays} days ago`;
+    
+    if (diffInDays < 30) return `${Math.floor(diffInDays / 7)} weeks ago`;
+    
+    if (diffInDays < 365) return `${Math.floor(diffInDays / 30)} months ago`;
+    
+    return `${Math.floor(diffInDays / 365)} years ago`;
+  };
+
+  // Pagination logic
+  const totalPages = Math.ceil(recentActivity.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentActivities = recentActivity.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
   };
 
   return (
@@ -302,7 +333,7 @@ const Index = () => {
             {/* Balance Dashboard */}
                          <div className="mb-8">
                <div className="flex items-center justify-between mb-6">
-                 <h2 className="text-2xl font-bold text-gray-900">{companyAccount} Balance</h2>
+                 <h2 className="text-2xl font-bold text-gray-900">{companyName} Balance</h2>
                  {stats?.companyBalance?.autoCalculated && (
                    <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-1">
                      <span className="text-xs font-medium text-blue-700">Auto Calculated</span>
@@ -395,7 +426,7 @@ const Index = () => {
                   </div>
                 </div>
                                  <div className="mt-4">
-                   <span className="text-sm text-gray-500">Money received by {companyAccount}</span>
+                   <span className="text-sm text-gray-500">Money received by {companyName}</span>
                  </div>
               </div>
 
@@ -412,7 +443,7 @@ const Index = () => {
                   </div>
                 </div>
                                  <div className="mt-4">
-                   <span className="text-sm text-gray-500">Money paid by {companyAccount}</span>
+                   <span className="text-sm text-gray-500">Money paid by {companyName}</span>
                  </div>
               </div>
 
@@ -526,11 +557,17 @@ const Index = () => {
               </div>
             </div>
 
-            {/* Recent Activity */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-8">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">Recent Activity (Last 30 Days)</h3>
-              </div>
+                         {/* Recent Activity */}
+             <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-8">
+               <div className="px-6 py-4 border-b border-gray-200">
+                 <div className="flex items-center justify-between">
+                   <h3 className="text-lg font-semibold text-gray-900">Recent Activity (Last 30 Days)</h3>
+                   <div className="flex items-center space-x-2">
+                     <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                     <span className="text-xs text-green-600 font-medium">Live Updates</span>
+                   </div>
+                 </div>
+               </div>
               <div className="p-6">
                 {loading ? (
                   <div className="space-y-4">
@@ -544,24 +581,75 @@ const Index = () => {
                         <div className="h-4 bg-gray-300 rounded w-16"></div>
                       </div>
                     ))}
+                    {/* Loading pagination skeleton */}
+                    <div className="pt-4 border-t border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <div className="h-4 bg-gray-200 rounded w-32"></div>
+                        <div className="flex space-x-2">
+                          <div className="h-8 bg-gray-200 rounded w-16"></div>
+                          <div className="h-8 bg-gray-200 rounded w-8"></div>
+                          <div className="h-8 bg-gray-200 rounded w-16"></div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ) : recentActivity.length > 0 ? (
                   <div className="space-y-4">
-                    {recentActivity.map((activity, index) => (
+                    {currentActivities.map((activity, index) => (
                       <div key={index} className="flex items-center space-x-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
                         <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-gray-900">{activity.partyName}</p>
-                          <p className="text-xs text-gray-500">{formatTimeAgo(activity.date)}</p>
-                          {activity.remarks && (
-                            <p className="text-xs text-gray-400 mt-1">{activity.remarks}</p>
-                          )}
-                        </div>
+                                                 <div className="flex-1">
+                           <p className="text-sm font-medium text-gray-900">{activity.partyName}</p>
+                           <p className="text-xs text-gray-500">{formatTimeAgoEnhanced(activity.createdAt)}</p>
+                           {activity.remarks && (
+                             <p className="text-xs text-gray-400 mt-1">{activity.remarks}</p>
+                           )}
+                         </div>
                         <span className="text-sm font-medium text-blue-600">
                           {activity.type === 'CR' ? '+' : '-'}₹{activity.amount}
                         </span>
                       </div>
                     ))}
+                    
+                    {/* Pagination Controls */}
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                        <div className="text-sm text-gray-500">
+                          Showing {startIndex + 1}-{Math.min(endIndex, recentActivity.length)} of {recentActivity.length} entries
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => handlePageChange(currentPage - 1)}
+                            disabled={currentPage === 1}
+                            className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Previous
+                          </button>
+                          <div className="flex items-center space-x-1">
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                              <button
+                                key={page}
+                                onClick={() => handlePageChange(page)}
+                                className={`px-3 py-1 text-sm rounded-md ${
+                                  currentPage === page
+                                    ? 'bg-blue-600 text-white'
+                                    : 'border border-gray-300 hover:bg-gray-50'
+                                }`}
+                              >
+                                {page}
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            onClick={() => handlePageChange(currentPage + 1)}
+                            disabled={currentPage === totalPages}
+                            className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Next
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="text-center py-8">

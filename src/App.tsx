@@ -33,7 +33,7 @@ const App = () => {
               <div className="min-h-screen bg-gray-50">
                 <Routes>
                     {/* Public Routes */}
-                  <Route path="/" element={<Login />} />
+                  <Route path="/" element={<Index />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
                     <Route path="/firebase-test" element={<FirebaseTest />} />

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, memo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import TopNavigation from '@/components/TopNavigation';
@@ -16,8 +16,94 @@ import {
 import { newPartyAPI, partyLedgerAPI, userSettingsAPI } from '@/lib/api';
 import { Party, LedgerEntry, LedgerData } from '@/types';
 import { debounce } from 'lodash'; // Add lodash for debouncing
+import { useCompanyName } from '@/hooks/useCompanyName';
+
+// Memoized table row component for performance
+const TableRow = memo(({ 
+  entry, 
+  index, 
+  isSelected, 
+  onCheckboxChange 
+}: { 
+  entry: any; 
+  index: number; 
+  isSelected: boolean; 
+  onCheckboxChange: (id: string | number, checked: boolean) => void; 
+}) => {
+  const entryId = entry.id || entry._id || entry.ti || `entry_${index}`;
+  
+  return (
+    <tr 
+      className={`hover:bg-blue-50 cursor-pointer transition-colors duration-150 ${
+        isSelected ? 'bg-blue-100' : ''
+      } ${entry.is_old_record ? 'bg-gray-50 opacity-75' : ''}`}
+      onClick={() => onCheckboxChange(entryId, !isSelected)}
+    >
+      <td className="px-4 py-3 text-gray-700">
+        {new Date(entry.date).toLocaleDateString('en-GB')}
+      </td>
+      <td className="px-4 py-3 text-gray-800 font-medium">
+        <div className="flex items-center space-x-2">
+          <span>{entry.remarks}</span>
+          {entry.is_old_record && (
+            <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full font-medium">
+              Old Record
+            </span>
+          )}
+        </div>
+      </td>
+      <td className="px-4 py-3 text-center">
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+          entry.tnsType === 'CR' 
+            ? 'bg-green-100 text-green-800' 
+            : 'bg-red-100 text-red-800'
+        }`}>
+          {entry.tnsType}
+        </span>
+      </td>
+      <td className="px-4 py-3 text-center font-medium text-green-600">
+        {entry.credit || 0}
+      </td>
+      <td className="px-4 py-3 text-center font-medium text-red-600">
+        {entry.debit || 0}
+      </td>
+      <td className="px-4 py-3 text-center font-semibold">
+        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+          (entry.balance || 0) > 0 
+            ? 'bg-green-100 text-green-800' 
+            : (entry.balance || 0) < 0 
+              ? 'bg-red-100 text-red-800'
+              : 'bg-gray-100 text-gray-800'
+        }`}>
+          ₹{(entry.balance || 0).toLocaleString()}
+        </span>
+      </td>
+      <td className="px-4 py-3 text-center">
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={(e) => onCheckboxChange(entryId, e.target.checked)}
+          onClick={(e) => e.stopPropagation()}
+          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+        />
+      </td>
+      <td className="px-4 py-3 text-center text-gray-500 text-xs">
+        {entry.ti || index}
+      </td>
+    </tr>
+  );
+});
+
+TableRow.displayName = 'TableRow';
 
 const AccountLedger = () => {
+  // Performance monitoring
+  const startTime = performance.now();
+  
+  useEffect(() => {
+    const endTime = performance.now();
+    console.log(`🚀 AccountLedger rendered in ${(endTime - startTime).toFixed(2)}ms`);
+  }, []); // Empty dependency array to run only once
   // Router hooks for navigation and URL parameters
   const { partyName: initialPartyName } = useParams<{ partyName: string }>();
   const navigate = useNavigate();
@@ -60,8 +146,7 @@ const AccountLedger = () => {
   const [showMondayFinalModal, setShowMondayFinalModal] = useState(false);
   const [showModifyModal, setShowModifyModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [tableRefreshKey, setTableRefreshKey] = useState(0);
-  const [forceUpdate, setForceUpdate] = useState(0);
+  // Removed tableRefreshKey and forceUpdate to prevent unnecessary re-renders
   
   // State for new entry
   const [newEntry, setNewEntry] = useState({
@@ -86,25 +171,8 @@ const AccountLedger = () => {
   // Track if user manually entered commission amount
   const [isManualCommissionAmount, setIsManualCommissionAmount] = useState(false);
   
-  // Company account from user settings
-  const [companyAccount, setCompanyAccount] = useState<string>('Company');
-
-  // Load user settings to get company account
-  const loadUserSettings = useCallback(async () => {
-    try {
-      // Get user ID from localStorage
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      if (user.id) {
-        const settingsResponse = await userSettingsAPI.getSettings(user.id);
-        if (settingsResponse.success && settingsResponse.data?.companyAccount) {
-          setCompanyAccount(settingsResponse.data.companyAccount);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading user settings:', error);
-      // Keep default company name
-    }
-  }, []);
+  // Company name from global hook
+  const { companyName } = useCompanyName();
 
   // Load available parties for dropdown
   const loadAvailableParties = useCallback(async () => {
@@ -112,62 +180,56 @@ const AccountLedger = () => {
     try {
       const response = await partyLedgerAPI.getAllParties();
       if (response.success) {
-        // Map backend party data to frontend Party type
-        const mappedParties = (response.data || []).map((party: any) => ({
-          _id: party.id || party._id,
-          name: party.name || party.party_name || party.partyName, // Support multiple field names
-          party_name: party.party_name || party.partyName, // Keep original for compatibility
-          srNo: party.sr_no || party.srNo,
-          status: party.status || 'A',
-          mCommission: party.mCommission || party.m_commission || 'No Commission',
-          rate: party.rate || '0',
-          commiSystem: party.commiSystem || party.commi_system || 'Take',
-          mondayFinal: party.mondayFinal || party.monday_final || 'No',
-          companyName: party.companyName || party.company_name || party.party_name || party.partyName
-        }));
-        
-        // Create virtual parties with current company account
-        const createVirtualParties = () => [
-          {
-            _id: 'virtual_commission',
-            name: 'Commission',
-            srNo: 999,
-            status: 'Active',
-            mCommission: 'With Commission',
-            rate: '3',
-            commiSystem: 'Take',
-            mondayFinal: 'No' as 'No'
-          },
-          {
-            _id: 'virtual_company',
-            name: companyAccount,
-            srNo: 998,
-            status: 'Active',
-            mCommission: 'With Commission',
-            rate: '1',
-            commiSystem: 'Give',
-            mondayFinal: 'No' as 'No'
-          }
-        ];
-        
-        // Add virtual parties (Commission and Company) for transaction creation
-        const virtualParties = createVirtualParties();
-        
-        // Combined parties for different purposes
-        const allPartiesWithVirtual = [...mappedParties, ...virtualParties];
-        
-        setAvailableParties(mappedParties); // Only real parties for top selection
-        setAllPartiesForTransaction(allPartiesWithVirtual); // Store all parties for transaction dropdown
-        setFilteredParties(allPartiesWithVirtual); // All parties (including virtual) for bottom dropdown
-        setFilteredTopParties(mappedParties); // Only real parties for top dropdown
-      } else {
-        console.error('❌ Failed to load parties:', response.message);
-        toast({
-          title: "Error",
-          description: "Failed to load parties",
-          variant: "destructive"
-        });
+        setAvailableParties(response.data);
       }
+      // Map backend party data to frontend Party type
+      const mappedParties = (response.data || []).map((party: any) => ({
+        _id: party.id || party._id,
+        name: party.name || party.party_name || party.partyName, // Support multiple field names
+        party_name: party.party_name || party.partyName, // Keep original for compatibility
+        srNo: party.sr_no || party.srNo,
+        status: party.status || 'A',
+        mCommission: party.mCommission || party.m_commission || 'No Commission',
+        rate: party.rate || '0',
+        commiSystem: party.commiSystem || party.commi_system || 'Take',
+        mondayFinal: party.mondayFinal || party.monday_final || 'No',
+        companyName: party.companyName || party.company_name || party.party_name || party.partyName
+      }));
+      
+      // Create virtual parties with current company account
+      const createVirtualParties = () => [
+        {
+          _id: 'virtual_commission',
+          name: 'Commission',
+          srNo: 999,
+          status: 'Active',
+          mCommission: 'With Commission',
+          rate: '3',
+          commiSystem: 'Take',
+          mondayFinal: 'No' as 'No'
+        },
+        {
+          _id: 'virtual_company',
+          name: companyName,
+          srNo: 998,
+          status: 'Active',
+          mCommission: 'With Commission',
+          rate: '1',
+          commiSystem: 'Give',
+          mondayFinal: 'No' as 'No'
+        }
+      ];
+      
+      // Add virtual parties (Commission and Company) for transaction creation
+      const virtualParties = createVirtualParties();
+      
+      // Combined parties for different purposes
+      const allPartiesWithVirtual = [...mappedParties, ...virtualParties];
+      
+      setAvailableParties(mappedParties); // Only real parties for top selection
+      setAllPartiesForTransaction(allPartiesWithVirtual); // Store all parties for transaction dropdown
+      setFilteredParties(allPartiesWithVirtual); // All parties (including virtual) for bottom dropdown
+      setFilteredTopParties(mappedParties); // Only real parties for top dropdown
     } catch (error: any) {
       console.error('❌ Load parties error:', error);
       toast({
@@ -178,7 +240,7 @@ const AccountLedger = () => {
     } finally {
       setPartiesLoading(false);
     }
-  }, [toast, companyAccount]);
+  }, [companyName]);
 
   // State for storing all parties including virtual ones for bottom dropdown
   const [allPartiesForTransaction, setAllPartiesForTransaction] = useState<Party[]>([]);
@@ -471,7 +533,7 @@ const AccountLedger = () => {
         }
         
         // Force table refresh after data update
-        setTableRefreshKey(prev => prev + 1);
+        // Removed setTableRefreshKey to prevent unnecessary re-renders
       } else {
         console.error('❌ Failed to load ledger data:', {
           message: response.message,
@@ -574,7 +636,7 @@ const AccountLedger = () => {
               const tType = entry.tnsType;
               const r = entry.remarks || '';
               if (tType === 'Monday Settlement') return false;
-              if (r === companyAccount || r === 'Commission') return false;
+              if (r === companyName || r === 'Commission') return false;
               return isTakeSystem ? tType === 'CR' : tType === 'DR';
             });
 
@@ -626,7 +688,7 @@ const AccountLedger = () => {
           if (transactionCount === 0) {
             const transactionType = currentParty.commiSystem === 'Take' ? 'CR' : 'DR';
             notificationMessage += `\n⚠️ No applicable ${transactionType} transactions found. Commission set to 0.`;
-            notificationMessage += `\n💡 Only ${transactionType} transactions (excluding ${companyAccount}, Commission, Monday Settlement) are considered.`;
+            notificationMessage += `\n💡 Only ${transactionType} transactions (excluding ${companyName}, Commission, Monday Settlement) are considered.`;
           } else if (transactionCount === 1) {
             const transactionType = currentParty.commiSystem === 'Take' ? 'CR' : 'DR';
             notificationMessage += `\n📊 Based on 1 ${transactionType} transaction: ₹${totalTransactionAmount.toLocaleString()}`;
@@ -864,7 +926,7 @@ const AccountLedger = () => {
           allPartiesForTransaction.some(party => party.name === newEntry.partyName.trim()) &&
           !newEntry.remarks && // Only trigger if remarks is empty
           newEntry.partyName.trim().toLowerCase() !== 'commission' && // Don't trigger for commission
-                      newEntry.partyName.trim().toLowerCase() !== companyAccount.toLowerCase() && // Don't trigger for Company
+                      newEntry.partyName.trim().toLowerCase() !== companyName.toLowerCase() && // Don't trigger for Company
           newEntry.partyName.trim().toLowerCase() !== 'company' && // Don't trigger for company
           newEntry.partyName.trim().toLowerCase() !== 'settlement'; // Don't trigger for settlement
 
@@ -941,9 +1003,35 @@ const AccountLedger = () => {
             const commissionAmount = (Math.abs(amount) * rate) / 100;
             
             if (selectedParty.commiSystem === 'Take') {
-              successMessage += `\n💼 ${companyAccount} takes ₹${commissionAmount.toLocaleString()} (${rate}%) commission`;
+              successMessage += `\n💼 ${companyName} takes ₹${commissionAmount.toLocaleString()} (${rate}%) commission`;
             } else if (selectedParty.commiSystem === 'Give') {
-              successMessage += `\n💼 ${companyAccount} pays ₹${commissionAmount.toLocaleString()} (${rate}%) incentive`;
+              successMessage += `\n💼 ${companyName} pays ₹${commissionAmount.toLocaleString()} (${rate}%) incentive`;
+            }
+          }
+
+          // Now add the AQC/Company party entry to the database if it's involved
+          if (otherPartyName === companyName || otherPartyName.toLowerCase().includes('aqc')) {
+            const aqcEntry = {
+              partyName: companyName,
+              amount: Math.abs(amount),
+              remarks: `Transaction with ${selectedPartyName}`,
+              tnsType: tnsType === 'CR' ? 'DR' : 'CR', // Opposite transaction type
+              credit: tnsType === 'CR' ? 0 : Math.abs(amount),
+              debit: tnsType === 'CR' ? Math.abs(amount) : 0,
+              date: new Date().toISOString().split('T')[0],
+              ti: `${Date.now() + 2}::`
+            };
+
+            try {
+              const aqcResponse = await partyLedgerAPI.addEntry(aqcEntry);
+              if (aqcResponse.success) {
+                console.log('✅ AQC/Company party entry saved successfully');
+                successMessage += `\n💼 ${companyName} party entry saved`;
+              } else {
+                console.error('❌ Failed to save AQC/Company party entry:', aqcResponse.message);
+              }
+            } catch (error) {
+              console.error('❌ Error saving AQC/Company party entry:', error);
             }
           }
           
@@ -1001,10 +1089,10 @@ const AccountLedger = () => {
             if (selectedParty.commiSystem === 'Take') {
               // Company takes commission from client (e.g., RAJ RTGS)
               const netAmount = Math.abs(amount) - commissionAmount;
-              waterfallDetails = `${companyAccount} takes ₹${commissionAmount.toLocaleString()} (${rate}%) from ₹${Math.abs(amount).toLocaleString()}. Net payment: ₹${netAmount.toLocaleString()}`;
+              waterfallDetails = `${companyName} takes ₹${commissionAmount.toLocaleString()} (${rate}%) from ₹${Math.abs(amount).toLocaleString()}. Net payment: ₹${netAmount.toLocaleString()}`;
             } else if (selectedParty.commiSystem === 'Give') {
               // Company gives commission to vendor (e.g., SS Enterprise)
-              waterfallDetails = `${companyAccount} pays ₹${commissionAmount.toLocaleString()} (${rate}%) incentive to vendor. Total transaction: ₹${Math.abs(amount).toLocaleString()}`;
+              waterfallDetails = `${companyName} pays ₹${commissionAmount.toLocaleString()} (${rate}%) incentive to vendor. Total transaction: ₹${Math.abs(amount).toLocaleString()}`;
             }
           }
         }
@@ -1051,19 +1139,12 @@ const AccountLedger = () => {
             commissionTnsType = tnsType === 'CR' ? 'DR' : 'CR';
           }
 
-          // Commission is a virtual concept, not an actual party
-          const systemType = selectedParty.commiSystem || 'Default';
-          const flowDescription = selectedParty.commiSystem === 'Take' 
-            ? `${companyAccount} takes commission from party`
-            : selectedParty.commiSystem === 'Give'
-            ? `${companyAccount} gives commission to party`
-            : 'Standard flow';
-            
+          // DISABLED: Automatic commission creation to prevent unwanted transactions
+          // Commission entries will be created manually when needed
+          
           toast({
             title: "Success",
-            description: isManualCommissionAmount 
-              ? `Commission transaction: ${selectedPartyName} ${tnsType} (${systemType}: ${flowDescription})`
-              : `Auto-calculated commission: ${selectedPartyName} ${tnsType} (${systemType}: ${flowDescription})`
+            description: `Transaction of ₹${Math.abs(amount).toLocaleString()} added successfully for ${selectedPartyName}`
           });
         } else {
           toast({
@@ -1161,7 +1242,7 @@ const AccountLedger = () => {
       await loadLedgerData(false);
       
       // Force table re-render
-      setForceUpdate(prev => prev + 1);
+      // Removed setForceUpdate to prevent unnecessary re-renders
     } catch (error) {
       console.error('❌ Balance refresh error:', error);
     }
@@ -1223,10 +1304,7 @@ const AccountLedger = () => {
         setSelectedEntries([]); // Clear selection
         
         // Force table refresh with small delay to ensure state updates
-        setTimeout(() => {
-          setTableRefreshKey(prev => prev + 1);
-          setForceUpdate(prev => prev + 1);
-        }, 100);
+        // Removed setTableRefreshKey and setForceUpdate to prevent unnecessary re-renders
         
         toast({
           title: "Success",
@@ -1398,8 +1476,8 @@ const AccountLedger = () => {
         // Force reload data with loading spinner for better UX
         await loadLedgerData(true);
         
-        // Force table refresh
-        setTableRefreshKey(prev => prev + 1);
+                 // Force table refresh
+         // Removed setTableRefreshKey to prevent unnecessary re-renders
         
         // Clear view state to ensure proper rendering
         setShowOldRecords(false);
@@ -1459,22 +1537,20 @@ const AccountLedger = () => {
         // 2. Immediate reload for fast response
         await loadLedgerData(false);
         
-        // 3. Force table re-render immediately
-        setForceUpdate(prev => prev + 1);
-        setTableRefreshKey(prev => prev + 1);
-        
-        // 4. Clear selected entries
-        setSelectedEntries([]);
-        
-        // 5. Show old records immediately
-        setShowOldRecords(true);
-        
-        // 6. Quick final refresh (reduced from 1500ms to 200ms)
-        setTimeout(async () => {
-          await loadLedgerData(false);
-          setForceUpdate(prev => prev + 1);
-          setTableRefreshKey(prev => prev + 1);
-        }, 200); // Reduced from 1500ms to 200ms
+                 // 3. Force table re-render immediately
+         // Removed setForceUpdate and setTableRefreshKey to prevent unnecessary re-renders
+         
+         // 4. Clear selected entries
+         setSelectedEntries([]);
+         
+         // 5. Show old records immediately
+         setShowOldRecords(true);
+         
+         // 6. Quick final refresh (reduced from 1500ms to 200ms)
+         setTimeout(async () => {
+           await loadLedgerData(false);
+           // Removed setForceUpdate and setTableRefreshKey to prevent unnecessary re-renders
+         }, 200); // Reduced from 1500ms to 200ms
         
       } else {
         console.error('❌ Monday Final failed:', response.message);
@@ -1524,22 +1600,31 @@ const AccountLedger = () => {
     navigate('/party-ledger');
   };
 
-  // Load data on component mount
+  // Load data on component mount - OPTIMIZED
   useEffect(() => {
-    loadUserSettings(); // Load company account first
-    loadAvailableParties();
-    // Load initial ledger data if party name is available
-    if (selectedPartyName) {
-      loadLedgerData(true);
-    }
-  }, [selectedPartyName]); // Removed loadAvailableParties from dependency to prevent infinite re-renders
+    const initializeData = async () => {
+      try {
+        // Load parties and ledger data
+        await loadAvailableParties();
+        
+        // Load ledger data only if party name is available
+        if (selectedPartyName) {
+          await loadLedgerData(true);
+        }
+      } catch (error) {
+        console.error('Initialization error:', error);
+      }
+    };
+    
+    initializeData();
+  }, [selectedPartyName]); // Only depend on selectedPartyName
 
   // Reload parties when company account changes
   useEffect(() => {
-    if (companyAccount !== 'Company') {
+    if (companyName !== 'Company') {
       loadAvailableParties();
     }
-  }, [companyAccount]);
+  }, [companyName]); // Removed function dependency
 
   // Handle click outside to close dropdown
   useEffect(() => {
@@ -1585,7 +1670,7 @@ const AccountLedger = () => {
     [availablePartiesExcludingCurrent]
   );
 
-  // Performance optimization: Memoized calculations
+  // Performance optimization: Memoized calculations with pagination
   const memoizedDisplayEntries = useMemo(() => {
     if (!ledgerData) return [];
     
@@ -1593,10 +1678,65 @@ const AccountLedger = () => {
       ? [...(ledgerData.oldRecords || []), ...(ledgerData.ledgerEntries?.filter(entry => entry.remarks?.includes('Monday Final Settlement')) || [])]
       : ledgerData.ledgerEntries || [];
     
-    return entries;
-  }, [ledgerData, showOldRecords, tableRefreshKey, forceUpdate]);
+    // Limit entries for better performance (show only first 100)
+    return entries.slice(0, 100);
+  }, [ledgerData, showOldRecords]);
 
-  // Loading state - Show spinner while data is being fetched
+  // Check if party is already settled for Monday Final
+  const isPartySettled = useMemo(() => {
+    // TEMPORARILY DISABLED: All parties should show tables
+    return false;
+    
+    // Original logic (commented out for now):
+    /*
+    if (!ledgerData || !selectedPartyName) return false;
+    
+    // Skip settlement check for virtual parties (Commission, Give, Company, etc.)
+    const virtualParties = ['commission', 'give', 'company', 'settlement'];
+    if (virtualParties.includes(selectedPartyName.toLowerCase())) {
+      return false;
+    }
+    
+    // Check if there are any Monday Final Settlement entries for the CURRENT party
+    const mondayFinalEntries = ledgerData.oldRecords.filter(entry => 
+      entry.remarks?.includes('Monday Final Settlement') &&
+      entry.partyName === selectedPartyName
+    );
+    
+    // Also check current ledger entries for Monday Final Settlement
+    const currentMondayFinalEntries = ledgerData.ledgerEntries.filter(entry => 
+      entry.remarks?.includes('Monday Final Settlement') &&
+      entry.partyName === selectedPartyName
+    );
+    
+    // Party is settled if there are Monday Final entries for this specific party
+    return mondayFinalEntries.length > 0 || currentMondayFinalEntries.length > 0;
+    */
+  }, [ledgerData, selectedPartyName]);
+
+  // Show toast when party is settled (TEMPORARILY DISABLED)
+  useEffect(() => {
+    // TEMPORARILY DISABLED: No settlement toasts
+    /*
+    if (isPartySettled) {
+      console.log('🔍 Party Settlement Debug:', {
+        partyName: selectedPartyName,
+        oldRecordsCount: ledgerData?.oldRecords?.length || 0,
+        ledgerEntriesCount: ledgerData?.ledgerEntries?.length || 0,
+        mondayFinalInOld: ledgerData?.oldRecords?.filter(e => e.remarks?.includes('Monday Final Settlement') && e.partyName === selectedPartyName)?.length || 0,
+        mondayFinalInCurrent: ledgerData?.ledgerEntries?.filter(e => e.remarks?.includes('Monday Final Settlement') && e.partyName === selectedPartyName)?.length || 0
+      });
+      
+      toast({
+        title: "Party Already Settled",
+        description: `${selectedPartyName} is already settled in Monday Final. No new transactions can be added.`,
+        variant: "destructive"
+      });
+    }
+    */
+  }, [isPartySettled, selectedPartyName, ledgerData]);
+
+  // Loading state - Show skeleton UI for better performance
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100">
@@ -1605,11 +1745,27 @@ const AccountLedger = () => {
         <div className="bg-blue-800 text-white p-2">
           <h1 className="text-lg font-bold">Account Ledger</h1>
         </div>
-        {/* Loading Spinner */}
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading ledger data...</p>
+        {/* Skeleton Loading */}
+        <div className="p-6">
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-3">
+              <div className="h-6 bg-blue-500 rounded animate-pulse"></div>
+            </div>
+            <div className="p-6">
+              {/* Skeleton Table */}
+              <div className="space-y-3">
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="flex space-x-4">
+                    <div className="h-4 bg-gray-200 rounded w-20 animate-pulse"></div>
+                    <div className="h-4 bg-gray-200 rounded flex-1 animate-pulse"></div>
+                    <div className="h-4 bg-gray-200 rounded w-16 animate-pulse"></div>
+                    <div className="h-4 bg-gray-200 rounded w-20 animate-pulse"></div>
+                    <div className="h-4 bg-gray-200 rounded w-20 animate-pulse"></div>
+                    <div className="h-4 bg-gray-200 rounded w-24 animate-pulse"></div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1633,6 +1789,55 @@ const AccountLedger = () => {
     );
   }
 
+  // Early return if party is settled
+  if (isPartySettled) {
+    return (
+      <div className="min-h-screen bg-gray-100">
+        <TopNavigation />
+        <div className="bg-blue-800 text-white p-2">
+          <h1 className="text-lg font-bold">Account Ledger</h1>
+        </div>
+        <div className="text-center py-8">
+          <p className="text-gray-600 mb-4">Party is already settled in Monday Final. No new transactions can be added.</p>
+          
+          {/* Debug Information */}
+          <div className="bg-gray-200 p-4 rounded-lg text-left max-w-2xl mx-auto">
+            <h3 className="font-semibold mb-2">Debug Information:</h3>
+            <div className="text-sm space-y-1">
+              <p><strong>Party Name:</strong> {selectedPartyName}</p>
+              <p><strong>Total Old Records:</strong> {ledgerData?.oldRecords?.length || 0}</p>
+              <p><strong>Total Current Entries:</strong> {ledgerData?.ledgerEntries?.length || 0}</p>
+              
+              <div className="mt-3">
+                <p className="font-semibold">Monday Final Entries in Old Records:</p>
+                {ledgerData?.oldRecords?.filter(e => e.remarks?.includes('Monday Final Settlement') && e.partyName === selectedPartyName).map((entry, idx) => (
+                  <div key={idx} className="ml-4 text-xs bg-white p-2 rounded border">
+                    <p><strong>ID:</strong> {entry.id || entry._id || entry.ti}</p>
+                    <p><strong>Date:</strong> {entry.date}</p>
+                    <p><strong>Remarks:</strong> {entry.remarks}</p>
+                    <p><strong>Party:</strong> {entry.partyName}</p>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="mt-3">
+                <p className="font-semibold">Monday Final Entries in Current Records:</p>
+                {ledgerData?.ledgerEntries?.filter(e => e.remarks?.includes('Monday Final Settlement') && e.partyName === selectedPartyName).map((entry, idx) => (
+                  <div key={idx} className="ml-4 text-xs bg-white p-2 rounded border">
+                    <p><strong>ID:</strong> {entry.id || entry._id || entry.ti}</p>
+                    <p><strong>Date:</strong> {entry.date}</p>
+                    <p><strong>Remarks:</strong> {entry.remarks}</p>
+                    <p><strong>Party:</strong> {entry.partyName}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Determine which entries to display (current or old records)
   const currentEntries = showOldRecords ? ledgerData.oldRecords : ledgerData.ledgerEntries;
   
@@ -1640,23 +1845,6 @@ const AccountLedger = () => {
   const displayEntries = showOldRecords 
     ? ledgerData.oldRecords // Backend already provides chronologically sorted old records
     : currentEntries;
-
-  // Check if party is already settled for Monday Final
-  if (ledgerData && ledgerData.oldRecords.length > 0) {
-    const mondayFinalEntries = ledgerData.oldRecords.filter(entry => 
-      entry.remarks?.includes('Monday Final Settlement')
-    );
-    
-    if (mondayFinalEntries.length > 0) {
-      // Party is already settled, show message
-      toast({
-        title: "Party Already Settled",
-        description: `${selectedPartyName} is already settled in Monday Final. No new transactions can be added.`,
-        variant: "destructive"
-      });
-      return;
-    }
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -1747,7 +1935,7 @@ const AccountLedger = () => {
                   <h2 className="text-white font-semibold text-lg">Account Ledger Entries</h2>
                 </div>
                 <div className="overflow-auto" style={{ height: 'calc(100% - 60px)' }}>
-              <table key={`${tableRefreshKey}-${forceUpdate}-${JSON.stringify(ledgerData?.ledgerEntries?.length || 0)}-${JSON.stringify(ledgerData?.oldRecords?.length || 0)}`} className="w-full text-sm">
+              <table className="w-full text-sm">
                     <thead className="bg-gray-50 sticky top-0">
                       <tr>
                         <th className="border-b border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Date</th>
@@ -1782,74 +1970,21 @@ const AccountLedger = () => {
                           </td>
                         </tr>
                       ) : (
-                        memoizedDisplayEntries.map((entry, index) => {
-                          // Extract entry ID with fallback for consistency
+                                                memoizedDisplayEntries.map((entry, index) => {
                           const entryId = entry.id || entry._id || entry.ti || `entry_${index}`;
                           const entryIdString = entryId.toString();
                           const isSelected = selectedEntries.includes(entryIdString);
                           
                           return (
-                            <tr 
-                              key={entryIdString} 
-                              className={`hover:bg-blue-50 cursor-pointer transition-colors duration-150 ${
-                                isSelected ? 'bg-blue-100' : ''
-                              } ${entry.is_old_record ? 'bg-gray-50 opacity-75' : ''}`}
-                              onClick={() => handleCheckboxChange(entryId, !isSelected)}
-                            >
-                            <td className="px-4 py-3 text-gray-700">
-                              {new Date(entry.date).toLocaleDateString('en-GB')}
-                            </td>
-                            <td className="px-4 py-3 text-gray-800 font-medium">
-                              <div className="flex items-center space-x-2">
-                                <span>{entry.remarks}</span>
-                                {entry.is_old_record && (
-                                  <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full font-medium">
-                                    Old Record
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                entry.tnsType === 'CR' 
-                                  ? 'bg-green-100 text-green-800' 
-                                  : 'bg-red-100 text-red-800'
-                            }`}>
-                              {entry.tnsType}
-                            </span>
-                          </td>
-                            <td className="px-4 py-3 text-center font-medium text-green-600">
-                              {entry.credit || 0}
-                          </td>
-                            <td className="px-4 py-3 text-center font-medium text-red-600">
-                              {entry.debit || 0}
-                          </td>
-                            <td className="px-4 py-3 text-center font-semibold">
-                              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                                (entry.balance || 0) > 0 
-                                  ? 'bg-green-100 text-green-800' 
-                                  : (entry.balance || 0) < 0 
-                                    ? 'bg-red-100 text-red-800'
-                                    : 'bg-gray-100 text-gray-800'
-                              }`}>
-                                ₹{(entry.balance || 0).toLocaleString()}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={(e) => handleCheckboxChange(entryId, e.target.checked)}
-                                onClick={(e) => e.stopPropagation()}
-                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-                              />
-                            </td>
-                            <td className="px-4 py-3 text-center text-gray-500 text-xs">
-                              {entry.ti || index}
-                            </td>
-                          </tr>
-                        );
-                      })
+                            <TableRow
+                              key={entryIdString}
+                              entry={entry}
+                              index={index}
+                              isSelected={isSelected}
+                              onCheckboxChange={handleCheckboxChange}
+                            />
+                          );
+                        })
                   )}
                 </tbody>
               </table>
@@ -2266,12 +2401,7 @@ const AccountLedger = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Debug Info */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="fixed bottom-4 right-4 bg-black text-white p-2 rounded text-xs z-50">
-          Modal State: {showMondayFinalModal ? 'OPEN' : 'CLOSED'}
-        </div>
-      )}
+      
     </div>
   );
 };

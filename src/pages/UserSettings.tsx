@@ -23,10 +23,12 @@ import TopNavigation from '../components/TopNavigation';
 import { userSettingsAPI } from '../lib/api';
 import { useToast } from '../hooks/use-toast';
 import { AuthContext } from '../contexts/AuthContext';
+import { useCompanyName } from '../hooks/useCompanyName';
 
 const UserSettings = () => {
   const { toast } = useToast();
   const { user } = useContext(AuthContext);
+  const { refreshCompanyName } = useCompanyName();
   const [loading, setLoading] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [verificationStep, setVerificationStep] = useState(1);
@@ -104,13 +106,23 @@ const UserSettings = () => {
       
       const response = await userSettingsAPI.updateSettings(user.id, cleanSettings);
       if (response.success) {
+        // Refresh company name globally after successful update
+        await refreshCompanyName();
+        
         toast({
           title: "Success",
           description: "Settings saved successfully with double verification!",
         });
+        
+        // Auto-close modal after successful save
         setShowConfirmation(false);
         setVerificationStep(1);
         setConfirmPassword('');
+        
+        // Auto-close the entire settings page and go to dashboard
+        setTimeout(() => {
+          window.history.back();
+        }, 1500); // Wait 1.5 seconds for user to see success message
       } else {
         toast({
           title: "Error",

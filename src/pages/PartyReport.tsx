@@ -52,25 +52,63 @@ const PartyReport = () => {
     setFilteredParties(filtered);
   }, [parties, searchTerm]);
 
+  // Function to check Monday Final status dynamically
+  const checkMondayFinalStatus = async (partyName: string): Promise<'Yes' | 'No'> => {
+    try {
+      const response = await partyLedgerAPI.getPartyLedger(partyName);
+      
+      if (response.success && response.data) {
+        // response.data is an object with ledgerEntries and oldRecords properties
+        const ledgerEntries = response.data.ledgerEntries || [];
+        const oldRecords = response.data.oldRecords || [];
+        
+        // Check both arrays for Monday Final Settlement
+        const hasMondayFinal = [...ledgerEntries, ...oldRecords].some((entry: any) => {
+          const hasSettlement = entry.remarks?.includes('Monday Final Settlement');
+          const partyMatch = entry.partyName === partyName || entry.party_name === partyName;
+          
+          return hasSettlement && partyMatch;
+        });
+        
+        return hasMondayFinal ? 'Yes' : 'No';
+      }
+      
+      return 'No';
+    } catch (error) {
+      console.error(`Error checking Monday Final status for ${partyName}:`, error);
+      return 'No';
+    }
+  };
+
   const loadParties = useCallback(async () => {
     setLoading(true);
     try {
       const response = await partyLedgerAPI.getAllParties();
       if (response.success) {
-        const mappedParties = (response.data || []).map((party: any) => ({
-          _id: party.id,
-          name: party.partyName,
-          srNo: party.srNo,
-          status: party.status,
-          balanceLimit: parseFloat(party.balanceLimit) || 0,
-          mCommission: party.mCommission || 'No Commission',
-          commiSystem: party.commiSystem,
-          rate: party.rate,
-          mondayFinal: party.mondayFinal,
-        }));
+        const partiesData = response.data || [];
+        
+        // Check Monday Final status for each party dynamically
+        const mappedParties = await Promise.all(
+          partiesData.map(async (party: any) => {
+            const mondayFinalStatus = await checkMondayFinalStatus(party.partyName);
+            
+            return {
+              _id: party.id,
+              name: party.partyName,
+              srNo: party.srNo,
+              status: party.status,
+              balanceLimit: parseFloat(party.balanceLimit) || 0,
+              mCommission: party.mCommission || 'No Commission',
+              commiSystem: party.commiSystem,
+              rate: party.rate,
+              mondayFinal: mondayFinalStatus, // Dynamic status instead of static field
+            };
+          })
+        );
+        
         setParties(mappedParties);
       } else {
-        console.error('❌ Failed to load parties:', response.message);
+        console.error('Failed to load parties:', response.message);
         toast({
           title: "Error",
           description: "Failed to load parties",
@@ -78,7 +116,7 @@ const PartyReport = () => {
         });
       }
     } catch (error) {
-      console.error('❌ Load parties error:', error);
+      console.error('Load parties error:', error);
       toast({
         title: "Error",
         description: "Failed to load parties",
@@ -88,6 +126,34 @@ const PartyReport = () => {
       setLoading(false);
     }
   }, [toast]);
+
+  // Event-based Monday Final status updates
+  useEffect(() => {
+    // Refresh Monday Final status when page gains focus
+    const handleFocus = () => {
+      // Only refresh if not currently loading
+      if (!loading) {
+        loadParties();
+      }
+    };
+
+    // Refresh when returning from other pages
+    const handleVisibilityChange = () => {
+      if (!document.hidden && !loading) {
+        loadParties();
+      }
+    };
+
+    // Listen for page focus and visibility changes
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Cleanup listeners
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [loadParties, loading]);
 
   const handleModify = async () => {
     if (selectedParty) {
@@ -99,7 +165,7 @@ const PartyReport = () => {
           description: `Opening ${selectedParty.name} for editing`,
         });
       } catch (error) {
-        console.error('❌ Modify party error:', error);
+        console.error('Modify party error:', error);
         toast({
           title: "Error",
           description: "Failed to open party for modification",
@@ -146,7 +212,7 @@ const PartyReport = () => {
             });
           }
         } catch (error) {
-          console.error('❌ Delete party error:', error);
+          console.error('Delete party error:', error);
           toast({
             title: "Error",
             description: "Failed to delete party",
@@ -210,6 +276,20 @@ const PartyReport = () => {
             
             {/* Action Buttons */}
             <div className="flex items-center space-x-3">
+              <button
+                onClick={() => {
+                  loadParties();
+                  toast({
+                    title: "Refreshing",
+                    description: "Updating Monday Final status for all parties...",
+                  });
+                }}
+                disabled={loading}
+                className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                <span>{loading ? 'Refreshing...' : '🔄 Refresh Status'}</span>
+              </button>
               <button
                 onClick={handleModify}
                 disabled={!selectedParty}
@@ -305,8 +385,8 @@ const PartyReport = () => {
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                         {party.name}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        {formatNumber(party.balanceLimit)}
+                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {formatNumber(Number(party.balanceLimit) || 0)}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                         {party.mCommission}

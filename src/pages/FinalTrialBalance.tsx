@@ -116,10 +116,14 @@ const FinalTrialBalance = () => {
   }, [partyName, parties]);
 
   // Load trial balance data
-  const loadTrialBalance = useCallback(async () => {
+  const loadTrialBalance = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     try {
-      const response = await finalTrialBalanceAPI.getAll();
+      // Use force refresh API if requested
+      const response = forceRefresh 
+        ? await finalTrialBalanceAPI.forceRefresh()
+        : await finalTrialBalanceAPI.getAll();
+      
       if (response.success) {
         // Trial balance data received
         
@@ -132,31 +136,46 @@ const FinalTrialBalance = () => {
         const debitEntries: TrialBalanceEntry[] = [];
         
         parties.forEach((party) => {
+          // Show Credit entries (Jama/Dena) - Company owes money
           if (party.creditTotal > 0) {
             creditEntries.push({
-              id: party.name,
+              id: `${party.name}-credit`,
               name: party.name,
               amount: party.creditTotal,
-              type: 'credit'
+              type: 'credit',
+              remarks: `Credit Total for ${party.name}`,
+              date: new Date().toISOString().split('T')[0]
             });
           }
           
+          // Show Debit entries (Name/Lena) - Company is owed money
           if (party.debitTotal > 0) {
             debitEntries.push({
-              id: party.name,
+              id: `${party.name}-debit`,
               name: party.name,
               amount: party.debitTotal,
-              type: 'debit'
+              type: 'debit',
+              remarks: `Debit Total for ${party.name}`,
+              date: new Date().toISOString().split('T')[0]
             });
           }
         });
         
+        // Sort entries by amount (largest first) for better readability
+        creditEntries.sort((a, b) => b.amount - a.amount);
+        debitEntries.sort((a, b) => b.amount - a.amount);
+        
+        // Calculate totals from actual entries
+        const creditTotal = creditEntries.reduce((sum, entry) => sum + entry.amount, 0);
+        const debitTotal = debitEntries.reduce((sum, entry) => sum + entry.amount, 0);
+        const balanceDifference = creditTotal - debitTotal;
+        
         const transformedData: TrialBalanceData = {
           creditEntries,
           debitEntries,
-          creditTotal: backendData.totals?.totalCredit || 0,
-          debitTotal: backendData.totals?.totalDebit || 0,
-          balanceDifference: backendData.totals?.totalBalance || 0
+          creditTotal,
+          debitTotal,
+          balanceDifference
         };
         
         setTrialBalanceData(transformedData);
@@ -183,6 +202,16 @@ const FinalTrialBalance = () => {
   // Load trial balance data on component mount
   useEffect(() => {
     loadTrialBalance();
+  }, [loadTrialBalance]);
+
+  // Auto-refresh trial balance every 30 seconds for real-time updates
+  useEffect(() => {
+    const autoRefreshInterval = setInterval(() => {
+      console.log('🔄 Auto-refreshing trial balance for real-time updates...');
+      loadTrialBalance(true); // Force refresh
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(autoRefreshInterval);
   }, [loadTrialBalance]);
 
   // Extract parties from trial balance when data is loaded
@@ -258,10 +287,20 @@ const FinalTrialBalance = () => {
   const handleRefresh = async () => {
     setPartyName('');
     setSelectedEntries([]);
-    await loadTrialBalance();
+    await loadTrialBalance(true); // Force refresh for real-time updates
     toast({
       title: "Success",
-      description: "Trial balance refreshed and showing all parties",
+      description: "Trial balance force refreshed with latest data",
+    });
+  };
+
+  const handleForceRefresh = async () => {
+    setPartyName('');
+    setSelectedEntries([]);
+    await loadTrialBalance(true); // Force refresh bypassing cache
+    toast({
+      title: "Real-time Update",
+      description: "Trial balance updated with latest ledger changes",
     });
   };
 
@@ -352,6 +391,12 @@ const FinalTrialBalance = () => {
                   Refresh
                 </button>
                 <button
+                  onClick={handleForceRefresh}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  Force Refresh
+                </button>
+                <button
                   onClick={handleExit}
                   className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
                 >
@@ -369,116 +414,157 @@ const FinalTrialBalance = () => {
             </div>
           )}
 
-          {/* Trial Balance Data - SHUBH LABH 1011 Format */}
-          {!loading && trialBalanceData && (
-            <div className="p-6">
-              {/* Two Tables Layout */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                
-                {/* Credit Table - Left Side */}
-                <div className="bg-white border border-gray-200 rounded-lg">
-                  <div className="bg-green-50 border-b border-green-200 px-4 py-2 rounded-t-lg">
-                    <h3 className="text-sm font-semibold text-green-800">Credit / Jama / Dena</h3>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Name
-                          </th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Amount (Cr)
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {creditEntries.map((entry) => (
-                          <tr key={entry.id} className="hover:bg-gray-50">
-                            <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
-                              <input
-                                type="checkbox"
-                                checked={selectedEntries.includes(entry.id)}
-                                onChange={(e) => handleCheckboxChange(entry.id, e.target.checked)}
-                                className="mr-2 rounded border-gray-300 text-green-600 focus:ring-green-500"
-                              />
-                              {entry.name}
-                            </td>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm text-green-600 font-semibold">
-                              {entry.amount.toLocaleString()}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Debit Table - Right Side */}
-                <div className="bg-white border border-gray-200 rounded-lg">
-                  <div className="bg-red-50 border-b border-red-200 px-4 py-2 rounded-t-lg">
-                    <h3 className="text-sm font-semibold text-red-800">Debit / Name / Lena</h3>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Name
-                          </th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Amount (Dr)
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {debitEntries.map((entry) => (
-                          <tr key={entry.id} className="hover:bg-gray-50">
-                            <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
-                              <input
-                                type="checkbox"
-                                checked={selectedEntries.includes(entry.id)}
-                                onChange={(e) => handleCheckboxChange(entry.id, e.target.checked)}
-                                className="mr-2 rounded border-gray-300 text-red-600 focus:ring-red-500"
-                              />
-                              {entry.name}
-                            </td>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm text-red-600 font-semibold">
-                              -{entry.amount.toLocaleString()}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+          {/* Table Section */}
+          <div className="p-4">
+            {/* Virtual Parties Info */}
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="text-sm text-blue-800">
+                <strong>Note:</strong> This trial balance includes all parties including virtual parties: 
+                <span className="font-semibold ml-1">Commission</span> (Company takes commission) and 
+                <span className="font-semibold ml-1">Company Account</span> (Company gives commission). 
+                Data is real-time and updates automatically when transactions are added/deleted.
               </div>
-
-              {/* Footer with Totals */}
-              <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <div className="flex justify-between items-center">
-                  <div className="text-sm font-medium text-blue-800">
-                    Credit / Jama / Dena Total: {creditTotal.toLocaleString()}
-                  </div>
-                  <div className="text-sm font-medium text-blue-800">
-                    Debit / Name / Lena Total: -{debitTotal.toLocaleString()}
-                  </div>
-                </div>
-                {balanceDifference !== 0 && (
-                  <div className="mt-2 text-sm font-medium text-red-600">
-                    Balance Difference: ₹{balanceDifference.toLocaleString()}
-                  </div>
-                )}
-              </div>
-
-              {/* No Data Message */}
-              {creditEntries.length === 0 && debitEntries.length === 0 && (
-                <div className="text-center py-8">
-                  <p className="text-gray-500">No trial balance data available</p>
-                </div>
-              )}
             </div>
-          )}
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Credit Entries Table */}
+              <div className="border border-gray-300 rounded-lg overflow-hidden shadow-lg">
+                <div className="bg-green-600 text-white px-4 py-3">
+                  <h3 className="text-lg font-semibold">Credit Entries (Jama/Dena)</h3>
+                </div>
+                <div className="overflow-auto" style={{ maxHeight: 500 }}>
+                  <table className="w-full text-sm">
+                    <thead className="bg-green-50">
+                      <tr>
+                        <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">Name</th>
+                        <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">Amount (Cr)</th>
+                        <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">Type</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {loading ? (
+                        <tr>
+                          <td colSpan={3} className="text-center py-8">Loading credit entries...</td>
+                        </tr>
+                      ) : trialBalanceData?.creditEntries.length === 0 ? (
+                        <tr>
+                          <td colSpan={3} className="text-center py-8 text-gray-500">No credit entries found</td>
+                        </tr>
+                      ) : (
+                        trialBalanceData?.creditEntries.map((entry, index) => (
+                          <tr key={`credit-${entry.id}-${index}`} className="hover:bg-green-50 transition-colors">
+                            <td className="border border-gray-300 px-3 py-2 font-medium text-gray-800">
+                              {entry.name}
+                            </td>
+                            <td className="border border-gray-300 px-3 py-2 text-center font-semibold text-green-600">
+                              ₹{entry.amount.toLocaleString()}
+                            </td>
+                            <td className="border border-gray-300 px-3 py-2 text-center">
+                              <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-medium">
+                                Credit
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                    <tfoot className="bg-green-100">
+                      <tr>
+                        <td className="border border-gray-300 px-3 py-2 font-bold text-gray-800">Total Credit</td>
+                        <td className="border border-gray-300 px-3 py-2 text-center font-bold text-green-600">
+                          ₹{trialBalanceData?.creditTotal.toLocaleString() || '0'}
+                        </td>
+                        <td className="border border-gray-300 px-3 py-2"></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+
+              {/* Debit Entries Table */}
+              <div className="border border-gray-300 rounded-lg overflow-hidden shadow-lg">
+                <div className="bg-red-600 text-white px-4 py-3">
+                  <h3 className="text-lg font-semibold">Debit Entries (Name/Lena)</h3>
+                </div>
+                <div className="overflow-auto" style={{ maxHeight: 500 }}>
+                  <table className="w-full text-sm">
+                    <thead className="bg-red-50">
+                      <tr>
+                        <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">Name</th>
+                        <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">Amount (Dr)</th>
+                        <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">Type</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {loading ? (
+                        <tr>
+                          <td colSpan={3} className="text-center py-8">Loading debit entries...</td>
+                        </tr>
+                      ) : trialBalanceData?.debitEntries.length === 0 ? (
+                        <tr>
+                          <td colSpan={3} className="text-center py-8 text-gray-500">No debit entries found</td>
+                        </tr>
+                      ) : (
+                        trialBalanceData?.debitEntries.map((entry, index) => (
+                          <tr key={`debit-${entry.id}-${index}`} className="hover:bg-red-50 transition-colors">
+                            <td className="border border-gray-300 px-3 py-2 font-medium text-gray-800">
+                              {entry.name}
+                            </td>
+                            <td className="border border-gray-300 px-3 py-2 text-center font-semibold text-red-600">
+                              ₹{entry.amount.toLocaleString()}
+                            </td>
+                            <td className="border border-gray-300 px-3 py-2 text-center">
+                              <span className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs font-medium">
+                                Debit
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                    <tfoot className="bg-red-100">
+                      <tr>
+                        <td className="border border-gray-300 px-3 py-2 font-bold text-gray-800">Total Debit</td>
+                        <td className="border border-gray-300 px-3 py-2 text-center font-bold text-red-600">
+                          ₹{trialBalanceData?.debitTotal.toLocaleString() || '0'}
+                        </td>
+                        <td className="border border-gray-300 px-3 py-2"></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* Balance Summary */}
+            {trialBalanceData && (
+              <div className="mt-6 p-4 bg-gray-50 border border-gray-300 rounded-lg">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="text-center">
+                    <div className="text-sm text-gray-600">Total Credit</div>
+                    <div className="text-2xl font-bold text-green-600">
+                      ₹{trialBalanceData.creditTotal.toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-sm text-gray-600">Total Debit</div>
+                    <div className="text-2xl font-bold text-red-600">
+                      ₹{trialBalanceData.debitTotal.toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-sm text-gray-600">Balance Difference</div>
+                    <div className={`text-2xl font-bold ${
+                      trialBalanceData.balanceDifference > 0 ? 'text-green-600' : 
+                      trialBalanceData.balanceDifference < 0 ? 'text-red-600' : 'text-gray-600'
+                    }`}>
+                      ₹{trialBalanceData.balanceDifference.toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

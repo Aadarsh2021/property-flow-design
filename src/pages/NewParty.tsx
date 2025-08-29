@@ -55,6 +55,13 @@ const NewParty = () => {
     } else {
       // Get next SR number for new party
       getNextSrNo();
+      
+      // Set default commission structure for new party (Take system)
+      setFormData(prev => ({
+        ...prev,
+        mCommission: 'With Commission',
+        rate: '3'
+      }));
     }
   }, [searchParams]);
 
@@ -155,6 +162,27 @@ const NewParty = () => {
         ...prev,
         [field]: value
       }));
+      
+      // Auto-set commission structure based on commission system
+      if (field === 'commiSystem') {
+        if (value === 'Take') {
+          // Take System: Default "With Commission" + Rate "3"
+          setFormData(prev => ({
+            ...prev,
+            [field]: value,
+            mCommission: 'With Commission',
+            rate: '3'
+          }));
+        } else if (value === 'Give') {
+          // Give System: Default "With Commission" + Rate "1"
+          setFormData(prev => ({
+            ...prev,
+            [field]: value,
+            mCommission: 'With Commission',
+            rate: '1'
+          }));
+        }
+      }
     } else {
       setFormData(prev => ({
         ...prev,
@@ -364,6 +392,12 @@ const NewParty = () => {
                         <span className="text-sm">Give (Dena)</span>
                       </label>
                     </div>
+                  </div>
+                  
+                  {/* Auto-default note */}
+                  <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded border border-blue-200">
+                    <strong>Auto-Default:</strong> Take system automatically sets "With Commission" + Rate "3", 
+                    Give system sets "With Commission" + Rate "1". You can modify these values below.
                   </div>
                   <div className="flex items-center">
                     <label className="w-24 text-sm font-medium text-gray-700">Balance Limit</label>
