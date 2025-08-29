@@ -245,6 +245,32 @@ const AccountLedger = () => {
   // State for storing all parties including virtual ones for bottom dropdown
   const [allPartiesForTransaction, setAllPartiesForTransaction] = useState<Party[]>([]);
 
+  // Update virtual parties when company account changes
+  const updateVirtualParties = useCallback(() => {
+    if (allPartiesForTransaction.length > 0) {
+      // Find and update the virtual company party
+      const updatedParties = allPartiesForTransaction.map(party => {
+        if (party._id === 'virtual_company') {
+          return {
+            ...party,
+            name: companyAccount
+          };
+        }
+        return party;
+      });
+      
+      setAllPartiesForTransaction(updatedParties);
+      setFilteredParties(updatedParties);
+    }
+  }, [allPartiesForTransaction, companyAccount]);
+
+  // Update virtual parties when company account changes
+  useEffect(() => {
+    if (companyAccount !== 'Company' && allPartiesForTransaction.length > 0) {
+      updateVirtualParties();
+    }
+  }, [companyAccount, updateVirtualParties]);
+
   // Filter parties based on search input (bottom section) - Exclude current party
   const filterParties = useCallback((searchTerm: string) => {
     // Always exclude current party from bottom dropdown
