@@ -58,14 +58,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         if (storedToken && storedUser) {
           // Quick token validation (check if not expired)
-          const tokenData = JSON.parse(atob(storedToken.split('.')[1]));
-          const currentTime = Date.now() / 1000;
-          
-          if (tokenData.exp > currentTime) {
-            setToken(storedToken);
-            setUser(JSON.parse(storedUser));
-          } else {
-            // Token expired, clear storage
+          try {
+            const tokenParts = storedToken.split('.');
+            if (tokenParts.length !== 3) {
+              throw new Error('Invalid token format');
+            }
+            
+            const tokenData = JSON.parse(atob(tokenParts[1]));
+            const currentTime = Date.now() / 1000;
+            
+            if (tokenData.exp && tokenData.exp > currentTime) {
+              setToken(storedToken);
+              setUser(JSON.parse(storedUser));
+            } else {
+              // Token expired, clear storage
+              localStorage.removeItem('token');
+              localStorage.removeItem('user');
+            }
+          } catch (tokenError) {
+            // Invalid token format, clear storage
+            console.warn('Invalid token format, clearing auth data:', tokenError);
             localStorage.removeItem('token');
             localStorage.removeItem('user');
           }

@@ -98,11 +98,13 @@ TableRow.displayName = 'TableRow';
 
 const AccountLedger = () => {
   // Performance monitoring
-  const startTime = performance.now();
-  
   useEffect(() => {
-    const endTime = performance.now();
-    console.log(`🚀 AccountLedger rendered in ${(endTime - startTime).toFixed(2)}ms`);
+    const startTime = performance.now();
+    // Use requestAnimationFrame to measure after render
+    requestAnimationFrame(() => {
+      const endTime = performance.now();
+      console.log(`🚀 AccountLedger rendered in ${(endTime - startTime).toFixed(2)}ms`);
+    });
   }, []); // Empty dependency array to run only once
   // Router hooks for navigation and URL parameters
   const { partyName: initialPartyName } = useParams<{ partyName: string }>();
@@ -1051,7 +1053,9 @@ const AccountLedger = () => {
             try {
               const aqcResponse = await partyLedgerAPI.addEntry(aqcEntry);
               if (aqcResponse.success) {
-                console.log('✅ AQC/Company party entry saved successfully');
+                if (import.meta.env.DEV) {
+                  console.log('✅ AQC/Company party entry saved successfully');
+                }
                 successMessage += `\n💼 ${companyName} party entry saved`;
               } else {
                 console.error('❌ Failed to save AQC/Company party entry:', aqcResponse.message);
