@@ -46,6 +46,7 @@ const Login = () => {
   const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({});
   const [loadingMessage, setLoadingMessage] = useState('Signing In...');
   const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   // Get the page user was trying to access
   const from = location.state?.from?.pathname || '/dashboard';
@@ -615,6 +616,16 @@ const Login = () => {
                 {validationErrors.password && (
                   <p className="text-sm text-red-500">{validationErrors.password}</p>
                 )}
+                <div className="text-right">
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotPassword(true)}
+                    className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                    disabled={loading || googleLoading}
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
               </div>
               
               <Button
