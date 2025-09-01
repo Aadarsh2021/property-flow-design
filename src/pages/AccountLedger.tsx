@@ -892,15 +892,23 @@ const AccountLedger = () => {
       // Determine transaction type based on amount
       const tnsType = amount > 0 ? 'CR' : 'DR';
 
-      // Simplified remarks logic - use user's remarks or party name only
+      // Format: Party Name(Remarks) - combine party name and remarks
       let finalRemarks = '';
-      if (newEntry.remarks && newEntry.remarks.trim()) {
-        // If user entered remarks, use only that
-        finalRemarks = newEntry.remarks.trim();
+      const partyName = newEntry.partyName && newEntry.partyName.trim() ? newEntry.partyName.trim() : '';
+      const remarks = newEntry.remarks && newEntry.remarks.trim() ? newEntry.remarks.trim() : '';
+      
+      if (partyName && remarks) {
+        // Both party name and remarks provided: Party Name(Remarks)
+        finalRemarks = `${partyName}(${remarks})`;
+      } else if (partyName) {
+        // Only party name provided: Party Name
+        finalRemarks = partyName;
+      } else if (remarks) {
+        // Only remarks provided: Remarks
+        finalRemarks = remarks;
       } else {
-        // If no remarks, use party name (from bottom form)
-        finalRemarks = newEntry.partyName && newEntry.partyName.trim() ? 
-          newEntry.partyName.trim() : 'Transaction';
+        // Neither provided: default
+        finalRemarks = 'Transaction';
       }
 
       // Check if this is a commission transaction
@@ -1969,7 +1977,7 @@ const AccountLedger = () => {
                     <thead className="bg-gray-50 sticky top-0">
                       <tr>
                         <th className="border-b border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Date</th>
-                        <th className="border-b border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Remarks</th>
+                        <th className="border-b border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Party Name</th>
                         <th className="border-b border-gray-200 px-4 py-3 text-center font-semibold text-gray-700">Type</th>
                         <th className="border-b border-gray-200 px-4 py-3 text-center font-semibold text-gray-700">Credit</th>
                         <th className="border-b border-gray-200 px-4 py-3 text-center font-semibold text-gray-700">Debit</th>
@@ -2026,7 +2034,7 @@ const AccountLedger = () => {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-800">Add New Entry</h3>
                   <div className="text-xs text-gray-500">
-                    <strong>Format:</strong> Party Name (Remarks) | <strong>Type:</strong> + for Credit, - for Debit | <strong>Commission:</strong> Type "commission" in party name for last transaction
+                    <strong>Format:</strong> Party Name(Remarks) | <strong>Type:</strong> + for Credit, - for Debit | <strong>Commission:</strong> Type "commission" in party name for last transaction
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -2115,7 +2123,7 @@ const AccountLedger = () => {
                   value={newEntry.remarks}
                       onChange={(e) => setNewEntry(prev => ({ ...prev, remarks: e.target.value }))}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                      placeholder="Additional remarks (optional)"
+                      placeholder="Additional remarks (will show as Party Name(Remarks))"
                 />
               </div>
                   <div className="space-y-2">
