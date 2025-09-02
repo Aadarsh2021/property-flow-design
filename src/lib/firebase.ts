@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getAnalytics } from 'firebase/analytics';
 
@@ -65,6 +65,17 @@ export const signOutUser = async () => {
     return { success: true };
   } catch (error: any) {
     console.error('Sign-out error:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Password Reset function
+export const resetPassword = async (email: string) => {
+  try {
+    await sendPasswordResetEmail(auth, email);
+    return { success: true, message: 'Password reset email sent successfully' };
+  } catch (error: any) {
+    console.error('Password reset error:', error);
     return { success: false, error: error.message };
   }
 };
