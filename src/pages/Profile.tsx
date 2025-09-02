@@ -821,52 +821,27 @@ const Profile = () => {
                 </CardContent>
               </Card>
 
-              {/* Delete Account Section */}
+              {/* Delete Account Section - Compact */}
               <Card className="mt-6 border-red-200">
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2 text-red-600">
-                    <Trash2 className="w-5 h-5" />
-                    <span>Delete Account</span>
-                  </CardTitle>
-                  <CardDescription className="text-red-600">
-                    Permanently delete your account and all associated data
-                  </CardDescription>
-                </CardHeader>
-                
-                <CardContent>
-                  <div className="bg-red-50 border border-red-200 rounded-md p-4">
-                    <div className="flex items-start space-x-3">
-                      <Trash2 className="w-5 h-5 text-red-600 mt-0.5" />
-                      <div className="flex-1">
-                        <h4 className="text-sm font-medium text-red-800 mb-2">
-                          ⚠️ This action cannot be undone
-                        </h4>
-                        <p className="text-sm text-red-700 mb-4">
-                          Deleting your account will permanently remove:
-                        </p>
-                        <ul className="text-sm text-red-700 space-y-1 mb-4">
-                          <li>• Your profile and personal information</li>
-                          <li>• All party data and ledger entries</li>
-                          <li>• Transaction history and reports</li>
-                          <li>• User settings and preferences</li>
-                          <li>• All associated business data</li>
-                        </ul>
-                        <p className="text-sm text-red-600 font-medium">
-                          This action is irreversible and will log you out immediately.
-                        </p>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <Trash2 className="w-5 h-5 text-red-600" />
+                      <div>
+                        <h3 className="text-sm font-medium text-red-800">Delete Account</h3>
+                        <p className="text-xs text-red-600">Permanently delete your account and all data</p>
                       </div>
                     </div>
-                  </div>
-                  
-                  <div className="mt-4">
+                    
                     <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
                       <AlertDialogTrigger asChild>
                         <Button 
                           variant="destructive" 
-                          className="w-full bg-red-600 hover:bg-red-700"
+                          size="sm"
+                          className="bg-red-600 hover:bg-red-700"
                         >
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Delete My Account
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Delete
                         </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
