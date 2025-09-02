@@ -61,7 +61,6 @@ const Profile = () => {
     fullname: '',
     email: '',
     phone: '',
-    company_account: '',
     address: '',
     city: '',
     state: '',
@@ -88,14 +87,13 @@ const Profile = () => {
         fullname: user.fullname || '',
         email: user.email || '',
         phone: user.phone || '',
-        company_account: user.company_account || companyName || '',
         address: user.address || '',
         city: user.city || '',
         state: user.state || '',
         pincode: user.pincode || ''
       });
     }
-  }, [user, companyName]);
+  }, [user]);
 
   // Load company name from User Settings
   useEffect(() => {
@@ -143,18 +141,7 @@ const Profile = () => {
         const updatedUser = { ...user, ...formData };
         login(user?.token || '', updatedUser);
         
-        // Update company name in User Settings if company_account changed
-        if (formData.company_account && formData.company_account !== companyName) {
-          try {
-            await userSettingsAPI.updateSettings(user?.id || '', {
-              company_account: formData.company_account
-            });
-            // Refresh company name in navigation
-            refreshCompanyName();
-          } catch (error) {
-            console.error('Error updating company name in User Settings:', error);
-          }
-        }
+        // Company name is managed in User Settings, not here
         
         toast({
           title: "✅ Profile Updated",
@@ -278,6 +265,9 @@ const Profile = () => {
   
   // Show current password field only for email users who have password set
   const showCurrentPassword = !isGoogleUser && hasPassword;
+  
+  // Company name from User Settings (read-only)
+  const displayCompanyName = companyName || user?.company_account || 'Company';
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -440,13 +430,13 @@ const Profile = () => {
                         <Input
                           id="company_account"
                           name="company_account"
-                          value={formData.company_account}
-                          onChange={handleInputChange}
-                          disabled={!isEditing}
-                          className="pl-10"
-                          placeholder="Enter your company name"
+                          value={displayCompanyName}
+                          disabled={true} // Company name cannot be changed from Profile
+                          className="pl-10 bg-gray-50"
+                          placeholder="Company name from User Settings"
                         />
                       </div>
+                      <p className="text-xs text-gray-500">Company name can only be changed from User Settings</p>
                     </div>
 
                     {/* Address */}

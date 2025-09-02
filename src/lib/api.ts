@@ -186,7 +186,7 @@ export const authAPI = {
     body: JSON.stringify(userData),
   }),
   getProfile: () => apiCall<any>('/authentication/profile'),
-  updateProfile: (userData: Partial<{ fullname: string; email: string; phone: string; company_account: string; address: string; city: string; state: string; pincode: string }>) => apiCall<any>('/authentication/profile', {
+  updateProfile: (userData: Partial<{ fullname: string; email: string; phone: string; address: string; city: string; state: string; pincode: string }>) => apiCall<any>('/authentication/profile', {
     method: 'PUT',
     body: JSON.stringify(userData),
   }),
