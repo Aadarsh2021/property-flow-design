@@ -27,6 +27,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Separator } from '@/components/ui/separator';
 import { 
   User, 
@@ -41,7 +42,8 @@ import {
   Camera,
   Shield,
   Calendar,
-  CheckCircle
+  CheckCircle,
+  Trash2
 } from 'lucide-react';
 import { authAPI, userSettingsAPI } from '@/lib/api';
 import { updateUserPassword, updateUserProfile, sendEmailVerificationToUser } from '@/lib/firebase';
@@ -80,6 +82,8 @@ const Profile = () => {
   });
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [emailVerificationLoading, setEmailVerificationLoading] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   
   // Load user data on component mount
   useEffect(() => {
@@ -298,6 +302,45 @@ const Profile = () => {
       });
     } finally {
       setEmailVerificationLoading(false);
+    }
+  };
+
+  // Handle account deletion
+  const handleDeleteAccount = async () => {
+    setDeleteLoading(true);
+    
+    try {
+      const result = await authAPI.deleteAccount();
+      
+      if (result.success) {
+        toast({
+          title: "🗑️ Account Deleted",
+          description: "Your account has been permanently deleted.",
+        });
+        
+        // Clear local storage and redirect to login
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        
+        // Redirect to login page
+        window.location.href = '/login';
+      } else {
+        toast({
+          title: "❌ Failed to Delete Account",
+          description: result.message || "Please try again later",
+          variant: "destructive"
+        });
+      }
+    } catch (error: any) {
+      console.error('Account deletion error:', error);
+      toast({
+        title: "❌ Error",
+        description: "Failed to delete account. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setDeleteLoading(false);
+      setShowDeleteDialog(false);
     }
   };
 
@@ -774,6 +817,102 @@ const Profile = () => {
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Status:</span>
                     <span className="text-sm font-medium text-green-600">Active</span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Delete Account Section */}
+              <Card className="mt-6 border-red-200">
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2 text-red-600">
+                    <Trash2 className="w-5 h-5" />
+                    <span>Delete Account</span>
+                  </CardTitle>
+                  <CardDescription className="text-red-600">
+                    Permanently delete your account and all associated data
+                  </CardDescription>
+                </CardHeader>
+                
+                <CardContent>
+                  <div className="bg-red-50 border border-red-200 rounded-md p-4">
+                    <div className="flex items-start space-x-3">
+                      <Trash2 className="w-5 h-5 text-red-600 mt-0.5" />
+                      <div className="flex-1">
+                        <h4 className="text-sm font-medium text-red-800 mb-2">
+                          ⚠️ This action cannot be undone
+                        </h4>
+                        <p className="text-sm text-red-700 mb-4">
+                          Deleting your account will permanently remove:
+                        </p>
+                        <ul className="text-sm text-red-700 space-y-1 mb-4">
+                          <li>• Your profile and personal information</li>
+                          <li>• All party data and ledger entries</li>
+                          <li>• Transaction history and reports</li>
+                          <li>• User settings and preferences</li>
+                          <li>• All associated business data</li>
+                        </ul>
+                        <p className="text-sm text-red-600 font-medium">
+                          This action is irreversible and will log you out immediately.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4">
+                    <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+                      <AlertDialogTrigger asChild>
+                        <Button 
+                          variant="destructive" 
+                          className="w-full bg-red-600 hover:bg-red-700"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete My Account
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle className="text-red-600">
+                            🗑️ Delete Account Permanently
+                          </AlertDialogTitle>
+                          <AlertDialogDescription className="text-gray-700">
+                            Are you absolutely sure you want to delete your account? This action cannot be undone.
+                            <br /><br />
+                            <strong>All your data will be permanently lost:</strong>
+                            <br />• Profile and personal information
+                            <br />• All party data and ledger entries  
+                            <br />• Transaction history and reports
+                            <br />• User settings and preferences
+                            <br />• All associated business data
+                            <br /><br />
+                            <span className="text-red-600 font-medium">
+                              You will be logged out immediately after deletion.
+                            </span>
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel disabled={deleteLoading}>
+                            Cancel
+                          </AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={handleDeleteAccount}
+                            disabled={deleteLoading}
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            {deleteLoading ? (
+                              <>
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                                Deleting...
+                              </>
+                            ) : (
+                              <>
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Yes, Delete My Account
+                              </>
+                            )}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 </CardContent>
               </Card>

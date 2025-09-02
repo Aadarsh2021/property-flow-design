@@ -198,6 +198,9 @@ export const authAPI = {
     method: 'POST',
     body: JSON.stringify(passwordData),
   }),
+  deleteAccount: () => apiCall<{ message: string }>('/authentication/account', {
+    method: 'DELETE',
+  }),
   logout: () => apiCall<{ message: string }>('/authentication/logout', {
     method: 'POST',
   }),
