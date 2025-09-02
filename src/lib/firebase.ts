@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, updatePassword, updateProfile } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, updatePassword, updateProfile, sendEmailVerification } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getAnalytics } from 'firebase/analytics';
 
@@ -108,6 +108,26 @@ export const updateUserProfile = async (profileData: { displayName?: string; pho
     return { success: true, message: 'Profile updated successfully' };
   } catch (error: any) {
     console.error('Profile update error:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Send Email Verification function
+export const sendEmailVerificationToUser = async () => {
+  try {
+    const user = auth.currentUser;
+    if (!user) {
+      return { success: false, error: 'No user logged in' };
+    }
+    
+    if (user.emailVerified) {
+      return { success: false, error: 'Email is already verified' };
+    }
+    
+    await sendEmailVerification(user);
+    return { success: true, message: 'Verification email sent successfully' };
+  } catch (error: any) {
+    console.error('Email verification error:', error);
     return { success: false, error: error.message };
   }
 };

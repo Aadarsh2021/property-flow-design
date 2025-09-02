@@ -28,7 +28,7 @@ import { Eye, EyeOff, Lock, User, Building2, Mail, Phone, Home } from 'lucide-re
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { authAPI } from '@/lib/api';
-import { signUpWithEmail, signInWithGoogle } from '@/lib/firebase';
+import { signUpWithEmail, signInWithGoogle, sendEmailVerificationToUser } from '@/lib/firebase';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -367,12 +367,25 @@ const Register = () => {
       if (response.success) {
         // PostgreSQL user created successfully (Business Data)
         
-        // Step 4: Auto-login after successful registration
+        // Step 4: Send email verification
+        try {
+          const verificationResult = await sendEmailVerificationToUser();
+          if (verificationResult.success) {
+            toast({
+              title: "📧 Verification Email Sent",
+              description: "Please check your email and verify your account to complete registration.",
+            });
+          }
+        } catch (error) {
+          console.error('Email verification error:', error);
+        }
+        
+        // Step 5: Auto-login after successful registration
         login(response.data.token, response.data.user);
         
         toast({
           title: "🎉 Registration Successful!",
-          description: "Account created successfully! Welcome to Account Ledger.",
+          description: "Account created successfully! Please verify your email to access all features.",
         });
         
         // Navigate to dashboard

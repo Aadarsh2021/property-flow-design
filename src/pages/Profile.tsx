@@ -44,7 +44,7 @@ import {
   CheckCircle
 } from 'lucide-react';
 import { authAPI, userSettingsAPI } from '@/lib/api';
-import { updateUserPassword, updateUserProfile } from '@/lib/firebase';
+import { updateUserPassword, updateUserProfile, sendEmailVerificationToUser } from '@/lib/firebase';
 
 const Profile = () => {
   const { user, login } = useAuth();
@@ -79,6 +79,7 @@ const Profile = () => {
     confirm: false
   });
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [emailVerificationLoading, setEmailVerificationLoading] = useState(false);
   
   // Load user data on component mount
   useEffect(() => {
@@ -269,6 +270,37 @@ const Profile = () => {
   // Company name from User Settings (read-only)
   const displayCompanyName = companyName || user?.company_account || 'Company';
 
+  // Handle email verification resend
+  const handleResendVerification = async () => {
+    setEmailVerificationLoading(true);
+    
+    try {
+      const result = await sendEmailVerificationToUser();
+      
+      if (result.success) {
+        toast({
+          title: "📧 Verification Email Sent",
+          description: "Please check your email and click the verification link.",
+        });
+      } else {
+        toast({
+          title: "❌ Failed to Send Verification Email",
+          description: result.error || "Please try again later",
+          variant: "destructive"
+        });
+      }
+    } catch (error: any) {
+      console.error('Email verification error:', error);
+      toast({
+        title: "❌ Error",
+        description: "Failed to send verification email. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setEmailVerificationLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <TopNavigation />
@@ -399,6 +431,41 @@ const Profile = () => {
                         />
                       </div>
                       <p className="text-xs text-gray-500">Email cannot be changed</p>
+                      
+                      {/* Email Verification Status */}
+                      {!isGoogleUser && (
+                        <div className="mt-2">
+                          {user?.emailVerified ? (
+                            <div className="flex items-center space-x-2 text-green-600">
+                              <CheckCircle className="w-4 h-4" />
+                              <span className="text-sm font-medium">Email Verified</span>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              <div className="flex items-center space-x-2 text-yellow-600">
+                                <Shield className="w-4 h-4" />
+                                <span className="text-sm font-medium">Email Not Verified</span>
+                              </div>
+                              <Button
+                                onClick={handleResendVerification}
+                                disabled={emailVerificationLoading}
+                                variant="outline"
+                                size="sm"
+                                className="text-xs"
+                              >
+                                {emailVerificationLoading ? (
+                                  <>
+                                    <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mr-1" />
+                                    Sending...
+                                  </>
+                                ) : (
+                                  'Resend Verification Email'
+                                )}
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Phone */}

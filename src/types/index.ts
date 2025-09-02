@@ -54,6 +54,7 @@ export interface User {
   last_login?: string;
   lastLogin?: string;
   token?: string;
+  emailVerified?: boolean;
 }
 
 // Google Authentication Types
