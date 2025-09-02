@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, updatePassword, updateProfile } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getAnalytics } from 'firebase/analytics';
 
@@ -76,6 +76,38 @@ export const resetPassword = async (email: string) => {
     return { success: true, message: 'Password reset email sent successfully' };
   } catch (error: any) {
     console.error('Password reset error:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Update Password function
+export const updateUserPassword = async (newPassword: string) => {
+  try {
+    const user = auth.currentUser;
+    if (!user) {
+      return { success: false, error: 'No user logged in' };
+    }
+    
+    await updatePassword(user, newPassword);
+    return { success: true, message: 'Password updated successfully' };
+  } catch (error: any) {
+    console.error('Password update error:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Update User Profile function
+export const updateUserProfile = async (profileData: { displayName?: string; photoURL?: string }) => {
+  try {
+    const user = auth.currentUser;
+    if (!user) {
+      return { success: false, error: 'No user logged in' };
+    }
+    
+    await updateProfile(user, profileData);
+    return { success: true, message: 'Profile updated successfully' };
+  } catch (error: any) {
+    console.error('Profile update error:', error);
     return { success: false, error: error.message };
   }
 };

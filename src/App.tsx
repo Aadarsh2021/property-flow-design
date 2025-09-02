@@ -11,6 +11,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Index from "./pages/Index";
 import UserSettings from "./pages/UserSettings";
+import Profile from "./pages/Profile";
 import NewParty from "./pages/NewParty";
 import PartyLedger from "./pages/PartyLedger";
 import AccountLedger from "./pages/AccountLedger";
@@ -57,6 +58,11 @@ const App = () => {
                     <Route path="/user-settings" element={
                       <ProtectedRoute>
                         <UserSettings />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/profile" element={
+                      <ProtectedRoute>
+                        <Profile />
                       </ProtectedRoute>
                     } />
                     <Route path="/new-party" element={

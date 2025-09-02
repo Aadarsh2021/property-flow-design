@@ -216,6 +216,13 @@ const TopNavigation = () => {
                           >
                             Dashboard
                           </Link>
+                          <Link
+                            to="/profile"
+                            className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                            onClick={() => setActiveDropdown(null)}
+                          >
+                            Profile
+                          </Link>
                           <button
                             onClick={handleLogout}
                             className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700"
