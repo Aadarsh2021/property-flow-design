@@ -188,28 +188,59 @@ const Profile = () => {
         } else {
           setError(response.message || 'Failed to setup password');
         }
-      } else {
-        // Email user - change password
-        const response = await authAPI.changePassword({
-          currentPassword: passwordData.currentPassword,
-          newPassword: passwordData.newPassword
-        });
-        
-        if (response.success) {
-          toast({
-            title: "✅ Password Changed",
-            description: "Your password has been changed successfully",
-          });
-          
-          setPasswordData({
-            currentPassword: '',
-            newPassword: '',
-            confirmPassword: ''
-          });
-        } else {
-          setError(response.message || 'Failed to change password');
-        }
-      }
+             } else {
+         // Check if user has password set during registration
+         const hasPassword = user?.password_hash && user.password_hash !== '';
+         
+         if (hasPassword) {
+           // User has password - require current password
+           if (!passwordData.currentPassword) {
+             setError('Current password is required');
+             setPasswordLoading(false);
+             return;
+           }
+           
+           const response = await authAPI.changePassword({
+             currentPassword: passwordData.currentPassword,
+             newPassword: passwordData.newPassword
+           });
+           
+           if (response.success) {
+             toast({
+               title: "✅ Password Changed",
+               description: "Your password has been changed successfully",
+             });
+             
+             setPasswordData({
+               currentPassword: '',
+               newPassword: '',
+               confirmPassword: ''
+             });
+           } else {
+             setError(response.message || 'Failed to change password');
+           }
+         } else {
+           // User doesn't have password - setup new password
+           const response = await authAPI.setupPassword({
+             password: passwordData.newPassword
+           });
+           
+           if (response.success) {
+             toast({
+               title: "✅ Password Setup Complete",
+               description: "Your password has been set up successfully",
+             });
+             
+             setPasswordData({
+               currentPassword: '',
+               newPassword: '',
+               confirmPassword: ''
+             });
+           } else {
+             setError(response.message || 'Failed to setup password');
+           }
+         }
+       }
     } catch (error: any) {
       console.error('Password change error:', error);
       setError(error.message || 'Failed to change password');
@@ -220,6 +251,12 @@ const Profile = () => {
 
   // Check if user is Google user
   const isGoogleUser = user?.auth_provider === 'google';
+  
+  // Check if user has password set (for email users)
+  const hasPassword = user?.password_hash && user.password_hash !== '';
+  
+  // Show current password field only for email users who have password set
+  const showCurrentPassword = !isGoogleUser && hasPassword;
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -484,41 +521,43 @@ const Profile = () => {
                   <Lock className="w-5 h-5" />
                   <span>Password Management</span>
                 </CardTitle>
-                <CardDescription>
-                  {isGoogleUser 
-                    ? "Set up a password for your account" 
-                    : "Change your account password"
-                  }
-                </CardDescription>
+                                 <CardDescription>
+                   {isGoogleUser 
+                     ? "Set up a password for your account" 
+                     : hasPassword 
+                       ? "Change your account password"
+                       : "Set up a password for your account"
+                   }
+                 </CardDescription>
               </CardHeader>
               
-              <CardContent className="space-y-4">
-                {!isGoogleUser && (
-                  <div className="space-y-2">
-                    <Label htmlFor="currentPassword" className="text-sm font-medium text-gray-700">
-                      Current Password
-                    </Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                      <Input
-                        id="currentPassword"
-                        name="currentPassword"
-                        type={showPasswords.current ? 'text' : 'password'}
-                        value={passwordData.currentPassword}
-                        onChange={handlePasswordChange}
-                        className="pl-10 pr-10"
-                        placeholder="Enter current password"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => togglePasswordVisibility('current')}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      >
-                        {showPasswords.current ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-                )}
+                             <CardContent className="space-y-4">
+                 {showCurrentPassword && (
+                   <div className="space-y-2">
+                     <Label htmlFor="currentPassword" className="text-sm font-medium text-gray-700">
+                       Current Password
+                     </Label>
+                     <div className="relative">
+                       <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                       <Input
+                         id="currentPassword"
+                         name="currentPassword"
+                         type={showPasswords.current ? 'text' : 'password'}
+                         value={passwordData.currentPassword}
+                         onChange={handlePasswordChange}
+                         className="pl-10 pr-10"
+                         placeholder="Enter current password"
+                       />
+                       <button
+                         type="button"
+                         onClick={() => togglePasswordVisibility('current')}
+                         className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                       >
+                         {showPasswords.current ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                       </button>
+                     </div>
+                   </div>
+                 )}
 
                 <div className="space-y-2">
                   <Label htmlFor="newPassword" className="text-sm font-medium text-gray-700">
@@ -570,37 +609,51 @@ const Profile = () => {
                   </div>
                 </div>
 
-                <Button
-                  onClick={handlePasswordChangeSubmit}
-                  disabled={passwordLoading || !passwordData.newPassword || !passwordData.confirmPassword}
-                  className="w-full bg-green-600 hover:bg-green-700"
-                >
-                  {passwordLoading ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                      {isGoogleUser ? 'Setting up...' : 'Changing...'}
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="w-4 h-4 mr-2" />
-                      {isGoogleUser ? 'Setup Password' : 'Change Password'}
-                    </>
-                  )}
-                </Button>
+                                 <Button
+                   onClick={handlePasswordChangeSubmit}
+                   disabled={passwordLoading || !passwordData.newPassword || !passwordData.confirmPassword}
+                   className="w-full bg-green-600 hover:bg-green-700"
+                 >
+                   {passwordLoading ? (
+                     <>
+                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                       {isGoogleUser || !hasPassword ? 'Setting up...' : 'Changing...'}
+                     </>
+                   ) : (
+                     <>
+                       <CheckCircle className="w-4 h-4 mr-2" />
+                       {isGoogleUser || !hasPassword ? 'Setup Password' : 'Change Password'}
+                     </>
+                   )}
+                 </Button>
 
-                {isGoogleUser && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-                    <div className="flex items-start space-x-2">
-                      <Shield className="w-4 h-4 text-blue-600 mt-0.5" />
-                      <div className="text-sm text-blue-800">
-                        <p className="font-medium">Google Account</p>
-                        <p className="text-blue-600">
-                          You can set up a password to also login with email and password.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                                 {isGoogleUser && (
+                   <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                     <div className="flex items-start space-x-2">
+                       <Shield className="w-4 h-4 text-blue-600 mt-0.5" />
+                       <div className="text-sm text-blue-800">
+                         <p className="font-medium">Google Account</p>
+                         <p className="text-blue-600">
+                           You can set up a password to also login with email and password.
+                         </p>
+                       </div>
+                     </div>
+                   </div>
+                 )}
+                 
+                 {!isGoogleUser && !hasPassword && (
+                   <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                     <div className="flex items-start space-x-2">
+                       <Shield className="w-4 h-4 text-yellow-600 mt-0.5" />
+                       <div className="text-sm text-yellow-800">
+                         <p className="font-medium">Email Account</p>
+                         <p className="text-yellow-600">
+                           You haven't set up a password yet. Set one up to secure your account.
+                         </p>
+                       </div>
+                     </div>
+                   </div>
+                 )}
               </CardContent>
             </Card>
 
