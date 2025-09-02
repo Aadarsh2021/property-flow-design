@@ -186,12 +186,16 @@ export const authAPI = {
     body: JSON.stringify(userData),
   }),
   getProfile: () => apiCall<any>('/authentication/profile'),
-  updateProfile: (userData: Partial<{ fullname: string; email: string; phone: string }>) => apiCall<any>('/authentication/profile', {
+  updateProfile: (userData: Partial<{ fullname: string; email: string; phone: string; company_account: string; address: string; city: string; state: string; pincode: string }>) => apiCall<any>('/authentication/profile', {
     method: 'PUT',
     body: JSON.stringify(userData),
   }),
   changePassword: (passwordData: { currentPassword: string; newPassword: string }) => apiCall<{ message: string }>('/authentication/change-password', {
     method: 'PUT',
+    body: JSON.stringify(passwordData),
+  }),
+  setupPassword: (passwordData: { password: string }) => apiCall<{ message: string }>('/authentication/setup-password', {
+    method: 'POST',
     body: JSON.stringify(passwordData),
   }),
   logout: () => apiCall<{ message: string }>('/authentication/logout', {

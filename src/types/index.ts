@@ -41,6 +41,19 @@ export interface User {
   status: string;
   googleId?: string;
   profilePicture?: string;
+  // Additional user fields
+  company_account?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  auth_provider?: 'google' | 'email';
+  password_hash?: string;
+  created_at?: string;
+  createdAt?: string;
+  last_login?: string;
+  lastLogin?: string;
+  token?: string;
 }
 
 // Google Authentication Types
@@ -161,6 +174,7 @@ export interface LedgerEntryInput {
 export interface UserSettings {
   decimalFormat: 'FULL AMOUNT' | 'DECIMAL' | 'CURRENCY';
   companyAccount: string;
+  company_account?: string; // Backend compatibility
   password: string;
   entryOrder: 'FIRST AMOUNT' | 'LAST AMOUNT' | 'CUSTOM ORDER';
   ntPosition: 'BOTTOM' | 'TOP' | 'MIDDLE';

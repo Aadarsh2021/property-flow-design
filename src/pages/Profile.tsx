@@ -20,6 +20,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { useCompanyName } from '@/hooks/useCompanyName';
 import TopNavigation from '@/components/TopNavigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,12 +43,13 @@ import {
   Calendar,
   CheckCircle
 } from 'lucide-react';
-import { authAPI } from '@/lib/api';
+import { authAPI, userSettingsAPI } from '@/lib/api';
 import { updateUserPassword, updateUserProfile } from '@/lib/firebase';
 
 const Profile = () => {
   const { user, login } = useAuth();
   const { toast } = useToast();
+  const { companyName, refreshCompanyName } = useCompanyName();
   
   // Form states
   const [isEditing, setIsEditing] = useState(false);
@@ -86,14 +88,19 @@ const Profile = () => {
         fullname: user.fullname || '',
         email: user.email || '',
         phone: user.phone || '',
-        company_account: user.company_account || '',
+        company_account: user.company_account || companyName || '',
         address: user.address || '',
         city: user.city || '',
         state: user.state || '',
         pincode: user.pincode || ''
       });
     }
-  }, [user]);
+  }, [user, companyName]);
+
+  // Load company name from User Settings
+  useEffect(() => {
+    refreshCompanyName();
+  }, [refreshCompanyName]);
 
   // Handle form input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -135,6 +142,19 @@ const Profile = () => {
         // Update local user data
         const updatedUser = { ...user, ...formData };
         login(user?.token || '', updatedUser);
+        
+        // Update company name in User Settings if company_account changed
+        if (formData.company_account && formData.company_account !== companyName) {
+          try {
+            await userSettingsAPI.updateSettings(user?.id || '', {
+              company_account: formData.company_account
+            });
+            // Refresh company name in navigation
+            refreshCompanyName();
+          } catch (error) {
+            console.error('Error updating company name in User Settings:', error);
+          }
+        }
         
         toast({
           title: "✅ Profile Updated",
@@ -680,14 +700,17 @@ const Profile = () => {
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Member Since:</span>
                     <span className="text-sm font-medium">
-                      {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
+                      {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 
+                       user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
                     </span>
                   </div>
                   
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Last Login:</span>
                     <span className="text-sm font-medium">
-                      {user?.last_login ? new Date(user.last_login).toLocaleDateString() : 'N/A'}
+                      {user?.last_login ? new Date(user.last_login).toLocaleDateString() : 
+                       user?.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 
+                       new Date().toLocaleDateString()}
                     </span>
                   </div>
                   
