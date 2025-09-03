@@ -117,12 +117,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const needsInitialSetup = (user: User | null): boolean => {
     if (!user) return false;
     
-    // Check if user was created recently (within last 5 minutes) or has no company account set
-    const createdAt = new Date(user.created_at || user.createdAt || '');
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    // User needs setup if: no company account OR created very recently (within 5 minutes)
+    const hasCompanyAccount = user.company_account && user.company_account.trim() !== '';
+    const isRecentlyCreated = user.created_at && new Date(user.created_at) > new Date(Date.now() - 5 * 60 * 1000);
     
-    // If user was created recently or doesn't have company account, they need setup
-    return createdAt > fiveMinutesAgo || !user.company_account;
+    return !hasCompanyAccount || isRecentlyCreated;
   };
 
   const logout = () => {

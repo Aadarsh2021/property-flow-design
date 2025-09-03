@@ -221,8 +221,9 @@ const Login = () => {
           login(response.data.token, response.data.user);
           
           // Check if user needs initial setup
+          // User needs setup if: no company account OR created very recently (within 5 minutes)
           const userNeedsSetup = !response.data.user.company_account || 
-            (new Date(response.data.user.created_at || response.data.user.createdAt || '') > new Date(Date.now() - 5 * 60 * 1000));
+            (response.data.user.created_at && new Date(response.data.user.created_at) > new Date(Date.now() - 5 * 60 * 1000));
           
           if (userNeedsSetup) {
             toast({
@@ -431,8 +432,9 @@ const Login = () => {
         login(response.data.token, response.data.user);
         
         // Check if user needs initial setup
+        // User needs setup if: no company account OR created very recently (within 5 minutes)
         const userNeedsSetup = !response.data.user.company_account || 
-          (new Date(response.data.user.created_at || response.data.user.createdAt || '') > new Date(Date.now() - 5 * 60 * 1000));
+          (response.data.user.created_at && new Date(response.data.user.created_at) > new Date(Date.now() - 5 * 60 * 1000));
         
         if (userNeedsSetup) {
           toast({
