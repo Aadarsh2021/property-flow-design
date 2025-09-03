@@ -385,11 +385,11 @@ const Register = () => {
         
         toast({
           title: "🎉 Registration Successful!",
-          description: "Account created successfully! Please verify your email to access all features.",
+          description: "Account created successfully! Please complete your initial setup.",
         });
         
-        // Navigate to dashboard
-        navigate('/');
+        // Navigate to user settings for initial setup
+        navigate('/user-settings');
       } else {
         // If PostgreSQL registration fails, we should clean up Firebase user
         console.error('❌ PostgreSQL registration failed:', response.message);
@@ -465,10 +465,10 @@ const Register = () => {
           
           toast({
             title: "🎉 Account Created Successfully!",
-            description: "Welcome to Account Ledger!",
+            description: "Please complete your initial setup to get started.",
           });
           
-          // Navigate to dashboard
+          // Navigate to user settings for initial setup
           navigate('/user-settings', { replace: true });
         } else {
           setError(createResponse.message || 'Failed to create account');

@@ -220,13 +220,24 @@ const Login = () => {
           // Use AuthContext to handle login
           login(response.data.token, response.data.user);
           
-          toast({
-            title: "🎉 Google Login Successful!",
-            description: "Welcome back!",
-          });
+          // Check if user needs initial setup
+          const userNeedsSetup = !response.data.user.company_account || 
+            (new Date(response.data.user.created_at || response.data.user.createdAt || '') > new Date(Date.now() - 5 * 60 * 1000));
           
-          // Navigate to the page user was trying to access or home
-          navigate(from, { replace: true });
+          if (userNeedsSetup) {
+            toast({
+              title: "🎉 Google Login Successful!",
+              description: "Please complete your initial setup to get started.",
+            });
+            navigate('/user-settings', { replace: true });
+          } else {
+            toast({
+              title: "🎉 Google Login Successful!",
+              description: "Welcome back!",
+            });
+            // Navigate to the page user was trying to access or home
+            navigate(from, { replace: true });
+          }
         } else {
           // User doesn't exist in backend, create account
           // Creating new user account for Google user...
@@ -248,10 +259,11 @@ const Login = () => {
             
             toast({
               title: "🎉 Account Created & Login Successful!",
-              description: "Welcome to Account Ledger!",
+              description: "Please complete your initial setup to get started.",
             });
             
-            navigate(from, { replace: true });
+            // New users should always go to settings first
+            navigate('/user-settings', { replace: true });
           } else {
             setError(createResponse.message || 'Failed to create account');
           }
@@ -418,13 +430,24 @@ const Login = () => {
         // Use AuthContext to handle login
         login(response.data.token, response.data.user);
         
-        toast({
-          title: "🎉 Login Successful!",
-          description: "Welcome back!",
-        });
+        // Check if user needs initial setup
+        const userNeedsSetup = !response.data.user.company_account || 
+          (new Date(response.data.user.created_at || response.data.user.createdAt || '') > new Date(Date.now() - 5 * 60 * 1000));
         
-        // Navigate to the page user was trying to access or home
-        navigate(from, { replace: true });
+        if (userNeedsSetup) {
+          toast({
+            title: "🎉 Login Successful!",
+            description: "Please complete your initial setup to get started.",
+          });
+          navigate('/user-settings', { replace: true });
+        } else {
+          toast({
+            title: "🎉 Login Successful!",
+            description: "Welcome back!",
+          });
+          // Navigate to the page user was trying to access or home
+          navigate(from, { replace: true });
+        }
       } else {
         console.error('❌ PostgreSQL authentication failed:', response.message);
         setError(response.message || 'Business data authentication failed');

@@ -26,6 +26,7 @@ interface AuthContextType {
   logout: () => void;
   isAuthenticated: boolean;
   loading: boolean;
+  needsInitialSetup: (user: User | null) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -112,6 +113,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  // Check if user needs to complete initial setup
+  const needsInitialSetup = (user: User | null): boolean => {
+    if (!user) return false;
+    
+    // Check if user was created recently (within last 5 minutes) or has no company account set
+    const createdAt = new Date(user.created_at || user.createdAt || '');
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    
+    // If user was created recently or doesn't have company account, they need setup
+    return createdAt > fiveMinutesAgo || !user.company_account;
+  };
+
   const logout = () => {
     try {
       setToken(null);
@@ -129,7 +142,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     login,
     logout,
     isAuthenticated: !!token && !!user,
-    loading
+    loading,
+    needsInitialSetup
   };
 
   return (
