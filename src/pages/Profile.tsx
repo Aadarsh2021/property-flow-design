@@ -188,10 +188,22 @@ const Profile = () => {
         });
         
         if (response.success) {
-          toast({
-            title: "✅ Password Setup Complete",
-            description: "Your password has been set up successfully",
-          });
+          // Update Firebase password as well
+          const firebaseResult = await updateUserPassword(passwordData.newPassword);
+          
+          if (firebaseResult.success) {
+            toast({
+              title: "✅ Password Setup Complete",
+              description: "Your password has been set up successfully in both systems",
+            });
+          } else {
+            // Database updated but Firebase failed
+            toast({
+              title: "⚠️ Partial Success",
+              description: "Password set up in database but failed to update Firebase. Please try logging in.",
+              variant: "destructive"
+            });
+          }
           
           setPasswordData({
             currentPassword: '',
@@ -219,10 +231,22 @@ const Profile = () => {
           });
           
           if (response.success) {
-            toast({
-              title: "✅ Password Changed",
-              description: "Your password has been changed successfully",
-            });
+            // Update Firebase password as well
+            const firebaseResult = await updateUserPassword(passwordData.newPassword);
+            
+            if (firebaseResult.success) {
+              toast({
+                title: "✅ Password Changed",
+                description: "Your password has been changed successfully in both systems",
+              });
+            } else {
+              // Database updated but Firebase failed
+              toast({
+                title: "⚠️ Partial Success",
+                description: "Password changed in database but failed to update Firebase. Please try logging in.",
+                variant: "destructive"
+              });
+            }
             
             setPasswordData({
               currentPassword: '',
@@ -239,10 +263,22 @@ const Profile = () => {
           });
           
           if (response.success) {
-            toast({
-              title: "✅ Password Setup Complete",
-              description: "Your password has been set up successfully",
-            });
+            // Update Firebase password as well
+            const firebaseResult = await updateUserPassword(passwordData.newPassword);
+            
+            if (firebaseResult.success) {
+              toast({
+                title: "✅ Password Setup Complete",
+                description: "Your password has been set up successfully in both systems",
+              });
+            } else {
+              // Database updated but Firebase failed
+              toast({
+                title: "⚠️ Partial Success",
+                description: "Password set up in database but failed to update Firebase. Please try logging in.",
+                variant: "destructive"
+              });
+            }
             
             setPasswordData({
               currentPassword: '',

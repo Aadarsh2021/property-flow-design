@@ -7,6 +7,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { usePasswordSync } from "@/hooks/usePasswordSync";
+import PasswordResetHandler from "@/components/PasswordResetHandler";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Index from "./pages/Index";
@@ -23,6 +25,9 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 const App = () => {
+  // Initialize password sync monitoring
+  usePasswordSync();
+
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
@@ -37,6 +42,7 @@ const App = () => {
               }}
             >
               <div className="min-h-screen bg-gray-50">
+                <PasswordResetHandler />
                 <Routes>
                     {/* Public Routes */}
                   <Route path="/" element={<Index />} />

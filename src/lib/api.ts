@@ -212,6 +212,10 @@ export const authAPI = {
     method: 'POST',
     body: JSON.stringify({ token, newPassword }),
   }),
+  syncPassword: (email: string, newPassword: string) => apiCall<{ message: string }>('/authentication/sync-password', {
+    method: 'POST',
+    body: JSON.stringify({ email, newPassword }),
+  }),
 };
 
 export const dashboardAPI = {
