@@ -30,8 +30,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { Party } from '../types';
 
 interface PartyWithMondayFinalStatus extends Party {
-  mondayFinalStatus: 'Yes' | 'No';
+mondayFinalStatus: 'Yes' | 'No';
   isSettled: boolean;
+  balance?: number;
+  creditTotal?: number;
+  debitTotal?: number;
 }
 
 const PartyLedger = () => {
@@ -96,6 +99,27 @@ const PartyLedger = () => {
     }
   };
 
+  // Get party balance
+  const getPartyBalance = async (partyName: string) => {
+    try {
+      const response = await partyLedgerAPI.getPartyLedger(partyName);
+      
+      if (response.success && response.data) {
+        const data = response.data as any;
+        return {
+          balance: data.closingBalance || 0,
+          creditTotal: data.summary?.totalCredit || 0,
+          debitTotal: data.summary?.totalDebit || 0
+        };
+      }
+      
+      return { balance: 0, creditTotal: 0, debitTotal: 0 };
+    } catch (error) {
+      console.error(`Error getting party balance for ${partyName}:`, error);
+      return { balance: 0, creditTotal: 0, debitTotal: 0 };
+    }
+  };
+
   // Enhanced fetch parties with Monday Final status
   const fetchParties = useCallback(async () => {
     setLoading(true);
@@ -122,11 +146,15 @@ const PartyLedger = () => {
             
             const mondayFinalStatus = await checkMondayFinalStatus(partyName);
             const isSettled = mondayFinalStatus === 'Yes';
+            const balanceData = await getPartyBalance(partyName);
             
             return {
               ...party,
               mondayFinalStatus,
               isSettled,
+              balance: balanceData.balance,
+              creditTotal: balanceData.creditTotal,
+              debitTotal: balanceData.debitTotal,
               // Override the static mondayFinal field with dynamic status
               mondayFinal: mondayFinalStatus as 'Yes' | 'No'
             };
@@ -589,6 +617,7 @@ const PartyLedger = () => {
                   <th className="border border-gray-300 px-2 py-1 text-center">Party Name</th>
                   <th className="border border-gray-300 px-2 py-1 text-center">Company</th>
                   <th className="border border-gray-300 px-2 py-1 text-center">Commission</th>
+                  <th className="border border-gray-300 px-2 py-1 text-center">Remaining Balance</th>
                   <th className="border border-gray-300 px-2 py-1 text-center">Monday Final</th>
                   <th className="border border-gray-300 px-2 py-1 text-center">
                     <input
@@ -644,6 +673,17 @@ const PartyLedger = () => {
                     <td className="border border-gray-300 px-2 py-1 text-center text-sm">
                       <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
                         {party.mCommission || 'No Commission'}
+                      </span>
+                    </td>
+                    <td className="border border-gray-300 px-2 py-1 text-center">
+                      <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                        (party.balance || 0) > 0 
+                          ? 'bg-green-100 text-green-800' 
+                          : (party.balance || 0) < 0 
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        ₹{(party.balance || 0).toLocaleString()}
                       </span>
                     </td>
                     <td className="border border-gray-300 px-2 py-1 text-center">
