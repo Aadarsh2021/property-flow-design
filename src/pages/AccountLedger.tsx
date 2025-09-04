@@ -336,22 +336,12 @@ const AccountLedger = () => {
       const searchLower = searchTerm.toLowerCase();
       const partyLower = partyName.toLowerCase();
       
-      console.log('🔍 Auto-complete text generation debug:', {
-        bestMatch,
-        partyName,
-        searchTerm,
-        searchLower,
-        partyLower,
-        startsWith: partyLower.startsWith(searchLower),
-        notEqual: partyLower !== searchLower
-      });
       
       if (partyLower.startsWith(searchLower) && partyLower !== searchLower) {
         // Find the actual position where the match starts (case insensitive)
         const matchIndex = partyName.toLowerCase().indexOf(searchLower);
         if (matchIndex === 0) {
           const autoCompleteText = partyName.substring(searchTerm.length);
-          console.log('🔍 Setting auto-complete text:', autoCompleteText);
           setAutoCompleteText(autoCompleteText);
           setShowInlineSuggestion(true);
         } else {
@@ -419,14 +409,6 @@ const AccountLedger = () => {
         const matchIndex = partyName.toLowerCase().indexOf(searchLower);
         if (matchIndex === 0) {
           const autoCompleteText = partyName.substring(searchTerm.length);
-          console.log('🔍 Top auto-complete text generation debug:', {
-            partyName,
-            searchTerm,
-            autoCompleteText,
-            originalPartyName: partyName,
-            searchLower,
-            partyLower
-          });
           setTopAutoCompleteText(autoCompleteText);
           setShowTopInlineSuggestion(true);
         } else {
@@ -630,12 +612,6 @@ const AccountLedger = () => {
     if (filteredParties.length > 0 && highlightedIndex >= 0) {
       const selectedParty = filteredParties[highlightedIndex];
       const partyName = selectedParty.party_name || selectedParty.name;
-      console.log('🔍 Auto-complete debug:', {
-        selectedParty,
-        partyName,
-        originalPartyName: selectedParty.party_name,
-        name: selectedParty.name
-      });
       setNewEntry(prev => ({ ...prev, partyName }));
       setShowPartyDropdown(false);
       setHighlightedIndex(-1);
@@ -650,11 +626,6 @@ const AccountLedger = () => {
     if (showInlineSuggestion && autoCompleteText) {
       const currentValue = newEntry.partyName;
       const completedValue = currentValue + autoCompleteText;
-      console.log('🔍 Tab completion debug:', {
-        currentValue,
-        autoCompleteText,
-        completedValue
-      });
       setNewEntry(prev => ({ ...prev, partyName: completedValue }));
       setAutoCompleteText('');
       setShowInlineSuggestion(false);
@@ -672,12 +643,6 @@ const AccountLedger = () => {
     if (filteredTopParties.length > 0) {
       const selectedParty = filteredTopParties[0];
       const partyName = selectedParty.party_name || selectedParty.name;
-      console.log('🔍 Top auto-complete selection debug:', {
-        selectedParty,
-        partyName,
-        originalPartyName: selectedParty.party_name,
-        name: selectedParty.name
-      });
       setTypingPartyName(partyName);
       setShowTopPartyDropdown(false);
       setTopAutoCompleteText('');
@@ -694,13 +659,6 @@ const AccountLedger = () => {
       
       // Use the original party name instead of concatenating user input + auto-complete
       const completedValue = originalPartyName;
-      console.log('🔍 Top Tab completion debug:', {
-        typingPartyName,
-        topAutoCompleteText,
-        completedValue,
-        originalPartyName,
-        originalParty
-      });
       setTypingPartyName(completedValue);
       setTopAutoCompleteText('');
       setShowTopInlineSuggestion(false);
@@ -731,11 +689,6 @@ const AccountLedger = () => {
       setLoading(true);
     }
     
-    console.log('🔍 Load ledger data debug:', {
-      selectedPartyName,
-      type: typeof selectedPartyName,
-      length: selectedPartyName.length
-    });
     
     try {
       const response = await partyLedgerAPI.getPartyLedger(selectedPartyName);
@@ -841,12 +794,6 @@ const AccountLedger = () => {
     // Extract actual party name from display format
     const actualPartyName = extractPartyNameFromDisplay(trimmedName);
     
-    console.log('🔍 Handle party change debug:', {
-      newPartyName,
-      trimmedName,
-      actualPartyName,
-      originalPartyName: newPartyName
-    });
     
     setSelectedPartyName(actualPartyName);
     setTypingPartyName(trimmedName); // Keep display format for typing
