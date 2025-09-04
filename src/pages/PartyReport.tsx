@@ -185,7 +185,7 @@ const PartyReport = () => {
     if (selectedParty) {
       // Show confirmation dialog
       const confirmed = window.confirm(
-        `Are you sure you want to delete party "${selectedParty.name}"?\n\nThis action cannot be undone and will permanently delete the party from the database.`
+        `Are you sure you want to delete party "${selectedParty.name}"?\n\nThis action cannot be undone and will permanently delete:\n• The party from the database\n• ALL transactions for this party\n\nThis is a permanent action!`
       );
       
       if (confirmed) {
@@ -195,9 +195,10 @@ const PartyReport = () => {
           console.log('🗑️ Delete response:', response);
           
           if (response.success) {
+            const deletedTransactions = response.data?.deletedTransactions || 0;
             toast({
               title: "✅ Success",
-              description: `Party "${selectedParty.name}" deleted permanently from database`,
+              description: `Party "${selectedParty.name}" and ${deletedTransactions} transactions deleted permanently from database`,
             });
             
             // Remove from local state immediately
