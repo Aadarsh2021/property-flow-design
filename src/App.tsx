@@ -80,6 +80,11 @@ const App = () => {
                         <PartyReport />
                       </ProtectedRoute>
                     } />
+                    <Route path="/account-ledger" element={
+                      <ProtectedRoute>
+                        <AccountLedger />
+                      </ProtectedRoute>
+                    } />
                     <Route path="/account-ledger/:partyName" element={
                       <ProtectedRoute>
                         <AccountLedger />

@@ -123,6 +123,15 @@ const AccountLedger = () => {
   const [typingPartyName, setTypingPartyName] = useState(initialPartyName || 'Test Company 1');
   const [availableParties, setAvailableParties] = useState<Party[]>([]);
   
+  // Handle URL parameter changes
+  useEffect(() => {
+    if (initialPartyName && initialPartyName !== selectedPartyName) {
+      const decodedPartyName = decodeURIComponent(initialPartyName);
+      setSelectedPartyName(decodedPartyName);
+      setTypingPartyName(decodedPartyName);
+    }
+  }, [initialPartyName, selectedPartyName]);
+  
   // Main ledger data state
   const [ledgerData, setLedgerData] = useState<{
     ledgerEntries: LedgerEntry[];
