@@ -109,40 +109,54 @@ export const updateUserPassword = async (newPassword: string) => {
 // Sync password with database
 export const syncPasswordWithDatabase = async (email: string, password: string) => {
   try {
-    console.log('🔄 Starting password sync for:', email);
+    console.log('🔄 [SYNC] Starting password sync for:', email);
+    console.log('🔄 [SYNC] Password length:', password.length);
     
     const apiUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software-oul4r93vr-aadarsh2021s-projects.vercel.app/api'}/authentication/sync-password`;
-    console.log('📡 API URL:', apiUrl);
+    console.log('📡 [SYNC] API URL:', apiUrl);
     
+    const requestBody = {
+      email: email,
+      newPassword: password
+    };
+    console.log('📤 [SYNC] Request body:', JSON.stringify(requestBody, null, 2));
+    
+    console.log('📡 [SYNC] Making API call...');
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        email: email,
-        newPassword: password
-      })
+      body: JSON.stringify(requestBody)
     });
 
-    console.log('📊 Response status:', response.status);
+    console.log('📊 [SYNC] Response status:', response.status);
+    console.log('📊 [SYNC] Response status text:', response.statusText);
+    console.log('📊 [SYNC] Response headers:', Object.fromEntries(response.headers.entries()));
     
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      console.error('❌ [SYNC] HTTP error response:', errorText);
+      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
     }
 
     const result = await response.json();
-    console.log('📥 Response data:', result);
+    console.log('📥 [SYNC] Response data:', JSON.stringify(result, null, 2));
     
     if (result.success) {
-      console.log('✅ Password synced with database');
+      console.log('✅ [SYNC] Password synced with database successfully!');
       return { success: true };
     } else {
-      console.error('❌ Database sync failed:', result.message);
+      console.error('❌ [SYNC] Database sync failed:', result.message);
+      console.error('❌ [SYNC] Full error result:', JSON.stringify(result, null, 2));
       return { success: false, error: result.message };
     }
   } catch (error: any) {
-    console.error('❌ Database sync error:', error);
+    console.error('❌ [SYNC] Database sync exception!');
+    console.error('❌ [SYNC] Error type:', typeof error);
+    console.error('❌ [SYNC] Error message:', error.message);
+    console.error('❌ [SYNC] Error stack:', error.stack);
+    console.error('❌ [SYNC] Full error object:', JSON.stringify(error, null, 2));
     return { success: false, error: error.message };
   }
 };

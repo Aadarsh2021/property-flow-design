@@ -100,11 +100,15 @@ const FirebasePasswordReset = () => {
       console.log('✅ Firebase password reset confirmed');
       
       // Then sync password with database
-      console.log('🔄 Syncing password with database...');
+      console.log('🔄 STEP 1: Starting database sync...');
+      console.log('📧 Email:', email);
+      console.log('🔑 Password length:', password.length);
+      
       const syncResult = await syncPasswordWithDatabase(email, password);
+      console.log('📊 Sync result:', syncResult);
       
       if (syncResult.success) {
-        console.log('✅ Database sync successful');
+        console.log('✅ STEP 2: Database sync successful!');
         toast({
           title: "✅ Password Reset Complete",
           description: "Your password has been reset and synced with both Firebase and database. You can now login.",
@@ -113,12 +117,17 @@ const FirebasePasswordReset = () => {
         // Redirect to login
         navigate('/login');
       } else {
-        console.error('❌ Database sync failed:', syncResult.error);
+        console.error('❌ STEP 2: Database sync failed!');
+        console.error('❌ Sync error details:', syncResult.error);
+        console.error('❌ Full sync result:', JSON.stringify(syncResult, null, 2));
         
         // Try alternative sync method
-        console.log('🔄 Trying alternative sync method...');
+        console.log('🔄 STEP 3: Trying alternative sync method...');
         try {
-          const altSyncResult = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software-oul4r93vr-aadarsh2021s-projects.vercel.app/api'}/authentication/sync-password`, {
+          const apiUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software-oul4r93vr-aadarsh2021s-projects.vercel.app/api'}/authentication/sync-password`;
+          console.log('📡 Alternative API URL:', apiUrl);
+          
+          const altSyncResult = await fetch(apiUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -129,22 +138,33 @@ const FirebasePasswordReset = () => {
             })
           });
           
+          console.log('📊 Alternative sync response status:', altSyncResult.status);
+          console.log('📊 Alternative sync response headers:', altSyncResult.headers);
+          
           const altResult = await altSyncResult.json();
+          console.log('📥 Alternative sync response data:', altResult);
           
           if (altResult.success) {
-            console.log('✅ Alternative sync successful');
+            console.log('✅ STEP 3: Alternative sync successful!');
             toast({
               title: "✅ Password Reset Complete",
               description: "Your password has been reset and synced with both Firebase and database. You can now login.",
             });
             navigate('/login');
             return;
+          } else {
+            console.error('❌ STEP 3: Alternative sync also failed!');
+            console.error('❌ Alternative sync error:', altResult.message);
           }
         } catch (altError) {
-          console.error('❌ Alternative sync also failed:', altError);
+          console.error('❌ STEP 3: Alternative sync exception!');
+          console.error('❌ Alternative sync error details:', altError);
+          console.error('❌ Alternative sync error message:', altError.message);
+          console.error('❌ Alternative sync error stack:', altError.stack);
         }
         
         // Show warning but still allow user to proceed since Firebase reset was successful
+        console.log('⚠️ STEP 4: Showing partial success warning...');
         toast({
           title: "⚠️ Partial Success",
           description: "Password reset in Firebase successful, but database sync failed. You can still login with your new password.",
@@ -152,7 +172,9 @@ const FirebasePasswordReset = () => {
         });
         
         // Still redirect to login since Firebase reset was successful
+        console.log('🔄 STEP 5: Redirecting to login in 3 seconds...');
         setTimeout(() => {
+          console.log('🔄 Redirecting to login now...');
           navigate('/login');
         }, 3000);
       }
