@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Password Sync Test</title>
+</head>
+<body>
+    <h1>Password Sync Test</h1>
+    <button onclick="testSync()">Test Password Sync</button>
+    <div id="result"></div>
+
+    <script>
+        async function testSync() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing password sync...';
+            
+            try {
+                const response = await fetch('https://account-ledger-software.vercel.app/api/authentication/sync-password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'thakuraadarsh1@gmail.com',
+                        newPassword: 'Aadarsh1234@'
+                    })
+                });
+                
+                const data = await response.json();
+                resultDiv.innerHTML = `<pre>Status: ${response.status}\nResponse: ${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                resultDiv.innerHTML = `Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>

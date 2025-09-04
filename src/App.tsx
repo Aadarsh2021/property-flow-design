@@ -9,8 +9,6 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import FirebasePasswordReset from "./pages/FirebasePasswordReset";
-import HandlePasswordReset from "./pages/HandlePasswordReset";
 import Index from "./pages/Index";
 import UserSettings from "./pages/UserSettings";
 import Profile from "./pages/Profile";
@@ -44,8 +42,6 @@ const App = () => {
                   <Route path="/" element={<Index />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
-                    <Route path="/firebase-reset" element={<FirebasePasswordReset />} />
-                    <Route path="/handle-reset" element={<HandlePasswordReset />} />
                     <Route path="/firebase-test" element={<FirebaseTest />} />
                     
                     {/* Protected Routes */}

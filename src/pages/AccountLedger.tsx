@@ -160,11 +160,21 @@ const AccountLedger = () => {
   // State for parties dropdown (bottom section)
   const [showPartyDropdown, setShowPartyDropdown] = useState(false);
   const [filteredParties, setFilteredParties] = useState<Party[]>([]);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [isTyping, setIsTyping] = useState(false);
+  const [autoCompleteText, setAutoCompleteText] = useState('');
+  const [showInlineSuggestion, setShowInlineSuggestion] = useState(false);
+  const [inputRef, setInputRef] = useState<HTMLInputElement | null>(null);
+  const [textWidth, setTextWidth] = useState(0);
   
   // State for top section dropdown
   const [showTopPartyDropdown, setShowTopPartyDropdown] = useState(false);
   const [filteredTopParties, setFilteredTopParties] = useState<Party[]>([]);
   const [editingEntry, setEditingEntry] = useState<LedgerEntry | null>(null);
+  const [topAutoCompleteText, setTopAutoCompleteText] = useState('');
+  const [showTopInlineSuggestion, setShowTopInlineSuggestion] = useState(false);
+  const [topInputRef, setTopInputRef] = useState<HTMLInputElement | null>(null);
+  const [topTextWidth, setTopTextWidth] = useState(0);
   const [entryToDelete, setEntryToDelete] = useState<LedgerEntry | null>(null);
   
   // Selected entries for bulk operations
@@ -282,13 +292,71 @@ const AccountLedger = () => {
     
     if (!searchTerm.trim()) {
       setFilteredParties(availablePartiesExcludingCurrent);
+      setHighlightedIndex(-1);
+      setAutoCompleteText('');
+      setShowInlineSuggestion(false);
       return;
     }
     
-    const filtered = availablePartiesExcludingCurrent.filter(party =>
-      (party.party_name || party.name || '').toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filtered = availablePartiesExcludingCurrent.filter(party => {
+      const partyName = (party.party_name || party.name || '').toLowerCase();
+      const searchLower = searchTerm.toLowerCase();
+      
+      // Better matching: starts with, then contains
+      return partyName.startsWith(searchLower) || partyName.includes(searchLower);
+    }).sort((a, b) => {
+      const aName = (a.party_name || a.name || '').toLowerCase();
+      const bName = (b.party_name || b.name || '').toLowerCase();
+      const searchLower = searchTerm.toLowerCase();
+      
+      // Sort by: starts with first, then alphabetically
+      const aStartsWith = aName.startsWith(searchLower);
+      const bStartsWith = bName.startsWith(searchLower);
+      
+      if (aStartsWith && !bStartsWith) return -1;
+      if (!aStartsWith && bStartsWith) return 1;
+      return aName.localeCompare(bName);
+    });
     setFilteredParties(filtered);
+    setHighlightedIndex(0); // Highlight first suggestion
+    
+    // VS Code style auto-complete: Find best match for inline suggestion (case insensitive)
+    if (filtered.length > 0) {
+      const bestMatch = filtered[0];
+      const partyName = bestMatch.party_name || bestMatch.name || '';
+      const searchLower = searchTerm.toLowerCase();
+      const partyLower = partyName.toLowerCase();
+      
+      console.log('🔍 Auto-complete text generation debug:', {
+        bestMatch,
+        partyName,
+        searchTerm,
+        searchLower,
+        partyLower,
+        startsWith: partyLower.startsWith(searchLower),
+        notEqual: partyLower !== searchLower
+      });
+      
+      if (partyLower.startsWith(searchLower) && partyLower !== searchLower) {
+        // Find the actual position where the match starts (case insensitive)
+        const matchIndex = partyName.toLowerCase().indexOf(searchLower);
+        if (matchIndex === 0) {
+          const autoCompleteText = partyName.substring(searchTerm.length);
+          console.log('🔍 Setting auto-complete text:', autoCompleteText);
+          setAutoCompleteText(autoCompleteText);
+          setShowInlineSuggestion(true);
+        } else {
+          setAutoCompleteText('');
+          setShowInlineSuggestion(false);
+        }
+      } else {
+        setAutoCompleteText('');
+        setShowInlineSuggestion(false);
+      }
+    } else {
+      setAutoCompleteText('');
+      setShowInlineSuggestion(false);
+    }
   }, [allPartiesForTransaction, selectedPartyName]);
 
   // Filter parties for top section dropdown - Exclude current party
@@ -301,15 +369,60 @@ const AccountLedger = () => {
     if (!searchTerm.trim()) {
       // Show available parties (excluding current) when no search term
       setFilteredTopParties(availablePartiesExcludingCurrent);
+      setTopAutoCompleteText('');
+      setShowTopInlineSuggestion(false);
       return;
     }
     
-    // Filter parties based on search term (excluding current)
-    const filtered = availablePartiesExcludingCurrent.filter(party =>
-      (party.party_name || party.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (party.companyName || party.party_name || party.name || '').toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // Filter parties based on search term (excluding current) - improved matching
+    const filtered = availablePartiesExcludingCurrent.filter(party => {
+      const partyName = (party.party_name || party.name || '').toLowerCase();
+      const companyName = (party.companyName || '').toLowerCase();
+      const searchLower = searchTerm.toLowerCase();
+      
+      // Better matching: starts with, then contains
+      return partyName.startsWith(searchLower) || partyName.includes(searchLower) ||
+             companyName.startsWith(searchLower) || companyName.includes(searchLower);
+    }).sort((a, b) => {
+      const aName = (a.party_name || a.name || '').toLowerCase();
+      const bName = (b.party_name || b.name || '').toLowerCase();
+      const searchLower = searchTerm.toLowerCase();
+      
+      // Sort by: starts with first, then alphabetically
+      const aStartsWith = aName.startsWith(searchLower);
+      const bStartsWith = bName.startsWith(searchLower);
+      
+      if (aStartsWith && !bStartsWith) return -1;
+      if (!aStartsWith && bStartsWith) return 1;
+      return aName.localeCompare(bName);
+    });
     setFilteredTopParties(filtered);
+    
+    // VS Code style auto-complete: Find best match for inline suggestion (case insensitive)
+    if (filtered.length > 0) {
+      const bestMatch = filtered[0];
+      const partyName = bestMatch.party_name || bestMatch.name || '';
+      const searchLower = searchTerm.toLowerCase();
+      const partyLower = partyName.toLowerCase();
+      
+      if (partyLower.startsWith(searchLower) && partyLower !== searchLower) {
+        // Find the actual position where the match starts (case insensitive)
+        const matchIndex = partyName.toLowerCase().indexOf(searchLower);
+        if (matchIndex === 0) {
+          setTopAutoCompleteText(partyName.substring(searchTerm.length));
+          setShowTopInlineSuggestion(true);
+        } else {
+          setTopAutoCompleteText('');
+          setShowTopInlineSuggestion(false);
+        }
+      } else {
+        setTopAutoCompleteText('');
+        setShowTopInlineSuggestion(false);
+      }
+    } else {
+      setTopAutoCompleteText('');
+      setShowTopInlineSuggestion(false);
+    }
   }, [availableParties, selectedPartyName]);
 
   // Handle party selection from dropdown (bottom section)
@@ -470,6 +583,18 @@ const AccountLedger = () => {
   // Handle party name change and auto-calculate commission
   const handlePartyNameChange = (value: string) => {
     setNewEntry(prev => ({ ...prev, partyName: value }));
+    setIsTyping(true);
+    
+    // Calculate text width for proper positioning
+    if (inputRef) {
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      if (context) {
+        context.font = window.getComputedStyle(inputRef).font;
+        const width = context.measureText(value).width;
+        setTextWidth(width);
+      }
+    }
     
     // Reset manual commission flag when party changes
     setIsManualCommissionAmount(false);
@@ -479,6 +604,71 @@ const AccountLedger = () => {
       calculateCommissionAmount(value);
       // Clear any existing amount when switching to commission
       setNewEntry(prev => ({ ...prev, amount: '' }));
+    }
+  };
+
+  // Auto-complete functionality
+  const handleAutoComplete = () => {
+    if (filteredParties.length > 0 && highlightedIndex >= 0) {
+      const selectedParty = filteredParties[highlightedIndex];
+      const partyName = selectedParty.party_name || selectedParty.name;
+      console.log('🔍 Auto-complete debug:', {
+        selectedParty,
+        partyName,
+        originalPartyName: selectedParty.party_name,
+        name: selectedParty.name
+      });
+      setNewEntry(prev => ({ ...prev, partyName }));
+      setShowPartyDropdown(false);
+      setHighlightedIndex(-1);
+      setIsTyping(false);
+      setAutoCompleteText('');
+      setShowInlineSuggestion(false);
+    }
+  };
+
+  // VS Code style Tab completion
+  const handleTabComplete = () => {
+    if (showInlineSuggestion && autoCompleteText) {
+      const currentValue = newEntry.partyName;
+      const completedValue = currentValue + autoCompleteText;
+      console.log('🔍 Tab completion debug:', {
+        currentValue,
+        autoCompleteText,
+        completedValue
+      });
+      setNewEntry(prev => ({ ...prev, partyName: completedValue }));
+      setAutoCompleteText('');
+      setShowInlineSuggestion(false);
+      setShowPartyDropdown(false);
+      
+      // Auto-fill commission if commission is selected
+      if (completedValue.toLowerCase().trim() === 'commission') {
+        handleCommissionAutoFill();
+      }
+    }
+  };
+
+  // Top section auto-complete functionality
+  const handleTopAutoComplete = () => {
+    if (filteredTopParties.length > 0) {
+      const selectedParty = filteredTopParties[0];
+      const partyName = selectedParty.party_name || selectedParty.name;
+      setTypingPartyName(partyName);
+      setShowTopPartyDropdown(false);
+      setTopAutoCompleteText('');
+      setShowTopInlineSuggestion(false);
+    }
+  };
+
+  // Top section Tab completion
+  const handleTopTabComplete = () => {
+    if (showTopInlineSuggestion && topAutoCompleteText) {
+      const completedValue = typingPartyName + topAutoCompleteText;
+      setTypingPartyName(completedValue);
+      setTopAutoCompleteText('');
+      setShowTopInlineSuggestion(false);
+      setShowTopPartyDropdown(false);
     }
   };
 
@@ -1897,23 +2087,40 @@ const AccountLedger = () => {
               <div className="flex items-center space-x-3">
                 <label className="text-sm font-semibold text-gray-700">Party Name:</label>
                 <div className="relative top-party-dropdown-container">
-                  <input
-                    type="text"
-                    value={typingPartyName}
-                    onChange={(e) => {
-                      setTypingPartyName(e.target.value);
-                      if (e.target.value.trim()) {
-                        // Filter parties when typing
-                        filterTopParties(e.target.value);
-                      } else {
-                        // Show available parties (excluding current) when input is empty
-                        const availablePartiesExcludingCurrent = availableParties.filter(party => 
-                          (party.party_name || party.name) !== selectedPartyName
-                        );
-                        setFilteredTopParties(availablePartiesExcludingCurrent);
-                      }
-                      setShowTopPartyDropdown(true);
-                    }}
+                  <div className="relative">
+                    <input
+                      ref={setTopInputRef}
+                      type="text"
+                      value={typingPartyName}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setTypingPartyName(value);
+                        
+                        // Calculate text width for proper positioning
+                        if (topInputRef) {
+                          const canvas = document.createElement('canvas');
+                          const context = canvas.getContext('2d');
+                          if (context) {
+                            context.font = window.getComputedStyle(topInputRef).font;
+                            const width = context.measureText(value).width;
+                            setTopTextWidth(width);
+                          }
+                        }
+                        
+                        if (value.trim()) {
+                          // Filter parties when typing
+                          filterTopParties(value);
+                        } else {
+                          // Show available parties (excluding current) when input is empty
+                          const availablePartiesExcludingCurrent = availableParties.filter(party => 
+                            (party.party_name || party.name) !== selectedPartyName
+                          );
+                          setFilteredTopParties(availablePartiesExcludingCurrent);
+                          setTopAutoCompleteText('');
+                          setShowTopInlineSuggestion(false);
+                        }
+                        setShowTopPartyDropdown(true);
+                      }}
                     onFocus={() => {
                       setShowTopPartyDropdown(true);
                       // Show available parties (excluding current) when focusing on top dropdown
@@ -1922,16 +2129,69 @@ const AccountLedger = () => {
                       );
                       setFilteredTopParties(availablePartiesExcludingCurrent);
                     }}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        handlePartyChange(typingPartyName);
-                        setShowTopPartyDropdown(false);
-                      }
-                    }}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                    placeholder="Search party name"
-                    autoComplete="off"
-                  />
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          // Enter key navigates to party
+                          if (showTopInlineSuggestion && topAutoCompleteText) {
+                            handleTopTabComplete();
+                            // After completing, navigate to the party
+                            setTimeout(() => {
+                              handlePartyChange(typingPartyName + topAutoCompleteText);
+                            }, 100);
+                          } else if (filteredTopParties.length > 0) {
+                            handleTopAutoComplete();
+                            // After selecting, navigate to the party
+                            setTimeout(() => {
+                              handlePartyChange(typingPartyName);
+                            }, 100);
+                          } else {
+                            handlePartyChange(typingPartyName);
+                            setShowTopPartyDropdown(false);
+                          }
+                        } else if (e.key === 'Tab') {
+                          e.preventDefault();
+                          // Tab key: Accept suggestion first, then move to next field
+                          if (showTopInlineSuggestion && topAutoCompleteText) {
+                            handleTopTabComplete();
+                          } else {
+                            // Move to next field (Amount field in bottom section)
+                            const amountField = document.querySelector('input[placeholder*="Credit"], input[placeholder*="Debit"]') as HTMLInputElement;
+                            if (amountField) {
+                              amountField.focus();
+                            }
+                          }
+                        } else if (e.key === 'Escape') {
+                          setShowTopPartyDropdown(false);
+                          setTopAutoCompleteText('');
+                          setShowTopInlineSuggestion(false);
+                        } else if (e.key === 'ArrowRight' && showTopInlineSuggestion) {
+                          e.preventDefault();
+                          handleTopTabComplete();
+                        }
+                      }}
+                      className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-transparent relative z-10"
+                      placeholder="Search party name"
+                      autoComplete="off"
+                    />
+                    {/* VS Code style inline suggestion for top section */}
+                    {showTopInlineSuggestion && topAutoCompleteText && (
+                      <div 
+                        className="absolute top-0 left-0 text-gray-400 pointer-events-none z-0"
+                        style={{ 
+                          left: `${topTextWidth + 16}px`, // 16px for padding
+                          top: '8px',
+                          fontSize: '14px',
+                          lineHeight: '20px',
+                          whiteSpace: 'nowrap',
+                          fontFamily: 'inherit',
+                          color: '#9CA3AF'
+                        }}
+                      >
+                        {topAutoCompleteText}
+                      </div>
+                    )}
+                  </div>
                   {showTopPartyDropdown && (
                     <div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto z-50 mt-1">
                       {partiesLoading ? (
@@ -2041,22 +2301,74 @@ const AccountLedger = () => {
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700">Party Name</label>
                     <div className="relative party-dropdown-container">
-                  <input
-                    type="text"
+                    <div className="relative">
+                      <input
+                        ref={setInputRef}
+                        type="text"
                         value={newEntry.partyName}
                     onChange={(e) => {
-                          handlePartyNameChange(e.target.value);
-                          if (e.target.value.trim()) {
+                          const value = e.target.value;
+                          handlePartyNameChange(value);
+                          
+                          if (value.trim()) {
                             // Filter parties when typing
-                            filterParties(e.target.value);
+                            filterParties(value);
+                            setShowPartyDropdown(true);
                           } else {
                             // Show available parties (excluding current) when input is empty
                             const availablePartiesExcludingCurrent = allPartiesForTransaction.filter(party => 
                               (party.party_name || party.name) !== selectedPartyName
                             );
                             setFilteredParties(availablePartiesExcludingCurrent);
+                            setHighlightedIndex(-1);
+                            setShowPartyDropdown(true);
                           }
-                          setShowPartyDropdown(true);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        // Ctrl+Enter submits form, Enter selects party
+                        if (e.ctrlKey) {
+                          handleAddEntry();
+                        } else {
+                          // Enter key selects party for form filling (not submit)
+                          if (showInlineSuggestion && autoCompleteText) {
+                            handleTabComplete();
+                          } else if (filteredParties.length > 0) {
+                            handleAutoComplete();
+                          }
+                        }
+                                              } else if (e.key === 'Tab') {
+                          e.preventDefault();
+                          // Tab key: Accept suggestion first, then move to next field
+                          if (showInlineSuggestion && autoCompleteText) {
+                            handleTabComplete();
+                          } else {
+                            // Move to next field (Amount field)
+                            const amountField = document.querySelector('input[placeholder*="Credit"], input[placeholder*="Debit"]') as HTMLInputElement;
+                            if (amountField) {
+                              amountField.focus();
+                            }
+                          }
+                      } else if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        setHighlightedIndex(prev => 
+                          prev < filteredParties.length - 1 ? prev + 1 : 0
+                        );
+                      } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        setHighlightedIndex(prev => 
+                          prev > 0 ? prev - 1 : filteredParties.length - 1
+                        );
+                      } else if (e.key === 'Escape') {
+                        setShowPartyDropdown(false);
+                        setHighlightedIndex(-1);
+                        setAutoCompleteText('');
+                        setShowInlineSuggestion(false);
+                      } else if (e.key === 'ArrowRight' && showInlineSuggestion) {
+                        e.preventDefault();
+                        handleTabComplete();
+                      }
                     }}
                     onFocus={() => {
                           setShowPartyDropdown(true);
@@ -2066,10 +2378,28 @@ const AccountLedger = () => {
                           );
                           setFilteredParties(availablePartiesExcludingCurrent);
                         }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-transparent relative z-10"
                         placeholder="Search party name"
-                    autoComplete="off"
-                  />
+                        autoComplete="off"
+                      />
+                      {/* VS Code style inline suggestion */}
+                      {showInlineSuggestion && autoCompleteText && (
+                        <div 
+                          className="absolute top-0 left-0 text-gray-400 pointer-events-none z-0"
+                          style={{ 
+                            left: `${textWidth + 12}px`, // 12px for padding
+                            top: '8px',
+                            fontSize: '14px',
+                            lineHeight: '20px',
+                            whiteSpace: 'nowrap',
+                            fontFamily: 'inherit',
+                            color: '#9CA3AF'
+                          }}
+                        >
+                          {autoCompleteText}
+                        </div>
+                      )}
+                    </div>
                       {showPartyDropdown && (
                         <div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto z-10 mt-1">
                           {partiesLoading ? (
@@ -2077,10 +2407,14 @@ const AccountLedger = () => {
                           ) : filteredParties.length === 0 ? (
                             <div className="px-3 py-2 text-sm text-gray-500">No parties found</div>
                           ) : (
-                            filteredParties.map((party) => (
+                            filteredParties.map((party, index) => (
                               <div
                                 key={party.id || party._id || party.party_name || party.name}
-                                className="px-3 py-2 text-sm hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors duration-150"
+                                className={`px-3 py-2 text-sm cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors duration-150 ${
+                                  index === highlightedIndex 
+                                    ? 'bg-blue-100 text-blue-900 font-medium' 
+                                    : 'hover:bg-blue-50'
+                                }`}
                                 onClick={() => {
                                   const partyName = party.party_name || party.name;
                                   handlePartySelect(partyName);
@@ -2090,6 +2424,7 @@ const AccountLedger = () => {
                                     handleCommissionAutoFill();
                                   }
                                 }}
+                                onMouseEnter={() => setHighlightedIndex(index)}
                               >
                                 {party.party_name || party.name}
                               </div>
@@ -2112,6 +2447,20 @@ const AccountLedger = () => {
                           setIsManualCommissionAmount(true);
                         }
                       }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Tab') {
+                          e.preventDefault();
+                          // Move to next field (Remarks field)
+                          const remarksField = document.querySelector('input[placeholder*="Additional remarks"]') as HTMLInputElement;
+                          if (remarksField) {
+                            remarksField.focus();
+                          }
+                        } else if (e.key === 'Enter') {
+                          e.preventDefault();
+                          // Enter submits form
+                          handleAddEntry();
+                        }
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                       placeholder="+10000 for Credit, -5000 for Debit"
                 />
@@ -2122,6 +2471,20 @@ const AccountLedger = () => {
                   type="text"
                   value={newEntry.remarks}
                       onChange={(e) => setNewEntry(prev => ({ ...prev, remarks: e.target.value }))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Tab') {
+                          e.preventDefault();
+                          // Move to next field (Add Entry button)
+                          const addButton = document.querySelector('button[onClick*="handleAddEntry"]') as HTMLButtonElement;
+                          if (addButton) {
+                            addButton.focus();
+                          }
+                        } else if (e.key === 'Enter') {
+                          e.preventDefault();
+                          // Enter submits form
+                          handleAddEntry();
+                        }
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                       placeholder="Additional remarks (will show as Party Name(Remarks))"
                 />
@@ -2139,7 +2502,7 @@ const AccountLedger = () => {
                           <span>Adding...</span>
                         </div>
                       ) : (
-                        'Add Entry'
+                        'Add Entry (Ctrl+Enter)'
                       )}
                     </button>
                   </div>

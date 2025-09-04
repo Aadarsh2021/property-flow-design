@@ -124,6 +124,27 @@ const NewParty = () => {
     }
   };
 
+  // Handle Enter key press for form submission and Tab navigation
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (!loading && formData.partyName.trim()) {
+        handleSubmit(e as any);
+      }
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      // Tab navigation between form fields
+      const currentElement = e.target as HTMLElement;
+      const formElements = Array.from(document.querySelectorAll('input, select, button[type="submit"]')) as HTMLElement[];
+      const currentIndex = formElements.indexOf(currentElement);
+      
+      if (currentIndex !== -1) {
+        const nextIndex = (currentIndex + 1) % formElements.length;
+        formElements[nextIndex].focus();
+      }
+    }
+  };
+
   // Keyboard shortcuts for better UX
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
@@ -339,6 +360,7 @@ const NewParty = () => {
                       type="text"
                       value={formData.srNo}
                       onChange={(e) => handleInputChange('basic', 'srNo', e.target.value)}
+                      onKeyPress={handleKeyPress}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                       readOnly
                     />
@@ -349,6 +371,7 @@ const NewParty = () => {
                       type="text"
                       value={formData.partyName}
                       onChange={(e) => handleInputChange('basic', 'partyName', e.target.value)}
+                      onKeyPress={handleKeyPress}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                       placeholder="Enter party name"
                       required
@@ -360,6 +383,7 @@ const NewParty = () => {
                     <select
                       value={formData.status}
                       onChange={(e) => handleInputChange('basic', 'status', e.target.value)}
+                      onKeyPress={handleKeyPress}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                     >
                       <option value="R">R (Regular)</option>
@@ -405,6 +429,7 @@ const NewParty = () => {
                       type="text"
                       value={formData.balanceLimit}
                       onChange={(e) => handleInputChange('basic', 'balanceLimit', e.target.value)}
+                      onKeyPress={handleKeyPress}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                       placeholder="Enter balance limit"
                     />
@@ -426,6 +451,7 @@ const NewParty = () => {
                     <select
                       value={formData.mCommission}
                       onChange={(e) => handleInputChange('basic', 'mCommission', e.target.value)}
+                      onKeyPress={handleKeyPress}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                     >
                       <option value="No Commission">No Commission</option>
@@ -438,6 +464,7 @@ const NewParty = () => {
                       type="text"
                       value={formData.rate}
                       onChange={(e) => handleInputChange('basic', 'rate', e.target.value)}
+                      onKeyPress={handleKeyPress}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                       placeholder="Enter commission rate"
                     />
@@ -492,11 +519,12 @@ const NewParty = () => {
         {/* Keyboard Shortcuts Help */}
         <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
           <div className="text-sm font-medium text-gray-800 mb-2">Keyboard Shortcuts:</div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-gray-600">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs text-gray-600">
             <div>Ctrl+S: Save Party</div>
             <div>Ctrl+B: Back to Parties</div>
+            <div>Enter: Submit Form</div>
+            <div>Tab: Next Field</div>
             <div>Esc: Exit</div>
-            <div>Tab: Navigate Fields</div>
           </div>
         </div>
       </div>

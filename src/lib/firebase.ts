@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, updatePassword, updateProfile, sendEmailVerification } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User, createUserWithEmailAndPassword, signInWithEmailAndPassword, updatePassword, updateProfile, sendEmailVerification } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getAnalytics } from 'firebase/analytics';
 
@@ -69,24 +69,8 @@ export const signOutUser = async () => {
   }
 };
 
-// Password Reset function with database sync
-export const resetPassword = async (email: string) => {
-  try {
-    await sendPasswordResetEmail(auth, email, {
-      url: `${window.location.origin}/firebase-reset?email=${encodeURIComponent(email)}`
-    });
-    
-    // Store email for password sync after reset
-    localStorage.setItem('pendingPasswordReset', email);
-    
-    return { success: true, message: 'Password reset email sent successfully' };
-  } catch (error: any) {
-    console.error('Password reset error:', error);
-    return { success: false, error: error.message };
-  }
-};
 
-// Update Password function with database sync
+// Update Password function
 export const updateUserPassword = async (newPassword: string) => {
   try {
     const user = auth.currentUser;
@@ -96,70 +80,13 @@ export const updateUserPassword = async (newPassword: string) => {
     
     await updatePassword(user, newPassword);
     
-    // Sync with database
-    await syncPasswordWithDatabase(user.email, newPassword);
-    
-    return { success: true, message: 'Password updated successfully in both systems' };
+    return { success: true, message: 'Password updated successfully' };
   } catch (error: any) {
     console.error('Password update error:', error);
     return { success: false, error: error.message };
   }
 };
 
-// Sync password with database
-export const syncPasswordWithDatabase = async (email: string, password: string) => {
-  try {
-    console.log('🔄 [SYNC] Starting password sync for:', email);
-    console.log('🔄 [SYNC] Password length:', password.length);
-    
-    const apiUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software.vercel.app/api'}/authentication/sync-password`;
-    console.log('📡 [SYNC] API URL:', apiUrl);
-    
-    const requestBody = {
-      email: email,
-      newPassword: password
-    };
-    console.log('📤 [SYNC] Request body:', JSON.stringify(requestBody, null, 2));
-    
-    console.log('📡 [SYNC] Making API call...');
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody)
-    });
-
-    console.log('📊 [SYNC] Response status:', response.status);
-    console.log('📊 [SYNC] Response status text:', response.statusText);
-    console.log('📊 [SYNC] Response headers:', Object.fromEntries(response.headers.entries()));
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ [SYNC] HTTP error response:', errorText);
-      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-    }
-
-    const result = await response.json();
-    console.log('📥 [SYNC] Response data:', JSON.stringify(result, null, 2));
-    
-    if (result.success) {
-      console.log('✅ [SYNC] Password synced with database successfully!');
-      return { success: true };
-    } else {
-      console.error('❌ [SYNC] Database sync failed:', result.message);
-      console.error('❌ [SYNC] Full error result:', JSON.stringify(result, null, 2));
-      return { success: false, error: result.message };
-    }
-  } catch (error: any) {
-    console.error('❌ [SYNC] Database sync exception!');
-    console.error('❌ [SYNC] Error type:', typeof error);
-    console.error('❌ [SYNC] Error message:', error.message);
-    console.error('❌ [SYNC] Error stack:', error.stack);
-    console.error('❌ [SYNC] Full error object:', JSON.stringify(error, null, 2));
-    return { success: false, error: error.message };
-  }
-};
 
 // Update User Profile function
 export const updateUserProfile = async (profileData: { displayName?: string; photoURL?: string }) => {
@@ -177,8 +104,6 @@ export const updateUserProfile = async (profileData: { displayName?: string; pho
   }
 };
 
-// Password sync is now handled by dedicated reset pages
-// No need for global monitoring since we have specific reset flows
 
 // Send Email Verification function
 export const sendEmailVerificationToUser = async () => {

@@ -44,6 +44,12 @@ const PartyLedger = () => {
   const [parties, setParties] = useState<PartyWithMondayFinalStatus[]>([]);
   const [showMondayFinalModal, setShowMondayFinalModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [autoCompleteText, setAutoCompleteText] = useState('');
+  const [showInlineSuggestion, setShowInlineSuggestion] = useState(false);
+  const [searchInputRef, setSearchInputRef] = useState<HTMLInputElement | null>(null);
+  const [searchTextWidth, setSearchTextWidth] = useState(0);
 
   // Helper function to format party display name
   const formatPartyDisplayName = (party: PartyWithMondayFinalStatus) => {
@@ -152,18 +158,101 @@ const PartyLedger = () => {
   // Filter parties based on search term (optimized with useMemo)
   const filteredParties = useMemo(() => {
     if (!searchTerm.trim()) {
+      setAutoCompleteText('');
+      setShowInlineSuggestion(false);
       return parties;
     }
     
     const searchLower = searchTerm.toLowerCase().trim();
     
-    return parties.filter(party => {
+    const filtered = parties.filter(party => {
       const partyName = party.name || party.party_name || (party as any).partyName || '';
+      const partyLower = partyName.toLowerCase();
       
-      // Check if party name contains search term
-      return partyName.toLowerCase().includes(searchLower);
+      // Better matching: starts with, then contains
+      return partyLower.startsWith(searchLower) || partyLower.includes(searchLower);
+    }).sort((a, b) => {
+      const aName = (a.name || a.party_name || (a as any).partyName || '').toLowerCase();
+      const bName = (b.name || b.party_name || (b as any).partyName || '').toLowerCase();
+      
+      // Sort by: starts with first, then alphabetically
+      const aStartsWith = aName.startsWith(searchLower);
+      const bStartsWith = bName.startsWith(searchLower);
+      
+      if (aStartsWith && !bStartsWith) return -1;
+      if (!aStartsWith && bStartsWith) return 1;
+      return aName.localeCompare(bName);
     });
+
+    // VS Code style auto-complete: Find best match for inline suggestion (case insensitive)
+    if (filtered.length > 0) {
+      const bestMatch = filtered[0];
+      const partyName = bestMatch.name || bestMatch.party_name || (bestMatch as any).partyName || '';
+      const partyLower = partyName.toLowerCase();
+      
+      if (partyLower.startsWith(searchLower) && partyLower !== searchLower) {
+        // Find the actual position where the match starts (case insensitive)
+        const matchIndex = partyName.toLowerCase().indexOf(searchLower);
+        if (matchIndex === 0) {
+          setAutoCompleteText(partyName.substring(searchTerm.length));
+          setShowInlineSuggestion(true);
+        } else {
+          setAutoCompleteText('');
+          setShowInlineSuggestion(false);
+        }
+      } else {
+        setAutoCompleteText('');
+        setShowInlineSuggestion(false);
+      }
+    } else {
+      setAutoCompleteText('');
+      setShowInlineSuggestion(false);
+    }
+
+    return filtered;
   }, [parties, searchTerm]);
+
+  // Auto-complete functionality
+  const handleAutoComplete = () => {
+    if (filteredParties.length > 0 && highlightedIndex >= 0) {
+      const selectedParty = filteredParties[highlightedIndex];
+      const partyName = selectedParty.name || selectedParty.party_name || (selectedParty as any).partyName;
+      setSearchTerm(partyName);
+      setShowSearchDropdown(false);
+      setHighlightedIndex(-1);
+      setAutoCompleteText('');
+      setShowInlineSuggestion(false);
+      
+      // Navigate to party ledger
+      if (partyName) {
+        navigate(`/account-ledger/${encodeURIComponent(partyName)}`);
+      }
+    }
+  };
+
+  // VS Code style Tab completion
+  const handleTabComplete = () => {
+    if (showInlineSuggestion && autoCompleteText) {
+      const completedValue = searchTerm + autoCompleteText;
+      setSearchTerm(completedValue);
+      setAutoCompleteText('');
+      setShowInlineSuggestion(false);
+      setShowSearchDropdown(false);
+      
+      // After tab completion, find the party and navigate
+      const foundParty = parties.find(party => {
+        const partyName = party.name || party.party_name || (party as any).partyName || '';
+        return partyName.toLowerCase() === completedValue.toLowerCase();
+      });
+      
+      if (foundParty) {
+        const partyName = foundParty.name || foundParty.party_name || (foundParty as any).partyName;
+        if (partyName) {
+          navigate(`/account-ledger/${encodeURIComponent(partyName)}`);
+        }
+      }
+    }
+  };
 
   // Handle checkbox change for individual party
   const handleCheckboxChange = (partyName: string, checked: boolean) => {
@@ -326,21 +415,133 @@ const PartyLedger = () => {
                   <span className="font-semibold text-lg">Party A/C. Ledger</span>
                   <div className="relative ml-4">
                     <input
+                      ref={setSearchInputRef}
                       type="text"
                       placeholder="Search by Party Name..."
                       value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="px-3 py-2 border border-gray-400 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 pr-8"
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setSearchTerm(value);
+                        
+                        // Calculate text width for proper positioning
+                        if (searchInputRef) {
+                          const canvas = document.createElement('canvas');
+                          const context = canvas.getContext('2d');
+                          if (context) {
+                            context.font = window.getComputedStyle(searchInputRef).font;
+                            const width = context.measureText(value).width;
+                            setSearchTextWidth(width);
+                          }
+                        }
+                        
+                        if (value.trim()) {
+                          setShowSearchDropdown(true);
+                          setHighlightedIndex(0);
+                        } else {
+                          setShowSearchDropdown(false);
+                          setHighlightedIndex(-1);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAutoComplete();
+                        } else if (e.key === 'Tab') {
+                          e.preventDefault();
+                          handleTabComplete();
+                        } else if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          setHighlightedIndex(prev => 
+                            prev < filteredParties.length - 1 ? prev + 1 : 0
+                          );
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          setHighlightedIndex(prev => 
+                            prev > 0 ? prev - 1 : filteredParties.length - 1
+                          );
+                        } else if (e.key === 'Escape') {
+                          setShowSearchDropdown(false);
+                          setHighlightedIndex(-1);
+                          setAutoCompleteText('');
+                          setShowInlineSuggestion(false);
+                        } else if (e.key === 'ArrowRight' && showInlineSuggestion) {
+                          e.preventDefault();
+                          handleTabComplete();
+                        }
+                      }}
+                      onFocus={() => {
+                        if (searchTerm.trim()) {
+                          setShowSearchDropdown(true);
+                        }
+                      }}
+                      onBlur={() => {
+                        // Delay hiding to allow click on suggestions
+                        setTimeout(() => setShowSearchDropdown(false), 200);
+                      }}
+                      className="px-3 py-2 border border-gray-400 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 pr-8 bg-transparent relative z-10"
                       style={{ width: 280 }}
                     />
+                    {/* VS Code style inline suggestion */}
+                    {showInlineSuggestion && autoCompleteText && (
+                      <div 
+                        className="absolute top-0 left-0 text-gray-400 pointer-events-none z-0"
+                        style={{ 
+                          left: `${searchTextWidth + 12}px`, // 12px for padding
+                          top: '8px',
+                          fontSize: '14px',
+                          lineHeight: '20px',
+                          whiteSpace: 'nowrap',
+                          fontFamily: 'inherit',
+                          color: '#9CA3AF'
+                        }}
+                      >
+                        {autoCompleteText}
+                      </div>
+                    )}
                     {searchTerm && (
                       <button
-                        onClick={() => setSearchTerm('')}
+                        onClick={() => {
+                          setSearchTerm('');
+                          setShowSearchDropdown(false);
+                          setHighlightedIndex(-1);
+                          setAutoCompleteText('');
+                          setShowInlineSuggestion(false);
+                        }}
                         className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
                         title="Clear search"
                       >
                         ✕
                       </button>
+                    )}
+                    
+                    {/* Auto-complete Dropdown */}
+                    {showSearchDropdown && filteredParties.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto z-10 mt-1">
+                        {filteredParties.slice(0, 10).map((party, index) => (
+                          <div
+                            key={party.name || party.party_name || (party as any).partyName || index}
+                            className={`px-3 py-2 text-sm cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors duration-150 ${
+                              index === highlightedIndex 
+                                ? 'bg-blue-100 text-blue-900 font-medium' 
+                                : 'hover:bg-blue-50'
+                            }`}
+                            onClick={() => {
+                              const partyName = party.name || party.party_name || (party as any).partyName;
+                              setSearchTerm(partyName);
+                              setShowSearchDropdown(false);
+                              setHighlightedIndex(-1);
+                              
+                              // Navigate to party ledger
+                              if (partyName) {
+                                navigate(`/account-ledger/${encodeURIComponent(partyName)}`);
+                              }
+                            }}
+                            onMouseEnter={() => setHighlightedIndex(index)}
+                          >
+                            {party.name || party.party_name || (party as any).partyName}
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                   {searchTerm && (

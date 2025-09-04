@@ -261,6 +261,16 @@ const Register = () => {
     }
   };
 
+  // Handle Enter key press
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (!hasErrors && allFieldsFilled && !loading && !googleLoading) {
+        handleSubmit(e as any);
+      }
+    }
+  };
+
   const validateForm = () => {
     const errors: {[key: string]: string} = {};
     
@@ -650,6 +660,7 @@ const Register = () => {
                     placeholder="Enter your full name"
                     value={formData.fullname}
                     onChange={handleInputChange}
+                    onKeyPress={handleKeyPress}
                     className={`pl-10 ${validationErrors.fullname ? 'border-red-500 focus:border-red-500' : ''}`}
                     autoComplete="name"
                     required
@@ -674,6 +685,7 @@ const Register = () => {
                     placeholder="Enter your email"
                     value={formData.email}
                     onChange={handleInputChange}
+                    onKeyPress={handleKeyPress}
                     className={`pl-10 ${validationErrors.email ? 'border-red-500 focus:border-red-500' : ''}`}
                     autoComplete="email"
                     required
@@ -698,6 +710,7 @@ const Register = () => {
                     placeholder="+91 9876543210"
                     value={formData.phone}
                     onChange={handleInputChange}
+                    onKeyPress={handleKeyPress}
                     className={`pl-10 ${validationErrors.phone ? 'border-red-500 focus:border-red-500' : ''}`}
                     autoComplete="tel"
                     required
@@ -723,6 +736,7 @@ const Register = () => {
                     placeholder="Create a password"
                     value={formData.password}
                     onChange={handleInputChange}
+                    onKeyPress={handleKeyPress}
                     className={`pl-10 pr-10 ${validationErrors.password ? 'border-red-500 focus:border-red-500' : ''}`}
                     autoComplete="new-password"
                     required
@@ -755,6 +769,7 @@ const Register = () => {
                     placeholder="Confirm your password"
                     value={formData.confirmPassword}
                     onChange={handleInputChange}
+                    onKeyPress={handleKeyPress}
                     className={`pl-10 pr-10 ${validationErrors.confirmPassword ? 'border-red-500 focus:border-red-500' : ''}`}
                     autoComplete="new-password"
                     required

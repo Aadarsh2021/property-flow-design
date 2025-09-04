@@ -30,6 +30,9 @@ export default defineConfig(({ mode }) => ({
     minify: 'terser',
     rollupOptions: {
       output: {
+        entryFileNames: `assets/[name]-${Date.now()}-${Math.random().toString(36).substr(2, 9)}.js`,
+        chunkFileNames: `assets/[name]-${Date.now()}-${Math.random().toString(36).substr(2, 9)}.js`,
+        assetFileNames: `assets/[name]-${Date.now()}-${Math.random().toString(36).substr(2, 9)}.[ext]`,
         manualChunks: {
           vendor: ['react', 'react-dom'],
           ui: ['@radix-ui/react-dialog', '@radix-ui/react-alert-dialog', '@radix-ui/react-toast', '@radix-ui/react-select', '@radix-ui/react-dropdown-menu'],

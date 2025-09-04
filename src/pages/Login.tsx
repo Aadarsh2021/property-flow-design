@@ -9,7 +9,6 @@
  * - Google OAuth authentication
  * - Form validation and error handling
  * - Remember me functionality
- * - Password reset option
  * - Registration link
  * - Responsive design
  * 
@@ -29,7 +28,7 @@ import { Eye, EyeOff, Lock, User, Building2, Home, Wifi, WifiOff } from 'lucide-
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { authAPI } from '@/lib/api';
-import { signInWithEmail, signInWithGoogle, resetPassword } from '@/lib/firebase';
+import { signInWithEmail, signInWithGoogle } from '@/lib/firebase';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -47,9 +46,6 @@ const Login = () => {
   const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({});
   const [loadingMessage, setLoadingMessage] = useState('Signing In...');
   const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
-  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
 
   // Get the page user was trying to access
   const from = location.state?.from?.pathname || '/dashboard';
@@ -165,6 +161,16 @@ const Login = () => {
       }
       return newErrors;
     });
+  };
+
+  // Handle Enter key press
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (isFormValid && !loading && !googleLoading) {
+        handleSubmit(e as any);
+      }
+    }
   };
 
   const validateForm = () => {
@@ -319,56 +325,6 @@ const Login = () => {
     }
   };
 
-  // Handle Forgot Password
-  const handleForgotPassword = async () => {
-    if (!forgotPasswordEmail.trim()) {
-      toast({
-        title: "Email Required",
-        description: "Please enter your email address",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(forgotPasswordEmail)) {
-      toast({
-        title: "Invalid Email",
-        description: "Please enter a valid email address",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setForgotPasswordLoading(true);
-    
-    try {
-      const result = await resetPassword(forgotPasswordEmail);
-      
-      if (result.success) {
-        toast({
-          title: "✅ Password Reset Email Sent",
-          description: "Check your email for password reset instructions",
-        });
-        setShowForgotPassword(false);
-        setForgotPasswordEmail('');
-      } else {
-        toast({
-          title: "❌ Failed to Send Reset Email",
-          description: result.error || "Please try again later",
-          variant: "destructive"
-        });
-      }
-    } catch (error: any) {
-      console.error('Forgot password error:', error);
-      toast({
-        title: "❌ Error",
-        description: "Failed to send password reset email. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setForgotPasswordLoading(false);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -668,6 +624,7 @@ const Login = () => {
                     placeholder="Enter your email"
                     value={formData.email}
                     onChange={handleInput}
+                    onKeyPress={handleKeyPress}
                     className={`pl-10 ${validationErrors.email ? 'border-red-500 focus:border-red-500' : ''}`}
                     autoComplete="email"
                     required
@@ -692,6 +649,7 @@ const Login = () => {
                     placeholder="Enter your password"
                     value={formData.password}
                     onChange={handleInput}
+                    onKeyPress={handleKeyPress}
                     className={`pl-10 pr-10 ${validationErrors.password ? 'border-red-500 focus:border-red-500' : ''}`}
                     autoComplete="current-password"
                     required
@@ -711,17 +669,6 @@ const Login = () => {
                 )}
               </div>
               
-              {/* Forgot Password Link */}
-              <div className="text-right">
-                <button
-                  type="button"
-                  onClick={() => setShowForgotPassword(true)}
-                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-                  disabled={loading || googleLoading}
-                >
-                  Forgot Password?
-                </button>
-              </div>
               
               <Button
                 type="submit"
@@ -755,61 +702,6 @@ const Login = () => {
         </Card>
       </div>
 
-      {/* Forgot Password Dialog */}
-      <Dialog open={showForgotPassword} onOpenChange={setShowForgotPassword}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Reset Password</DialogTitle>
-            <DialogDescription>
-              Enter your email address and we'll send you a link to reset your password.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="forgot-email" className="text-sm font-medium text-gray-700">
-                Email Address
-              </Label>
-              <Input
-                id="forgot-email"
-                type="email"
-                placeholder="Enter your email"
-                value={forgotPasswordEmail}
-                onChange={(e) => setForgotPasswordEmail(e.target.value)}
-                disabled={forgotPasswordLoading}
-              />
-            </div>
-            
-            <div className="flex space-x-3">
-              <Button
-                onClick={handleForgotPassword}
-                disabled={forgotPasswordLoading || !forgotPasswordEmail.trim()}
-                className="flex-1"
-              >
-                {forgotPasswordLoading ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                    Sending...
-                  </>
-                ) : (
-                  'Send Reset Email'
-                )}
-              </Button>
-              
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowForgotPassword(false);
-                  setForgotPasswordEmail('');
-                }}
-                disabled={forgotPasswordLoading}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

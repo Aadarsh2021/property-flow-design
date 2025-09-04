@@ -58,6 +58,10 @@ const FinalTrialBalance = () => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [filteredParties, setFilteredParties] = useState<Party[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [autoCompleteText, setAutoCompleteText] = useState('');
+  const [showInlineSuggestion, setShowInlineSuggestion] = useState(false);
+  const [inputRef, setInputRef] = useState<HTMLInputElement | null>(null);
+  const [textWidth, setTextWidth] = useState(0);
 
   // Handle click outside dropdown
   useEffect(() => {
@@ -103,15 +107,55 @@ const FinalTrialBalance = () => {
 
 
 
-  // Filter parties based on search input
+  // Filter parties based on search input with auto-suggestion
   useEffect(() => {
     if (partyName.trim() === '') {
       setFilteredParties(parties);
+      setAutoCompleteText('');
+      setShowInlineSuggestion(false);
     } else {
-      const filtered = parties.filter(party =>
-        party.partyName.toLowerCase().includes(partyName.toLowerCase())
-      );
+      const searchLower = partyName.toLowerCase();
+      const filtered = parties.filter(party => {
+        const partyLower = party.partyName.toLowerCase();
+        return partyLower.startsWith(searchLower) || partyLower.includes(searchLower);
+      }).sort((a, b) => {
+        const aName = a.partyName.toLowerCase();
+        const bName = b.partyName.toLowerCase();
+        
+        // Sort by: starts with first, then alphabetically
+        const aStartsWith = aName.startsWith(searchLower);
+        const bStartsWith = bName.startsWith(searchLower);
+        
+        if (aStartsWith && !bStartsWith) return -1;
+        if (!aStartsWith && bStartsWith) return 1;
+        return aName.localeCompare(bName);
+      });
+      
       setFilteredParties(filtered);
+      
+      // VS Code style auto-complete: Find best match for inline suggestion (case insensitive)
+      if (filtered.length > 0) {
+        const bestMatch = filtered[0];
+        const partyNameLower = bestMatch.partyName.toLowerCase();
+        
+        if (partyNameLower.startsWith(searchLower) && partyNameLower !== searchLower) {
+          // Find the actual position where the match starts (case insensitive)
+          const matchIndex = bestMatch.partyName.toLowerCase().indexOf(searchLower);
+          if (matchIndex === 0) {
+            setAutoCompleteText(bestMatch.partyName.substring(partyName.length));
+            setShowInlineSuggestion(true);
+          } else {
+            setAutoCompleteText('');
+            setShowInlineSuggestion(false);
+          }
+        } else {
+          setAutoCompleteText('');
+          setShowInlineSuggestion(false);
+        }
+      } else {
+        setAutoCompleteText('');
+        setShowInlineSuggestion(false);
+      }
     }
   }, [partyName, parties]);
 
@@ -339,15 +383,83 @@ const FinalTrialBalance = () => {
                     Party Name:
                   </label>
                   <div className="relative" ref={dropdownRef}>
-                    <input
-                      type="text"
-                      id="partyName"
-                      value={partyName}
-                      onChange={(e) => setPartyName(e.target.value)}
-                      onFocus={() => setShowDropdown(true)}
-                      placeholder="Search party name..."
-                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-64"
-                    />
+                    <div className="relative">
+                      <input
+                        ref={setInputRef}
+                        type="text"
+                        id="partyName"
+                        value={partyName}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setPartyName(value);
+                          
+                          // Calculate text width for proper positioning
+                          if (inputRef) {
+                            const canvas = document.createElement('canvas');
+                            const context = canvas.getContext('2d');
+                            if (context) {
+                              context.font = window.getComputedStyle(inputRef).font;
+                              const width = context.measureText(value).width;
+                              setTextWidth(width);
+                            }
+                          }
+                        }}
+                        onFocus={() => setShowDropdown(true)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            // Enter key: Accept suggestion first, then select party
+                            if (showInlineSuggestion && autoCompleteText) {
+                              const completedValue = partyName + autoCompleteText;
+                              handlePartySelect(completedValue);
+                            } else if (filteredParties.length > 0) {
+                              handlePartySelect(filteredParties[0].partyName);
+                            } else {
+                              setShowDropdown(false);
+                            }
+                          } else if (e.key === 'Tab') {
+                            e.preventDefault();
+                            // Tab key: Accept suggestion
+                            if (showInlineSuggestion && autoCompleteText) {
+                              const completedValue = partyName + autoCompleteText;
+                              setPartyName(completedValue);
+                              setAutoCompleteText('');
+                              setShowInlineSuggestion(false);
+                            }
+                          } else if (e.key === 'Escape') {
+                            setShowDropdown(false);
+                            setAutoCompleteText('');
+                            setShowInlineSuggestion(false);
+                          } else if (e.key === 'ArrowRight' && showInlineSuggestion) {
+                            e.preventDefault();
+                            // Arrow Right: Accept suggestion
+                            const completedValue = partyName + autoCompleteText;
+                            setPartyName(completedValue);
+                            setAutoCompleteText('');
+                            setShowInlineSuggestion(false);
+                          }
+                        }}
+                        placeholder="Search party name..."
+                        className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-64 bg-transparent relative z-10"
+                      />
+                      {/* VS Code style inline suggestion */}
+                      {showInlineSuggestion && autoCompleteText && (
+                        <div 
+                          className="absolute top-0 left-0 text-gray-400 pointer-events-none z-0"
+                          style={{ 
+                            left: `${textWidth + 12}px`, // 12px for padding
+                            top: '8px',
+                            fontSize: '14px',
+                            lineHeight: '20px',
+                            whiteSpace: 'nowrap',
+                            fontFamily: 'inherit',
+                            color: '#9CA3AF'
+                          }}
+                        >
+                          {autoCompleteText}
+                        </div>
+                      )}
+                    </div>
                     
                     {/* Searchable Dropdown */}
                     {showDropdown && (
