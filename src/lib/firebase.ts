@@ -69,10 +69,16 @@ export const signOutUser = async () => {
   }
 };
 
-// Password Reset function
+// Password Reset function with database sync
 export const resetPassword = async (email: string) => {
   try {
-    await sendPasswordResetEmail(auth, email);
+    await sendPasswordResetEmail(auth, email, {
+      url: `${window.location.origin}/handle-reset`
+    });
+    
+    // Store email for password sync after reset
+    localStorage.setItem('pendingPasswordReset', email);
+    
     return { success: true, message: 'Password reset email sent successfully' };
   } catch (error: any) {
     console.error('Password reset error:', error);
@@ -80,7 +86,7 @@ export const resetPassword = async (email: string) => {
   }
 };
 
-// Update Password function
+// Update Password function with database sync
 export const updateUserPassword = async (newPassword: string) => {
   try {
     const user = auth.currentUser;
@@ -89,9 +95,54 @@ export const updateUserPassword = async (newPassword: string) => {
     }
     
     await updatePassword(user, newPassword);
-    return { success: true, message: 'Password updated successfully' };
+    
+    // Sync with database
+    await syncPasswordWithDatabase(user.email, newPassword);
+    
+    return { success: true, message: 'Password updated successfully in both systems' };
   } catch (error: any) {
     console.error('Password update error:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Sync password with database
+export const syncPasswordWithDatabase = async (email: string, password: string) => {
+  try {
+    console.log('🔄 Starting password sync for:', email);
+    
+    const apiUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software.vercel.app/api'}/authentication/sync-password`;
+    console.log('📡 API URL:', apiUrl);
+    
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: email,
+        newPassword: password
+      })
+    });
+
+    console.log('📊 Response status:', response.status);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('📥 Response data:', result);
+    
+    if (result.success) {
+      console.log('✅ Password synced with database');
+      return { success: true };
+    } else {
+      console.error('❌ Database sync failed:', result.message);
+      return { success: false, error: result.message };
+    }
+  } catch (error: any) {
+    console.error('❌ Database sync error:', error);
     return { success: false, error: error.message };
   }
 };
@@ -111,6 +162,9 @@ export const updateUserProfile = async (profileData: { displayName?: string; pho
     return { success: false, error: error.message };
   }
 };
+
+// Password sync is now handled by dedicated reset pages
+// No need for global monitoring since we have specific reset flows
 
 // Send Email Verification function
 export const sendEmailVerificationToUser = async () => {

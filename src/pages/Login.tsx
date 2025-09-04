@@ -30,7 +30,6 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { authAPI } from '@/lib/api';
 import { signInWithEmail, signInWithGoogle, resetPassword } from '@/lib/firebase';
-import { createSupabaseSession } from '@/lib/supabase-auth';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -407,26 +406,21 @@ const Login = () => {
     setLoadingMessage('Signing In...');
 
     try {
-      // Step 1: Authenticate with Firebase (Authentication)
+      // Step 1: Try Firebase authentication first (optional)
       // Authenticating with Firebase...
       const firebaseResult = await signInWithEmail(email, password);
       
       if (!firebaseResult.success) {
-        console.error('❌ Firebase authentication failed:', firebaseResult.error);
-        setError(firebaseResult.error || 'Firebase authentication failed');
-        return;
+        console.warn('⚠️ Firebase authentication failed:', firebaseResult.error);
+        console.log('ℹ️ Continuing with backend-only authentication...');
+        // Continue with backend authentication even if Firebase fails
+      } else {
+        console.log('✅ Firebase authentication successful');
       }
 
-              // Firebase authentication successful
-
-      // Step 2: Create Supabase session for storage access
-      // Creating Supabase session...
-      const supabaseResult = await createSupabaseSession(email, password);
-      
-      if (!supabaseResult.success) {
-        console.warn('⚠️ Supabase session creation failed:', supabaseResult.error);
-        // Continue with login even if Supabase session fails
-      }
+      // Step 2: Skip Supabase session creation
+      // We use backend API for image uploads, so no direct Supabase session needed
+      console.log('ℹ️ Skipping Supabase session creation - using backend API for storage');
 
       // Step 3: Authenticate with PostgreSQL (Business Data)
               // Authenticating with PostgreSQL...
@@ -461,6 +455,16 @@ const Login = () => {
           navigate(from, { replace: true });
         }
       } else {
+        // PostgreSQL authentication failed
+        if (response.message === 'Invalid email or password') {
+          // Just show error message - no prompts
+          toast({
+            title: "❌ Login Failed",
+            description: "Invalid email or password. Please check your credentials.",
+            variant: "destructive"
+          });
+        }
+        
         console.error('❌ PostgreSQL authentication failed:', response.message);
         setError(response.message || 'Business data authentication failed');
       }

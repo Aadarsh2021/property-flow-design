@@ -105,6 +105,26 @@ const Profile = () => {
       
       // Set profile photo
       setProfilePhoto(user.profilePicture || null);
+      
+      // Debug date values
+      console.log('📅 User date debug:', {
+        created_at: user.created_at,
+        createdAt: user.createdAt,
+        last_login: user.last_login,
+        lastLogin: user.lastLogin,
+        createdAt_parsed: user.createdAt ? new Date(user.createdAt) : null,
+        lastLogin_parsed: user.lastLogin ? new Date(user.lastLogin) : null
+      });
+      
+      // Debug auth provider
+      console.log('🔐 Auth provider debug:', {
+        auth_provider: user.auth_provider,
+        authProvider: user.authProvider,
+        password_hash: user.password_hash ? 'Set' : 'Not Set',
+        hasBothAuth: user?.auth_provider === 'both' || user?.authProvider === 'both',
+        isGoogleUser: user?.auth_provider === 'google' || user?.authProvider === 'google',
+        isEmailUser: user?.auth_provider === 'email' || user?.authProvider === 'email'
+      });
     }
   }, [user]);
 
@@ -390,7 +410,7 @@ const Profile = () => {
             newPassword: passwordData.newPassword
           });
           if (response.success) {
-            // Update Firebase password as well
+            // Update Firebase password as well (this will auto-sync with database)
             const firebaseResult = await updateUserPassword(passwordData.newPassword);
             
             if (firebaseResult.success) {
@@ -399,7 +419,7 @@ const Profile = () => {
               
               toast({
                 title: "✅ Password Changed",
-                description: "Your password has been changed successfully in both systems",
+                description: "Your password has been changed successfully in both Firebase and database",
               });
             } else {
               // Database updated but Firebase failed
@@ -507,6 +527,7 @@ const Profile = () => {
   // Check if user is Google user or has both auth methods (handle both auth_provider and authProvider)
   const isGoogleUser = user?.auth_provider === 'google' || user?.authProvider === 'google';
   const hasBothAuth = user?.auth_provider === 'both' || user?.authProvider === 'both';
+  const isEmailUser = user?.auth_provider === 'email' || user?.authProvider === 'email';
   
   // Check if user has password set (for email users)
   const hasPassword = user?.password_hash && user.password_hash !== '' && user.password_hash !== null && user.password_hash !== undefined;
@@ -1051,24 +1072,46 @@ const Profile = () => {
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Account Type:</span>
                     <span className="text-sm font-medium">
-                      {isGoogleUser ? 'Google Account' : 'Email Account'}
+                      {hasBothAuth ? 'Hybrid Account' : 
+                       isGoogleUser ? 'Google Account' : 
+                       isEmailUser ? 'Email Account' : 'Unknown'}
                     </span>
                   </div>
                   
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Member Since:</span>
                     <span className="text-sm font-medium">
-                      {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 
-                       user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
+                      {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                      }) : 
+                       user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                      }) : 'N/A'}
                     </span>
                   </div>
                   
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Last Login:</span>
                     <span className="text-sm font-medium">
-                      {user?.last_login ? new Date(user.last_login).toLocaleDateString() : 
-                       user?.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 
-                       new Date().toLocaleDateString()}
+                      {user?.lastLogin ? new Date(user.lastLogin).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                      }) : 
+                       user?.last_login ? new Date(user.last_login).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                      }) : 
+                       new Date().toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                      })}
                     </span>
                   </div>
                   
