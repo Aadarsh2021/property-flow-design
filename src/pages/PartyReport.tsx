@@ -185,44 +185,50 @@ const PartyReport = () => {
     if (selectedParty) {
       // Show confirmation dialog
       const confirmed = window.confirm(
-        `Are you sure you want to delete party "${selectedParty.name}"?\n\nThis action cannot be undone.`
+        `Are you sure you want to delete party "${selectedParty.name}"?\n\nThis action cannot be undone and will permanently delete the party from the database.`
       );
       
       if (confirmed) {
         try {
+          console.log('🗑️ Deleting party:', selectedParty);
           const response = await newPartyAPI.delete(selectedParty._id!);
+          console.log('🗑️ Delete response:', response);
           
           if (response.success) {
             toast({
-              title: "Success",
-              description: `Party "${selectedParty.name}" deleted successfully`,
+              title: "✅ Success",
+              description: `Party "${selectedParty.name}" deleted permanently from database`,
             });
             
-            // Remove from local state
+            // Remove from local state immediately
             setParties(prev => prev.filter(p => p._id !== selectedParty._id));
+            setFilteredParties(prev => prev.filter(p => p._id !== selectedParty._id));
             setSelectedParty(null);
             
             // Reload parties to refresh the list
-            loadParties();
+            setTimeout(() => {
+              loadParties();
+            }, 1000);
           } else {
+            console.error('❌ Delete failed:', response);
             toast({
-              title: "Error",
+              title: "❌ Error",
               description: response.message || "Failed to delete party",
               variant: "destructive"
             });
           }
         } catch (error) {
-          console.error('Delete party error:', error);
+          console.error('❌ Delete party error:', error);
           toast({
-            title: "Error",
-            description: "Failed to delete party",
+            title: "❌ Error",
+            description: "Failed to delete party. Please try again.",
             variant: "destructive"
           });
         }
       }
     } else {
       toast({
-        title: "Select Party",
+        title: "⚠️ Select Party",
         description: "Please select a party to delete",
         variant: "destructive"
       });
