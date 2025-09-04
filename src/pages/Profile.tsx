@@ -177,12 +177,18 @@ const Profile = () => {
       return;
     }
     
+    // If user has password, current password is required
+    if (hasPassword && !passwordData.currentPassword) {
+      setError('Current password is required');
+      return;
+    }
+    
     setPasswordLoading(true);
     setError('');
     
     try {
-      if (user?.auth_provider === 'google') {
-        // Google user - setup password
+      if (user?.auth_provider === 'google' && !hasPassword) {
+        // Google user - setup password (first time)
         const response = await authAPI.setupPassword({
           password: passwordData.newPassword
         });
@@ -267,6 +273,39 @@ const Profile = () => {
           } else {
             setError(response.message || 'Failed to change password');
           }
+        } else if (hasPassword) {
+          // User has password - change password
+          const response = await authAPI.changePassword({
+            currentPassword: passwordData.currentPassword,
+            newPassword: passwordData.newPassword
+          });
+          
+          if (response.success) {
+            // Update Firebase password as well
+            const firebaseResult = await updateUserPassword(passwordData.newPassword);
+            
+            if (firebaseResult.success) {
+              toast({
+                title: "✅ Password Changed",
+                description: "Your password has been changed successfully in both systems",
+              });
+            } else {
+              // Database updated but Firebase failed
+              toast({
+                title: "⚠️ Partial Success",
+                description: "Password changed in database but failed to update Firebase. Please try logging in.",
+                variant: "destructive"
+              });
+            }
+            
+            setPasswordData({
+              currentPassword: '',
+              newPassword: '',
+              confirmPassword: ''
+            });
+          } else {
+            setError(response.message || 'Failed to change password');
+          }
         } else {
           // User doesn't have password - setup new password
           const response = await authAPI.setupPassword({
@@ -316,8 +355,8 @@ const Profile = () => {
   // Check if user has password set (for email users)
   const hasPassword = user?.password_hash && user.password_hash !== '';
   
-  // Show current password field only for email users who have password set
-  const showCurrentPassword = !isGoogleUser && hasPassword;
+  // Show current password field for users who have password set (both email and Google users with password)
+  const showCurrentPassword = hasPassword;
   
   // Show password setup section only for Google users who haven't set password yet
   const showPasswordSetup = isGoogleUser && !hasPassword;
@@ -696,7 +735,7 @@ const Profile = () => {
                     <span>Password Management</span>
                   </CardTitle>
                   <CardDescription>
-                    {isGoogleUser 
+                    {showPasswordSetup 
                       ? "Set up a password for your account" 
                       : hasPassword 
                         ? "Change your account password"
