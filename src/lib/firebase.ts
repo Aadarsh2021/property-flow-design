@@ -111,7 +111,7 @@ export const syncPasswordWithDatabase = async (email: string, password: string) 
   try {
     console.log('🔄 Starting password sync for:', email);
     
-    const apiUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software.vercel.app/api'}/authentication/sync-password`;
+    const apiUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software-oul4r93vr-aadarsh2021s-projects.vercel.app/api'}/authentication/sync-password`;
     console.log('📡 API URL:', apiUrl);
     
     const response = await fetch(apiUrl, {

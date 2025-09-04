@@ -118,7 +118,7 @@ const FirebasePasswordReset = () => {
         // Try alternative sync method
         console.log('🔄 Trying alternative sync method...');
         try {
-          const altSyncResult = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software.vercel.app/api'}/authentication/sync-password`, {
+          const altSyncResult = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software-oul4r93vr-aadarsh2021s-projects.vercel.app/api'}/authentication/sync-password`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

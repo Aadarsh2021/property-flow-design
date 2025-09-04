@@ -203,7 +203,7 @@ export const uploadProfileImage = async (file: File, userId: string): Promise<{ 
     });
 
     // Upload via backend API
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software.vercel.app/api'}/upload/profile-image`, {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software-oul4r93vr-aadarsh2021s-projects.vercel.app/api'}/upload/profile-image`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
