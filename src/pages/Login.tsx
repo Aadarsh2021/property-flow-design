@@ -30,6 +30,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { authAPI } from '@/lib/api';
 import { signInWithEmail, signInWithGoogle, resetPassword } from '@/lib/firebase';
+import { createSupabaseSession } from '@/lib/supabase-auth';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -418,7 +419,16 @@ const Login = () => {
 
               // Firebase authentication successful
 
-      // Step 2: Authenticate with PostgreSQL (Business Data)
+      // Step 2: Create Supabase session for storage access
+      // Creating Supabase session...
+      const supabaseResult = await createSupabaseSession(email, password);
+      
+      if (!supabaseResult.success) {
+        console.warn('⚠️ Supabase session creation failed:', supabaseResult.error);
+        // Continue with login even if Supabase session fails
+      }
+
+      // Step 3: Authenticate with PostgreSQL (Business Data)
               // Authenticating with PostgreSQL...
       const response = await authAPI.login({
         email: email,

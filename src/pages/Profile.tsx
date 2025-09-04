@@ -47,9 +47,10 @@ import {
 } from 'lucide-react';
 import { authAPI, userSettingsAPI } from '@/lib/api';
 import { updateUserPassword, updateUserProfile, sendEmailVerificationToUser } from '@/lib/firebase';
+import { uploadProfileImage, deleteProfileImage } from '@/lib/supabase-auth';
 
 const Profile = () => {
-  const { user, login } = useAuth();
+  const { user, login, token } = useAuth();
   const { toast } = useToast();
   const { companyName, refreshCompanyName } = useCompanyName();
   
@@ -68,6 +69,10 @@ const Profile = () => {
     state: '',
     pincode: ''
   });
+  
+  // Profile photo states
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+  const [photoLoading, setPhotoLoading] = useState(false);
   
   // Password states
   const [passwordData, setPasswordData] = useState({
@@ -97,13 +102,68 @@ const Profile = () => {
         state: user.state || '',
         pincode: user.pincode || ''
       });
+      
+      // Set profile photo
+      setProfilePhoto(user.profilePicture || null);
     }
   }, [user]);
+
+  // Refresh user profile data
+  const refreshUserProfile = async () => {
+    try {
+      const response = await authAPI.getProfile();
+      if (response.success) {
+        // Use token from context or user object
+        const currentToken = token || user?.token;
+        if (currentToken) {
+          login(currentToken, response.data);
+          
+          // Update form data with fresh data
+          setFormData({
+            fullname: response.data.fullname || '',
+            email: response.data.email || '',
+            phone: response.data.phone || '',
+            address: response.data.address || '',
+            city: response.data.city || '',
+            state: response.data.state || '',
+            pincode: response.data.pincode || ''
+          });
+        } else {
+          console.error('No token available for profile refresh');
+        }
+      } else {
+        console.error('Profile refresh failed:', response.message);
+      }
+    } catch (error) {
+      console.error('Profile refresh error:', error);
+      // Don't logout on profile refresh failure, just log the error
+    }
+  };
 
   // Load company name from User Settings
   useEffect(() => {
     refreshCompanyName();
   }, [refreshCompanyName]);
+
+  // Refresh user profile on component mount to get latest data
+  useEffect(() => {
+    // Only refresh if user exists and we have a token (check both user.token and token from context)
+    if (user && (user.token || token)) {
+      refreshUserProfile();
+    }
+  }, []);
+
+  // Don't render if user is not loaded yet
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Handle form input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -142,11 +202,8 @@ const Profile = () => {
       const response = await authAPI.updateProfile(formData);
       
       if (response.success) {
-        // Update local user data
-        const updatedUser = { ...user, ...formData };
-        login(user?.token || '', updatedUser);
-        
-        // Company name is managed in User Settings, not here
+        // Refresh user profile to get updated data from backend
+        await refreshUserProfile();
         
         toast({
           title: "✅ Profile Updated",
@@ -156,12 +213,106 @@ const Profile = () => {
         setIsEditing(false);
       } else {
         setError(response.message || 'Failed to update profile');
+        toast({
+          title: "❌ Update Failed",
+          description: response.message || 'Failed to update profile',
+          variant: "destructive"
+        });
       }
     } catch (error: any) {
       console.error('Profile update error:', error);
-      setError(error.message || 'Failed to update profile');
+      const errorMessage = error.message || 'Failed to update profile';
+      setError(errorMessage);
+      toast({
+        title: "❌ Update Error",
+        description: errorMessage,
+        variant: "destructive"
+      });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle profile photo change
+  const handlePhotoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "❌ Invalid File Type",
+        description: "Please select an image file",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "❌ File Too Large",
+        description: "Please select an image smaller than 5MB",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setPhotoLoading(true);
+    try {
+      // Delete old image if exists
+      if (profilePhoto && profilePhoto.startsWith('http')) {
+        await deleteProfileImage(profilePhoto);
+      }
+
+      // Upload new image to Supabase Storage
+      const uploadResult = await uploadProfileImage(file, user?.id || user?._id || '');
+      
+      if (uploadResult.success && uploadResult.url) {
+        // Update local state only (avoid calling login function)
+        setProfilePhoto(uploadResult.url);
+        
+        // Update localStorage directly to persist the change
+        try {
+          const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+          const updatedUser = { ...currentUser, profilePicture: uploadResult.url };
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+          console.log('✅ Local storage updated with new profile picture');
+        } catch (error) {
+          console.warn('Failed to update localStorage:', error);
+        }
+        
+        // Also update the backend user profile
+        try {
+          const profileUpdateResult = await authAPI.updateProfile({
+            profilePicture: uploadResult.url
+          });
+          console.log('✅ Backend profile updated:', profileUpdateResult);
+        } catch (error) {
+          console.warn('Backend profile update failed:', error);
+          // Continue even if backend update fails - image is already uploaded and displayed
+        }
+        
+        toast({
+          title: "✅ Photo Updated",
+          description: "Your profile photo has been updated successfully",
+        });
+      } else {
+        toast({
+          title: "❌ Upload Failed",
+          description: uploadResult.error || "Failed to upload profile photo",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Photo update error:', error);
+      toast({
+        title: "❌ Update Error",
+        description: "Failed to update profile photo",
+        variant: "destructive"
+      });
+    } finally {
+      setPhotoLoading(false);
     }
   };
 
@@ -199,15 +350,7 @@ const Profile = () => {
           
           if (firebaseResult.success) {
             // Refresh user profile to get updated auth_provider
-            try {
-              const profileResponse = await authAPI.getProfile();
-              if (profileResponse.success) {
-                // Update user in context with new auth_provider
-                login(user?.token || '', profileResponse.data);
-              }
-            } catch (error) {
-              console.error('Failed to refresh profile:', error);
-            }
+            await refreshUserProfile();
             
             toast({
               title: "✅ Password Setup Complete",
@@ -246,12 +389,14 @@ const Profile = () => {
             currentPassword: passwordData.currentPassword,
             newPassword: passwordData.newPassword
           });
-          
           if (response.success) {
             // Update Firebase password as well
             const firebaseResult = await updateUserPassword(passwordData.newPassword);
             
             if (firebaseResult.success) {
+              // Refresh user profile to get updated data
+              await refreshUserProfile();
+              
               toast({
                 title: "✅ Password Changed",
                 description: "Your password has been changed successfully in both systems",
@@ -285,6 +430,9 @@ const Profile = () => {
             const firebaseResult = await updateUserPassword(passwordData.newPassword);
             
             if (firebaseResult.success) {
+              // Refresh user profile to get updated data
+              await refreshUserProfile();
+              
               toast({
                 title: "✅ Password Changed",
                 description: "Your password has been changed successfully in both systems",
@@ -342,24 +490,34 @@ const Profile = () => {
       }
     } catch (error: any) {
       console.error('Password change error:', error);
-      setError(error.message || 'Failed to change password');
+      const errorMessage = error.message || 'Failed to change password';
+      setError(errorMessage);
+      
+      // Show error toast
+      toast({
+        title: "❌ Password Change Failed",
+        description: errorMessage,
+        variant: "destructive"
+      });
     } finally {
       setPasswordLoading(false);
     }
   };
 
-  // Check if user is Google user or has both auth methods
-  const isGoogleUser = user?.auth_provider === 'google';
-  const hasBothAuth = user?.auth_provider === 'both';
+  // Check if user is Google user or has both auth methods (handle both auth_provider and authProvider)
+  const isGoogleUser = user?.auth_provider === 'google' || user?.authProvider === 'google';
+  const hasBothAuth = user?.auth_provider === 'both' || user?.authProvider === 'both';
   
   // Check if user has password set (for email users)
-  const hasPassword = user?.password_hash && user.password_hash !== '';
+  const hasPassword = user?.password_hash && user.password_hash !== '' && user.password_hash !== null && user.password_hash !== undefined;
   
   // Show current password field for users who have password set (both email and Google users with password)
   const showCurrentPassword = hasPassword;
   
   // Show password setup section only for Google users who haven't set password yet
   const showPasswordSetup = isGoogleUser && !hasPassword;
+
+  // Debug logging removed for clean testing
   
   // Company name from User Settings (read-only)
   const displayCompanyName = companyName || user?.company_account || 'Company';
@@ -486,42 +644,54 @@ const Profile = () => {
                       )}
                     </Button>
                   </div>
-                </CardHeader>
-                
-                <CardContent className="space-y-6">
-                  {/* Profile Picture Section */}
-                  <div className="flex items-center space-x-4">
+                  
+                  {/* Profile Photo Section */}
+                  <div className="flex items-center space-x-4 pt-4">
                     <div className="relative">
-                      {user?.profilePicture ? (
-                        <img 
-                          src={user.profilePicture} 
-                          alt={user.fullname || 'User'} 
-                          className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-lg"
+                      {profilePhoto ? (
+                        <img
+                          src={profilePhoto}
+                          alt="Profile"
+                          className="w-20 h-20 rounded-full object-cover border-4 border-gray-200"
                         />
                       ) : (
-                        <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center border-4 border-white shadow-lg">
-                          <User className="w-8 h-8 text-white" />
+                        <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center border-4 border-gray-200">
+                          <User className="w-8 h-8 text-gray-400" />
                         </div>
                       )}
-                      {isEditing && (
-                        <button className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full shadow-lg hover:bg-blue-700 transition-colors">
-                          <Camera className="w-4 h-4" />
-                        </button>
+                      {photoLoading && (
+                        <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        </div>
                       )}
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900">
-                        {user?.fullname || 'User'}
+                        {formData.fullname || 'User Name'}
                       </h3>
-                      <p className="text-gray-600">{user?.email}</p>
-                      {isGoogleUser && (
-                        <div className="flex items-center space-x-1 mt-1">
-                          <Shield className="w-4 h-4 text-green-600" />
-                          <span className="text-sm text-green-600">Google Account</span>
-                        </div>
-                      )}
+                      <p className="text-sm text-gray-500">{formData.email}</p>
+                      <div className="mt-2">
+                        <input
+                          type="file"
+                          id="photo-upload"
+                          accept="image/*"
+                          onChange={handlePhotoChange}
+                          className="hidden"
+                          disabled={photoLoading}
+                        />
+                        <label
+                          htmlFor="photo-upload"
+                          className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 cursor-pointer disabled:opacity-50"
+                        >
+                          <Camera className="w-3 h-3 mr-1" />
+                          {photoLoading ? 'Uploading...' : 'Change Photo'}
+                        </label>
+                      </div>
                     </div>
                   </div>
+                </CardHeader>
+                
+                <CardContent className="space-y-6">
 
                   <Separator />
 
@@ -735,11 +905,9 @@ const Profile = () => {
                     <span>Password Management</span>
                   </CardTitle>
                   <CardDescription>
-                    {showPasswordSetup 
-                      ? "Set up a password for your account" 
-                      : hasPassword 
-                        ? "Change your account password"
-                        : "Set up a password for your account"
+                    {hasPassword 
+                      ? "Change your account password"
+                      : "Set up a password for your account"
                     }
                   </CardDescription>
                 </CardHeader>
@@ -830,12 +998,12 @@ const Profile = () => {
                     {passwordLoading ? (
                       <>
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                        {showPasswordSetup ? 'Setting up...' : 'Changing...'}
+                        {hasPassword ? 'Changing...' : 'Setting up...'}
                       </>
                     ) : (
                       <>
                         <CheckCircle className="w-4 h-4 mr-2" />
-                        {showPasswordSetup ? 'Setup Password' : 'Change Password'}
+                        {hasPassword ? 'Change Password' : 'Setup Password'}
                       </>
                     )}
                   </Button>
