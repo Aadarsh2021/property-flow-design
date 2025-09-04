@@ -192,6 +192,17 @@ const Profile = () => {
           const firebaseResult = await updateUserPassword(passwordData.newPassword);
           
           if (firebaseResult.success) {
+            // Refresh user profile to get updated auth_provider
+            try {
+              const profileResponse = await authAPI.getProfile();
+              if (profileResponse.success) {
+                // Update user in context with new auth_provider
+                login(user?.token || '', profileResponse.data);
+              }
+            } catch (error) {
+              console.error('Failed to refresh profile:', error);
+            }
+            
             toast({
               title: "✅ Password Setup Complete",
               description: "Your password has been set up successfully in both systems",
@@ -298,14 +309,18 @@ const Profile = () => {
     }
   };
 
-  // Check if user is Google user
+  // Check if user is Google user or has both auth methods
   const isGoogleUser = user?.auth_provider === 'google';
+  const hasBothAuth = user?.auth_provider === 'both';
   
   // Check if user has password set (for email users)
   const hasPassword = user?.password_hash && user.password_hash !== '';
   
   // Show current password field only for email users who have password set
   const showCurrentPassword = !isGoogleUser && hasPassword;
+  
+  // Show password setup section only for Google users who haven't set password yet
+  const showPasswordSetup = isGoogleUser && !hasPassword;
   
   // Company name from User Settings (read-only)
   const displayCompanyName = companyName || user?.company_account || 'Company';
@@ -776,12 +791,12 @@ const Profile = () => {
                     {passwordLoading ? (
                       <>
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                        {isGoogleUser || !hasPassword ? 'Setting up...' : 'Changing...'}
+                        {showPasswordSetup ? 'Setting up...' : 'Changing...'}
                       </>
                     ) : (
                       <>
                         <CheckCircle className="w-4 h-4 mr-2" />
-                        {isGoogleUser || !hasPassword ? 'Setup Password' : 'Change Password'}
+                        {showPasswordSetup ? 'Setup Password' : 'Change Password'}
                       </>
                     )}
                   </Button>
@@ -800,7 +815,7 @@ const Profile = () => {
                     </div>
                   )}
                   
-                  {!isGoogleUser && !hasPassword && (
+                  {showPasswordSetup && (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
                       <div className="flex items-start space-x-2">
                         <Shield className="w-4 h-4 text-yellow-600 mt-0.5" />
