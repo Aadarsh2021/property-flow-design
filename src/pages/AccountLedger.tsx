@@ -418,7 +418,16 @@ const AccountLedger = () => {
         // Find the actual position where the match starts (case insensitive)
         const matchIndex = partyName.toLowerCase().indexOf(searchLower);
         if (matchIndex === 0) {
-          setTopAutoCompleteText(partyName.substring(searchTerm.length));
+          const autoCompleteText = partyName.substring(searchTerm.length);
+          console.log('🔍 Top auto-complete text generation debug:', {
+            partyName,
+            searchTerm,
+            autoCompleteText,
+            originalPartyName: partyName,
+            searchLower,
+            partyLower
+          });
+          setTopAutoCompleteText(autoCompleteText);
           setShowTopInlineSuggestion(true);
         } else {
           setTopAutoCompleteText('');
@@ -663,6 +672,12 @@ const AccountLedger = () => {
     if (filteredTopParties.length > 0) {
       const selectedParty = filteredTopParties[0];
       const partyName = selectedParty.party_name || selectedParty.name;
+      console.log('🔍 Top auto-complete selection debug:', {
+        selectedParty,
+        partyName,
+        originalPartyName: selectedParty.party_name,
+        name: selectedParty.name
+      });
       setTypingPartyName(partyName);
       setShowTopPartyDropdown(false);
       setTopAutoCompleteText('');
@@ -674,6 +689,11 @@ const AccountLedger = () => {
   const handleTopTabComplete = () => {
     if (showTopInlineSuggestion && topAutoCompleteText) {
       const completedValue = typingPartyName + topAutoCompleteText;
+      console.log('🔍 Top Tab completion debug:', {
+        typingPartyName,
+        topAutoCompleteText,
+        completedValue
+      });
       setTypingPartyName(completedValue);
       setTopAutoCompleteText('');
       setShowTopInlineSuggestion(false);
