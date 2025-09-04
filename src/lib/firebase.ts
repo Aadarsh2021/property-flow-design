@@ -73,7 +73,7 @@ export const signOutUser = async () => {
 export const resetPassword = async (email: string) => {
   try {
     await sendPasswordResetEmail(auth, email, {
-      url: `${window.location.origin}/handle-reset`
+      url: `${window.location.origin}/firebase-reset?email=${encodeURIComponent(email)}`
     });
     
     // Store email for password sync after reset
@@ -112,7 +112,7 @@ export const syncPasswordWithDatabase = async (email: string, password: string) 
     console.log('🔄 [SYNC] Starting password sync for:', email);
     console.log('🔄 [SYNC] Password length:', password.length);
     
-    const apiUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software-oul4r93vr-aadarsh2021s-projects.vercel.app/api'}/authentication/sync-password`;
+    const apiUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software.vercel.app/api'}/authentication/sync-password`;
     console.log('📡 [SYNC] API URL:', apiUrl);
     
     const requestBody = {

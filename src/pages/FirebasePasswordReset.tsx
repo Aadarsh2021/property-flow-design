@@ -39,22 +39,65 @@ const FirebasePasswordReset = () => {
       try {
         const oobCodeParam = searchParams.get('oobCode');
         const mode = searchParams.get('mode');
+        const emailParam = searchParams.get('email');
         
-        if (mode !== 'resetPassword' || !oobCodeParam) {
-          setError('Invalid or missing reset code');
-          setVerifying(false);
-          return;
+        console.log('🔍 FirebasePasswordReset - OOB Code:', oobCodeParam);
+        console.log('🔍 FirebasePasswordReset - Mode:', mode);
+        console.log('🔍 FirebasePasswordReset - Email:', emailParam);
+        
+        // If we have email from URL but no OOB code, try to extract from current URL
+        if (emailParam && !oobCodeParam) {
+          console.log('📧 Email found in URL, checking for OOB code in current URL...');
+          const currentUrl = window.location.href;
+          console.log('🔍 Current URL:', currentUrl);
+          
+          // Try to extract OOB code from URL fragments or query params
+          const urlParams = new URLSearchParams(window.location.search);
+          const fragmentParams = new URLSearchParams(window.location.hash.substring(1));
+          
+          const oobFromQuery = urlParams.get('oobCode');
+          const oobFromFragment = fragmentParams.get('oobCode');
+          const oobFromUrl = oobFromQuery || oobFromFragment;
+          
+          console.log('🔍 OOB from query:', oobFromQuery);
+          console.log('🔍 OOB from fragment:', oobFromFragment);
+          console.log('🔍 OOB from URL:', oobFromUrl);
+          
+          if (oobFromUrl) {
+            console.log('✅ OOB code found in URL, verifying...');
+            try {
+              const emailFromCode = await verifyPasswordResetCode(auth, oobFromUrl);
+              if (emailFromCode) {
+                setEmail(emailFromCode);
+                setOobCode(oobFromUrl);
+                setVerifying(false);
+                return;
+              }
+            } catch (verifyError) {
+              console.error('❌ OOB code verification failed:', verifyError);
+            }
+          }
         }
-
-        // Verify the password reset code
-        const emailFromCode = await verifyPasswordResetCode(auth, oobCodeParam);
         
-        if (emailFromCode) {
-          setEmail(emailFromCode);
-          setOobCode(oobCodeParam);
+        // Standard Firebase flow
+        if (mode === 'resetPassword' && oobCodeParam) {
+          console.log('✅ Standard Firebase flow - verifying OOB code...');
+          const emailFromCode = await verifyPasswordResetCode(auth, oobCodeParam);
+          
+          if (emailFromCode) {
+            setEmail(emailFromCode);
+            setOobCode(oobCodeParam);
+            setVerifying(false);
+          } else {
+            setError('Invalid or expired reset code');
+            setVerifying(false);
+          }
+        } else if (emailParam) {
+          console.log('📧 Email found but no valid OOB code, showing manual reset form...');
+          setEmail(emailParam);
           setVerifying(false);
         } else {
-          setError('Invalid or expired reset code');
+          setError('Invalid or missing reset code');
           setVerifying(false);
         }
       } catch (error: any) {
@@ -95,9 +138,17 @@ const FirebasePasswordReset = () => {
     setError('');
     
     try {
-      // First, confirm the password reset with Firebase
-      await confirmPasswordReset(auth, oobCode, password);
-      console.log('✅ Firebase password reset confirmed');
+      if (oobCode) {
+        // Standard Firebase flow with OOB code
+        console.log('🔄 Using Firebase OOB code flow...');
+        await confirmPasswordReset(auth, oobCode, password);
+        console.log('✅ Firebase password reset confirmed');
+      } else {
+        // Manual password update flow (when we only have email)
+        console.log('🔄 Using manual password update flow...');
+        console.log('⚠️ Note: This will only update the database password, not Firebase');
+        console.log('⚠️ User will need to login with old Firebase password and update it manually');
+      }
       
       // Then sync password with database
       console.log('🔄 STEP 1: Starting database sync...');
@@ -124,7 +175,7 @@ const FirebasePasswordReset = () => {
         // Try alternative sync method
         console.log('🔄 STEP 3: Trying alternative sync method...');
         try {
-          const apiUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software-oul4r93vr-aadarsh2021s-projects.vercel.app/api'}/authentication/sync-password`;
+          const apiUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software.vercel.app/api'}/authentication/sync-password`;
           console.log('📡 Alternative API URL:', apiUrl);
           
           const altSyncResult = await fetch(apiUrl, {
