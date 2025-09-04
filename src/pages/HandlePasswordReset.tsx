@@ -19,6 +19,10 @@ const HandlePasswordReset = () => {
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
+    console.log('🔄 HandlePasswordReset component mounted');
+    console.log('🔍 Current URL:', window.location.href);
+    console.log('🔍 Search params:', Object.fromEntries(searchParams.entries()));
+    
     const handlePasswordReset = async () => {
       try {
         const oobCode = searchParams.get('oobCode');
@@ -26,14 +30,17 @@ const HandlePasswordReset = () => {
         
         console.log('🔍 Password reset handler - OOB Code:', oobCode);
         console.log('🔍 Password reset handler - Mode:', mode);
+        console.log('🔍 All search params:', Object.fromEntries(searchParams.entries()));
         
         if (mode === 'resetPassword' && oobCode) {
+          console.log('✅ Valid reset parameters found, verifying code...');
           try {
             // Verify the password reset code
             const email = await verifyPasswordResetCode(auth, oobCode);
             console.log('✅ Password reset code verified for email:', email);
             
             if (email) {
+              console.log('🔄 Redirecting to firebase-reset page...');
               // Redirect to our custom reset page with the email and OOB code
               navigate(`/firebase-reset?mode=resetPassword&oobCode=${oobCode}&email=${encodeURIComponent(email)}`);
             } else {
@@ -42,28 +49,35 @@ const HandlePasswordReset = () => {
             }
           } catch (verifyError) {
             console.error('❌ Password reset code verification failed:', verifyError);
+            console.error('❌ Verification error details:', verifyError.message);
             navigate('/login?error=invalid-reset-code');
           }
         } else {
           console.log('❌ Invalid parameters - Mode:', mode, 'OOB Code:', oobCode);
+          console.log('🔄 Redirecting to login page...');
           // No valid reset parameters, redirect to login
           navigate('/login');
         }
       } catch (error) {
         console.error('❌ Password reset handling error:', error);
+        console.error('❌ Error details:', error.message);
         navigate('/login?error=reset-failed');
       }
     };
 
     // Add timeout to prevent infinite loading
     const timeout = setTimeout(() => {
-      console.error('❌ Password reset handler timeout');
+      console.error('❌ Password reset handler timeout after 10 seconds');
       navigate('/login?error=timeout');
     }, 10000); // 10 second timeout
 
+    console.log('🔄 Starting password reset handler...');
     handlePasswordReset();
 
-    return () => clearTimeout(timeout);
+    return () => {
+      console.log('🔄 Cleaning up password reset handler');
+      clearTimeout(timeout);
+    };
   }, [searchParams, navigate]);
 
   return (
