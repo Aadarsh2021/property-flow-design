@@ -30,20 +30,48 @@ export default defineConfig(({ mode }) => ({
     minify: 'terser',
     rollupOptions: {
       output: {
-        entryFileNames: `assets/[name]-${Date.now()}-${Math.random().toString(36).substr(2, 9)}.js`,
-        chunkFileNames: `assets/[name]-${Date.now()}-${Math.random().toString(36).substr(2, 9)}.js`,
-        assetFileNames: `assets/[name]-${Date.now()}-${Math.random().toString(36).substr(2, 9)}.[ext]`,
+        entryFileNames: `assets/[name]-[hash].js`,
+        chunkFileNames: `assets/[name]-[hash].js`,
+        assetFileNames: `assets/[name]-[hash].[ext]`,
         manualChunks: {
-          vendor: ['react', 'react-dom'],
-          ui: ['@radix-ui/react-dialog', '@radix-ui/react-alert-dialog', '@radix-ui/react-toast', '@radix-ui/react-select', '@radix-ui/react-dropdown-menu'],
-          utils: ['lucide-react', 'clsx', 'tailwind-merge'],
-          router: ['react-router-dom']
+          // Core React libraries
+          'react-vendor': ['react', 'react-dom'],
+          'react-router': ['react-router-dom'],
+          
+          // UI Libraries - Split by usage
+          'radix-core': ['@radix-ui/react-dialog', '@radix-ui/react-alert-dialog'],
+          'radix-forms': ['@radix-ui/react-toast', '@radix-ui/react-select', '@radix-ui/react-dropdown-menu'],
+          'radix-navigation': ['@radix-ui/react-navigation-menu', '@radix-ui/react-tabs'],
+          
+          // Utility libraries
+          'utils': ['lucide-react', 'clsx', 'tailwind-merge'],
+          
+          // Data fetching
+          'query': ['@tanstack/react-query'],
+          
+          // Firebase
+          'firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/analytics'],
+          
+          // Supabase
+          'supabase': ['@supabase/supabase-js'],
+          
+          // Charts and visualization
+          'charts': ['recharts'],
+          
+          // Form handling
+          'forms': ['react-hook-form', '@hookform/resolvers', 'zod']
         }
       }
     },
-    chunkSizeWarningLimit: 800,
+    chunkSizeWarningLimit: 500,
     sourcemap: false,
-    reportCompressedSize: true
+    reportCompressedSize: true,
+    // Enable tree shaking
+    treeshake: true,
+    // Optimize dependencies
+    commonjsOptions: {
+      include: [/node_modules/]
+    }
   },
   plugins: [
     react(),

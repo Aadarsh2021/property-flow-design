@@ -97,14 +97,17 @@ const TableRow = memo(({
 TableRow.displayName = 'TableRow';
 
 const AccountLedger = () => {
-  // Performance monitoring
+  // Performance monitoring - only in development
   useEffect(() => {
-    const startTime = performance.now();
-    // Use requestAnimationFrame to measure after render
-    requestAnimationFrame(() => {
-      const endTime = performance.now();
-      console.log(`🚀 AccountLedger rendered in ${(endTime - startTime).toFixed(2)}ms`);
-    });
+    if (process.env.NODE_ENV === 'development') {
+      const startTime = performance.now();
+      requestAnimationFrame(() => {
+        const endTime = performance.now();
+        if (endTime - startTime > 10) { // Only log if render takes > 10ms
+          console.log(`🚀 AccountLedger rendered in ${(endTime - startTime).toFixed(2)}ms`);
+        }
+      });
+    }
   }, []); // Empty dependency array to run only once
   // Router hooks for navigation and URL parameters
   const { partyName: initialPartyName } = useParams<{ partyName: string }>();
