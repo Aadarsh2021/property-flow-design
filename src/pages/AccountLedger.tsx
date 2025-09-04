@@ -688,11 +688,18 @@ const AccountLedger = () => {
   // Top section Tab completion
   const handleTopTabComplete = () => {
     if (showTopInlineSuggestion && topAutoCompleteText) {
-      const completedValue = typingPartyName + topAutoCompleteText;
+      // Find the original party name from the filtered parties to preserve case
+      const originalParty = filteredTopParties[0];
+      const originalPartyName = originalParty?.party_name || originalParty?.name || '';
+      
+      // Use the original party name instead of concatenating user input + auto-complete
+      const completedValue = originalPartyName;
       console.log('🔍 Top Tab completion debug:', {
         typingPartyName,
         topAutoCompleteText,
-        completedValue
+        completedValue,
+        originalPartyName,
+        originalParty
       });
       setTypingPartyName(completedValue);
       setTopAutoCompleteText('');
@@ -723,6 +730,12 @@ const AccountLedger = () => {
     if (showLoading) {
       setLoading(true);
     }
+    
+    console.log('🔍 Load ledger data debug:', {
+      selectedPartyName,
+      type: typeof selectedPartyName,
+      length: selectedPartyName.length
+    });
     
     try {
       const response = await partyLedgerAPI.getPartyLedger(selectedPartyName);
@@ -827,6 +840,13 @@ const AccountLedger = () => {
     
     // Extract actual party name from display format
     const actualPartyName = extractPartyNameFromDisplay(trimmedName);
+    
+    console.log('🔍 Handle party change debug:', {
+      newPartyName,
+      trimmedName,
+      actualPartyName,
+      originalPartyName: newPartyName
+    });
     
     setSelectedPartyName(actualPartyName);
     setTypingPartyName(trimmedName); // Keep display format for typing
@@ -2164,15 +2184,19 @@ const AccountLedger = () => {
                           // Enter key navigates to party
                           if (showTopInlineSuggestion && topAutoCompleteText) {
                             handleTopTabComplete();
-                            // After completing, navigate to the party
+                            // After completing, navigate to the party using the completed value
                             setTimeout(() => {
-                              handlePartyChange(typingPartyName + topAutoCompleteText);
+                              const originalParty = filteredTopParties[0];
+                              const originalPartyName = originalParty?.party_name || originalParty?.name || '';
+                              handlePartyChange(originalPartyName);
                             }, 100);
                           } else if (filteredTopParties.length > 0) {
                             handleTopAutoComplete();
-                            // After selecting, navigate to the party
+                            // After selecting, navigate to the party using the selected party name
                             setTimeout(() => {
-                              handlePartyChange(typingPartyName);
+                              const selectedParty = filteredTopParties[0];
+                              const partyName = selectedParty?.party_name || selectedParty?.name || '';
+                              handlePartyChange(partyName);
                             }, 100);
                           } else {
                             handlePartyChange(typingPartyName);
