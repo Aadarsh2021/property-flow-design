@@ -46,6 +46,11 @@ const Login = () => {
   const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({});
   const [loadingMessage, setLoadingMessage] = useState('Signing In...');
   const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+  const [forgotPasswordError, setForgotPasswordError] = useState('');
+  const [forgotPasswordSuccess, setForgotPasswordSuccess] = useState(false);
 
   // Get the page user was trying to access
   const from = location.state?.from?.pathname || '/dashboard';
@@ -459,6 +464,40 @@ const Login = () => {
     }
   };
 
+  // Handle forgot password
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!forgotPasswordEmail.trim()) {
+      setForgotPasswordError('Please enter your email address');
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotPasswordEmail.trim())) {
+      setForgotPasswordError('Please enter a valid email address');
+      return;
+    }
+
+    setForgotPasswordLoading(true);
+    setForgotPasswordError('');
+
+    try {
+      const response = await authAPI.forgotPassword(forgotPasswordEmail.trim());
+      
+      if (response.success) {
+        setForgotPasswordSuccess(true);
+        setForgotPasswordError('');
+      } else {
+        setForgotPasswordError(response.message || 'Failed to send reset email');
+      }
+    } catch (error: any) {
+      console.error('❌ Forgot password error:', error);
+      setForgotPasswordError(error.message || 'Failed to send reset email. Please try again.');
+    } finally {
+      setForgotPasswordLoading(false);
+    }
+  };
+
   const hasErrors = Object.keys(validationErrors).length > 0 || Boolean(error);
   const isFormValid = formData.email.trim() && formData.password && !hasErrors;
   const isButtonDisabled = loading || !isFormValid;
@@ -669,6 +708,17 @@ const Login = () => {
                 )}
               </div>
               
+              {/* Forgot Password Link */}
+              <div className="text-right">
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPassword(true)}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  disabled={loading || googleLoading}
+                >
+                  Forgot Password?
+                </button>
+              </div>
               
               <Button
                 type="submit"
@@ -701,6 +751,105 @@ const Login = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Forgot Password Dialog */}
+      <Dialog open={showForgotPassword} onOpenChange={setShowForgotPassword}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-center">Reset Password</DialogTitle>
+            <DialogDescription className="text-center">
+              {forgotPasswordSuccess 
+                ? "Check your email for password reset instructions"
+                : "Enter your email address and we'll send you a link to reset your password"
+              }
+            </DialogDescription>
+          </DialogHeader>
+          
+          {!forgotPasswordSuccess ? (
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="forgot-email" className="text-sm font-medium text-gray-700">
+                  Email Address
+                </Label>
+                <Input
+                  id="forgot-email"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={forgotPasswordEmail}
+                  onChange={(e) => {
+                    setForgotPasswordEmail(e.target.value);
+                    setForgotPasswordError('');
+                  }}
+                  className={forgotPasswordError ? 'border-red-500 focus:border-red-500' : ''}
+                  required
+                  disabled={forgotPasswordLoading}
+                />
+                {forgotPasswordError && (
+                  <p className="text-sm text-red-500">{forgotPasswordError}</p>
+                )}
+              </div>
+              
+              <div className="flex space-x-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setShowForgotPassword(false);
+                    setForgotPasswordEmail('');
+                    setForgotPasswordError('');
+                  }}
+                  disabled={forgotPasswordLoading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                  disabled={forgotPasswordLoading || !forgotPasswordEmail.trim()}
+                >
+                  {forgotPasswordLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                      Sending...
+                    </>
+                  ) : (
+                    'Send Reset Link'
+                  )}
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <div className="space-y-4">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <p className="text-sm text-gray-600">
+                  We've sent a password reset link to <strong>{forgotPasswordEmail}</strong>
+                </p>
+                <p className="text-xs text-gray-500 mt-2">
+                  Please check your email and follow the instructions to reset your password.
+                </p>
+              </div>
+              
+              <Button
+                onClick={() => {
+                  setShowForgotPassword(false);
+                  setForgotPasswordEmail('');
+                  setForgotPasswordError('');
+                  setForgotPasswordSuccess(false);
+                }}
+                className="w-full bg-blue-600 hover:bg-blue-700"
+              >
+                Close
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
     </div>
   );
