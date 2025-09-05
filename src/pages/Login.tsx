@@ -47,7 +47,11 @@ const Login = () => {
   const [loadingMessage, setLoadingMessage] = useState('Signing In...');
   const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [resetPasswordData, setResetPasswordData] = useState({
+    email: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
   const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
   const [forgotPasswordError, setForgotPasswordError] = useState('');
   const [forgotPasswordSuccess, setForgotPasswordSuccess] = useState(false);
@@ -464,17 +468,35 @@ const Login = () => {
     }
   };
 
-  // Handle forgot password
+  // Handle forgot password - direct reset
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!forgotPasswordEmail.trim()) {
+    const { email, newPassword, confirmPassword } = resetPasswordData;
+    
+    // Validation
+    if (!email.trim()) {
       setForgotPasswordError('Please enter your email address');
       return;
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotPasswordEmail.trim())) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       setForgotPasswordError('Please enter a valid email address');
+      return;
+    }
+
+    if (!newPassword.trim()) {
+      setForgotPasswordError('Please enter a new password');
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setForgotPasswordError('Password must be at least 8 characters long');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setForgotPasswordError('Passwords do not match');
       return;
     }
 
@@ -482,17 +504,25 @@ const Login = () => {
     setForgotPasswordError('');
 
     try {
-      const response = await authAPI.forgotPassword(forgotPasswordEmail.trim());
+      // Step 1: Reset password in Firebase
+      const { sendPasswordResetEmail } = await import('firebase/auth');
+      const { auth } = await import('@/lib/firebase');
+      
+      await sendPasswordResetEmail(auth, email.trim());
+      
+      // Step 2: Update password in database
+      const response = await authAPI.syncPassword(email.trim(), newPassword);
       
       if (response.success) {
         setForgotPasswordSuccess(true);
         setForgotPasswordError('');
+        setResetPasswordData({ email: '', newPassword: '', confirmPassword: '' });
       } else {
-        setForgotPasswordError(response.message || 'Failed to send reset email');
+        setForgotPasswordError(response.message || 'Failed to update password');
       }
     } catch (error: any) {
-      console.error('❌ Forgot password error:', error);
-      setForgotPasswordError(error.message || 'Failed to send reset email. Please try again.');
+      console.error('❌ Password reset error:', error);
+      setForgotPasswordError(error.message || 'Failed to reset password. Please try again.');
     } finally {
       setForgotPasswordLoading(false);
     }
@@ -759,8 +789,8 @@ const Login = () => {
             <DialogTitle className="text-center">Reset Password</DialogTitle>
             <DialogDescription className="text-center">
               {forgotPasswordSuccess 
-                ? "Check your email for password reset instructions"
-                : "Enter your email address and we'll send you a link to reset your password"
+                ? "Password reset successfully! You can now login with your new password."
+                : "Enter your email and new password to reset your account"
               }
             </DialogDescription>
           </DialogHeader>
@@ -768,26 +798,65 @@ const Login = () => {
           {!forgotPasswordSuccess ? (
             <form onSubmit={handleForgotPassword} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="forgot-email" className="text-sm font-medium text-gray-700">
+                <Label htmlFor="reset-email" className="text-sm font-medium text-gray-700">
                   Email Address
                 </Label>
                 <Input
-                  id="forgot-email"
+                  id="reset-email"
                   type="email"
                   placeholder="Enter your email"
-                  value={forgotPasswordEmail}
+                  value={resetPasswordData.email}
                   onChange={(e) => {
-                    setForgotPasswordEmail(e.target.value);
+                    setResetPasswordData(prev => ({ ...prev, email: e.target.value }));
                     setForgotPasswordError('');
                   }}
                   className={forgotPasswordError ? 'border-red-500 focus:border-red-500' : ''}
                   required
                   disabled={forgotPasswordLoading}
                 />
-                {forgotPasswordError && (
-                  <p className="text-sm text-red-500">{forgotPasswordError}</p>
-                )}
               </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="reset-password" className="text-sm font-medium text-gray-700">
+                  New Password
+                </Label>
+                <Input
+                  id="reset-password"
+                  type="password"
+                  placeholder="Enter new password"
+                  value={resetPasswordData.newPassword}
+                  onChange={(e) => {
+                    setResetPasswordData(prev => ({ ...prev, newPassword: e.target.value }));
+                    setForgotPasswordError('');
+                  }}
+                  className={forgotPasswordError ? 'border-red-500 focus:border-red-500' : ''}
+                  required
+                  disabled={forgotPasswordLoading}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password" className="text-sm font-medium text-gray-700">
+                  Confirm Password
+                </Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  placeholder="Confirm new password"
+                  value={resetPasswordData.confirmPassword}
+                  onChange={(e) => {
+                    setResetPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }));
+                    setForgotPasswordError('');
+                  }}
+                  className={forgotPasswordError ? 'border-red-500 focus:border-red-500' : ''}
+                  required
+                  disabled={forgotPasswordLoading}
+                />
+              </div>
+              
+              {forgotPasswordError && (
+                <p className="text-sm text-red-500">{forgotPasswordError}</p>
+              )}
               
               <div className="flex space-x-3">
                 <Button
@@ -796,7 +865,7 @@ const Login = () => {
                   className="flex-1"
                   onClick={() => {
                     setShowForgotPassword(false);
-                    setForgotPasswordEmail('');
+                    setResetPasswordData({ email: '', newPassword: '', confirmPassword: '' });
                     setForgotPasswordError('');
                   }}
                   disabled={forgotPasswordLoading}
@@ -806,15 +875,15 @@ const Login = () => {
                 <Button
                   type="submit"
                   className="flex-1 bg-blue-600 hover:bg-blue-700"
-                  disabled={forgotPasswordLoading || !forgotPasswordEmail.trim()}
+                  disabled={forgotPasswordLoading || !resetPasswordData.email.trim() || !resetPasswordData.newPassword.trim() || !resetPasswordData.confirmPassword.trim()}
                 >
                   {forgotPasswordLoading ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                      Sending...
+                      Resetting...
                     </>
                   ) : (
-                    'Send Reset Link'
+                    'Reset Password'
                   )}
                 </Button>
               </div>
@@ -828,17 +897,17 @@ const Login = () => {
                   </svg>
                 </div>
                 <p className="text-sm text-gray-600">
-                  We've sent a password reset link to <strong>{forgotPasswordEmail}</strong>
+                  Password reset successfully!
                 </p>
                 <p className="text-xs text-gray-500 mt-2">
-                  Please check your email and follow the instructions to reset your password.
+                  You can now login with your new password.
                 </p>
               </div>
               
               <Button
                 onClick={() => {
                   setShowForgotPassword(false);
-                  setForgotPasswordEmail('');
+                  setResetPasswordData({ email: '', newPassword: '', confirmPassword: '' });
                   setForgotPasswordError('');
                   setForgotPasswordSuccess(false);
                 }}
