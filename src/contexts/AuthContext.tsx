@@ -29,6 +29,7 @@ interface AuthContextType {
   needsInitialSetup: (user: User | null) => boolean;
   isApproved: boolean;
   requiresApproval: boolean;
+  checkAuthStatus: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -110,8 +111,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       setToken(newToken);
       setUser(userWithId);
-      setIsApproved(userWithId.isApproved || false);
-      setRequiresApproval(!userWithId.isApproved);
+      setIsApproved(userWithId.isApproved || true); // Default to true if not set
+      setRequiresApproval(userWithId.isApproved === false); // Only true if explicitly false
       localStorage.setItem('token', newToken);
       localStorage.setItem('user', JSON.stringify(userWithId));
     } catch (error) {
@@ -143,6 +144,101 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  // Check current authentication status
+  const checkAuthStatus = async () => {
+    try {
+      const storedToken = localStorage.getItem('token');
+      const storedUser = localStorage.getItem('user');
+      
+      if (!storedToken || !storedUser) {
+        setUser(null);
+        setToken(null);
+        setIsApproved(false);
+        setRequiresApproval(false);
+        return;
+      }
+
+      // Parse stored user data
+      const userData = JSON.parse(storedUser);
+      
+      // If user is not approved, try to fetch latest status from API
+      if (userData.isApproved === false) {
+        try {
+          // Check if API URL is available
+          const apiUrl = import.meta.env.VITE_API_BASE_URL;
+          if (!apiUrl) {
+            console.warn('VITE_API_BASE_URL not configured, using cached data');
+            return;
+          }
+
+          // Make API call to check current user status
+          const response = await fetch(`${apiUrl}/authentication/profile`, {
+            headers: {
+              'Authorization': `Bearer ${storedToken}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          // Check if response is JSON
+          const contentType = response.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            console.warn('API returned non-JSON response, using cached data');
+            return;
+          }
+
+          if (response.ok) {
+            const profileData = await response.json();
+            if (profileData.success && profileData.data) {
+              const updatedUser = {
+                ...userData,
+                isApproved: profileData.data.isApproved || true,
+                requiresApproval: profileData.data.isApproved === false
+              };
+              
+              // Update localStorage with fresh data
+              localStorage.setItem('user', JSON.stringify(updatedUser));
+              
+              // Update state
+              setUser(updatedUser);
+              setIsApproved(updatedUser.isApproved);
+              setRequiresApproval(updatedUser.requiresApproval);
+              return;
+            }
+          } else if (response.status === 401 || response.status === 403) {
+            // User not found or unauthorized - likely disapproved
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            setUser(null);
+            setToken(null);
+            setIsApproved(false);
+            setRequiresApproval(false);
+            return;
+          }
+        } catch (apiError) {
+          console.warn('API call failed, using cached data:', apiError.message);
+        }
+      }
+      
+      // Update approval status from cached data
+      setIsApproved(userData.isApproved || true);
+      setRequiresApproval(userData.isApproved === false);
+      
+      // Update user state
+      setUser(userData);
+      setToken(storedToken);
+      
+    } catch (error) {
+      console.error('Error checking auth status:', error);
+      // Clear corrupted data
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      setUser(null);
+      setToken(null);
+      setIsApproved(false);
+      setRequiresApproval(false);
+    }
+  };
+
   const value: AuthContextType = {
     user,
     token,
@@ -152,7 +248,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     loading,
     needsInitialSetup,
     isApproved,
-    requiresApproval
+    requiresApproval,
+    checkAuthStatus
   };
 
   return (

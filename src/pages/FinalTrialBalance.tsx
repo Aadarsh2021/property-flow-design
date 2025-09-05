@@ -169,50 +169,17 @@ const FinalTrialBalance = () => {
         : await finalTrialBalanceAPI.getAll();
       
       if (response.success) {
-        // Trial balance data received
-        
-        // Transform backend data to frontend format
+        // Trial balance data received - now comes pre-formatted from backend
         const backendData = response.data;
-        const parties = backendData.parties || [];
         
-        // Separate credit and debit entries based on party balances
-        const creditEntries: TrialBalanceEntry[] = [];
-        const debitEntries: TrialBalanceEntry[] = [];
+        // Backend now sends creditEntries and debitEntries directly
+        const creditEntries: TrialBalanceEntry[] = backendData.creditEntries || [];
+        const debitEntries: TrialBalanceEntry[] = backendData.debitEntries || [];
         
-        parties.forEach((party) => {
-          // Show Credit entries (Jama/Dena) - Company owes money
-          if (party.creditTotal > 0) {
-            creditEntries.push({
-              id: `${party.name}-credit`,
-              name: party.name,
-              amount: party.creditTotal,
-              type: 'credit',
-              remarks: `Credit Total for ${party.name}`,
-              date: new Date().toISOString().split('T')[0]
-            });
-          }
-          
-          // Show Debit entries (Name/Lena) - Company is owed money
-          if (party.debitTotal > 0) {
-            debitEntries.push({
-              id: `${party.name}-debit`,
-              name: party.name,
-              amount: party.debitTotal,
-              type: 'debit',
-              remarks: `Debit Total for ${party.name}`,
-              date: new Date().toISOString().split('T')[0]
-            });
-          }
-        });
-        
-        // Sort entries by amount (largest first) for better readability
-        creditEntries.sort((a, b) => b.amount - a.amount);
-        debitEntries.sort((a, b) => b.amount - a.amount);
-        
-        // Calculate totals from actual entries
-        const creditTotal = creditEntries.reduce((sum, entry) => sum + entry.amount, 0);
-        const debitTotal = debitEntries.reduce((sum, entry) => sum + entry.amount, 0);
-        const balanceDifference = creditTotal - debitTotal;
+        // Use totals from backend
+        const creditTotal = backendData.creditTotal || 0;
+        const debitTotal = backendData.debitTotal || 0;
+        const balanceDifference = backendData.balanceDifference || 0;
         
         const transformedData: TrialBalanceData = {
           creditEntries,
@@ -530,13 +497,18 @@ const FinalTrialBalance = () => {
 
           {/* Table Section */}
           <div className="p-4">
-            {/* Virtual Parties Info */}
+            {/* Traditional Trial Balance Info */}
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="text-sm text-blue-800">
-                <strong>Note:</strong> This trial balance includes all parties including virtual parties: 
-                <span className="font-semibold ml-1">Commission</span> (Company takes commission) and 
-                <span className="font-semibold ml-1">Company Account</span> (Company gives commission). 
-                Data is real-time and updates automatically when transactions are added/deleted.
+                <strong>Traditional Trial Balance:</strong> Shows all credit and debit amounts for each party.
+                <br />
+                <span className="font-semibold text-green-700">Credit Side:</span> All credit amounts (Jama/Dena)
+                <br />
+                <span className="font-semibold text-red-700">Debit Side:</span> All debit amounts (Name/Lena)
+                <br />
+                <span className="text-xs text-gray-600 mt-1 block">
+                  In a balanced system, Total Credit = Total Debit. Data updates automatically when transactions are added/deleted.
+                </span>
               </div>
             </div>
             
@@ -550,7 +522,7 @@ const FinalTrialBalance = () => {
                   <table className="w-full text-sm">
                     <thead className="bg-green-50">
                       <tr>
-                        <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">Name</th>
+                        <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">Party Name</th>
                         <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">Amount (Cr)</th>
                         <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">Type</th>
                       </tr>
@@ -604,7 +576,7 @@ const FinalTrialBalance = () => {
                   <table className="w-full text-sm">
                     <thead className="bg-red-50">
                       <tr>
-                        <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">Name</th>
+                        <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">Party Name</th>
                         <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">Amount (Dr)</th>
                         <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">Type</th>
                       </tr>
@@ -659,20 +631,26 @@ const FinalTrialBalance = () => {
                     <div className="text-2xl font-bold text-green-600">
                       ₹{trialBalanceData.creditTotal.toLocaleString()}
                     </div>
+                    <div className="text-xs text-gray-500 mt-1">All credit amounts</div>
                   </div>
                   <div className="text-center">
                     <div className="text-sm text-gray-600">Total Debit</div>
                     <div className="text-2xl font-bold text-red-600">
                       ₹{trialBalanceData.debitTotal.toLocaleString()}
                     </div>
+                    <div className="text-xs text-gray-500 mt-1">All debit amounts</div>
                   </div>
                   <div className="text-center">
                     <div className="text-sm text-gray-600">Balance Difference</div>
                     <div className={`text-2xl font-bold ${
-                      trialBalanceData.balanceDifference > 0 ? 'text-green-600' : 
-                      trialBalanceData.balanceDifference < 0 ? 'text-red-600' : 'text-gray-600'
+                      trialBalanceData.balanceDifference === 0 ? 'text-green-600' : 
+                      trialBalanceData.balanceDifference > 0 ? 'text-orange-600' : 'text-red-600'
                     }`}>
                       ₹{trialBalanceData.balanceDifference.toLocaleString()}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {trialBalanceData.balanceDifference === 0 ? 'Perfect Balance ✓' : 
+                       trialBalanceData.balanceDifference > 0 ? 'Credit Higher' : 'Debit Higher'}
                     </div>
                   </div>
                 </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { User } from 'firebase/auth';
 import { auth, signInWithGoogle, signInWithEmail, signUpWithEmail, signOutUser, onAuthStateChange } from '@/lib/firebase';
+import { useAuth as useAuthContext } from '@/contexts/AuthContext';
 
 interface AuthState {
   user: User | null;
@@ -9,6 +10,7 @@ interface AuthState {
 }
 
 export const useAuth = () => {
+  const authContext = useAuthContext();
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
     loading: true,
@@ -124,6 +126,10 @@ export const useAuth = () => {
     registerWithEmail,
     logout,
     clearError,
-    isAuthenticated: !!authState.user
+    isAuthenticated: !!authState.user,
+    // Add auth context methods
+    checkAuthStatus: authContext.checkAuthStatus,
+    isApproved: authContext.isApproved,
+    requiresApproval: authContext.requiresApproval
   };
 };

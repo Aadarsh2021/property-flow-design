@@ -55,6 +55,8 @@ const AdminDashboard: React.FC = () => {
   const [pendingUsers, setPendingUsers] = useState<User[]>([]);
   const [approvingUser, setApprovingUser] = useState<string | null>(null);
   const [disapprovingUser, setDisapprovingUser] = useState<string | null>(null);
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [autoRefreshInterval, setAutoRefreshInterval] = useState<NodeJS.Timeout | null>(null);
   const navigate = useNavigate();
   const { isLoggedIn, logout, checkSession } = useAdminAuth();
 
@@ -66,34 +68,62 @@ const AdminDashboard: React.FC = () => {
       return;
     }
 
-    // Simulate loading data
+    // Load initial data
     loadDashboardData();
+
+    // Set up auto-refresh every 30 seconds
+    const interval = setInterval(() => {
+      console.log('🔄 Auto-refreshing admin dashboard...');
+      loadDashboardData(false); // Silent refresh
+      setLastRefresh(new Date());
+    }, 30000); // 30 seconds
+
+    setAutoRefreshInterval(interval);
+
+    // Cleanup interval on unmount
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
   }, [navigate]);
 
-  const loadDashboardData = async () => {
+  const loadDashboardData = async (showLoading = true) => {
     try {
-      setIsLoading(true);
+      if (showLoading) {
+        setIsLoading(true);
+      }
       setError(null);
       
-      // Fetch all data in parallel
-      const [statsData, activityData, healthData, usersData, pendingUsersData] = await Promise.all([
+      // Fetch critical data first (pending users and stats)
+      const [statsData, pendingUsersData] = await Promise.all([
         adminApi.getDashboardStats(),
-        adminApi.getRecentActivity(10),
-        adminApi.getSystemHealth(),
-        adminApi.getAllUsers(1, 10),
         adminApi.getPendingUsers()
       ]);
 
       setStats(statsData);
-      setRecentActivity(activityData);
-      setSystemHealth(healthData);
-      setUsers(usersData.users);
       setPendingUsers(pendingUsersData);
+
+      // Fetch secondary data in background
+      Promise.all([
+        adminApi.getRecentActivity(10),
+        adminApi.getSystemHealth(),
+        adminApi.getAllUsers(1, 10)
+      ]).then(([activityData, healthData, usersData]) => {
+        setRecentActivity(activityData);
+        setSystemHealth(healthData);
+        setUsers(usersData.users);
+      }).catch(err => {
+        console.warn('Background data loading failed:', err);
+      });
+
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
     } finally {
-      setIsLoading(false);
+      if (showLoading) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -174,8 +204,9 @@ const AdminDashboard: React.FC = () => {
       setApprovingUser(userId);
       await adminApi.approveUser(userId);
       
-      // Refresh the data
-      await loadDashboardData();
+      // Refresh the data immediately
+      await loadDashboardData(false);
+      setLastRefresh(new Date());
       
       alert('User approved successfully');
     } catch (err) {
@@ -195,8 +226,9 @@ const AdminDashboard: React.FC = () => {
       setDisapprovingUser(userId);
       await adminApi.disapproveUser(userId);
       
-      // Refresh the data
-      await loadDashboardData();
+      // Refresh the data immediately
+      await loadDashboardData(false);
+      setLastRefresh(new Date());
       
       alert('User disapproved and deleted successfully');
     } catch (err) {
@@ -246,7 +278,12 @@ const AdminDashboard: React.FC = () => {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
               <Shield className="h-8 w-8 text-blue-600 mr-3" />
-              <h1 className="text-xl font-semibold text-gray-900">Admin Dashboard</h1>
+              <div>
+                <h1 className="text-xl font-semibold text-gray-900">Admin Dashboard</h1>
+                <p className="text-sm text-gray-500">
+                  Last updated: {lastRefresh.toLocaleTimeString()} (Auto-refresh every 30s)
+                </p>
+              </div>
             </div>
             <div className="flex items-center space-x-3">
               <Button 
