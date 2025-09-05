@@ -256,7 +256,25 @@ const Login = () => {
             // Navigate to the page user was trying to access or home
             navigate(from, { replace: true });
           }
+        } else if (response.message && response.message.includes('pending admin approval')) {
+          // Show approval pending message
+          toast({
+            title: "⏳ Account Pending Approval",
+            description: "Your account is pending admin approval. Please wait for approval before logging in.",
+            variant: "destructive"
+          });
+          return;
         } else {
+          // Check if it's an approval error
+          if (response.message && response.message.includes('pending admin approval')) {
+            toast({
+              title: "⏳ Account Pending Approval",
+              description: "Your account is pending admin approval. Please wait for approval before logging in.",
+              variant: "destructive"
+            });
+            return;
+          }
+          
           // User doesn't exist in backend, create account
           // Creating new user account for Google user...
           
@@ -428,6 +446,13 @@ const Login = () => {
           toast({
             title: "❌ Login Failed",
             description: "Invalid email or password. Please check your credentials.",
+            variant: "destructive"
+          });
+        } else if (response.message && response.message.includes('pending admin approval')) {
+          // Show approval pending message
+          toast({
+            title: "⏳ Account Pending Approval",
+            description: "Your account is pending admin approval. Please wait for approval before logging in.",
             variant: "destructive"
           });
         }

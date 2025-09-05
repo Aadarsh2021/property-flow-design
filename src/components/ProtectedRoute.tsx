@@ -17,13 +17,14 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import ApprovalPending from './ApprovalPending';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, requiresApproval } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -40,6 +41,11 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   if (!isAuthenticated) {
     // Redirect to login page with the return url
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (requiresApproval) {
+    // Show approval pending message
+    return <ApprovalPending />;
   }
 
   return <>{children}</>;

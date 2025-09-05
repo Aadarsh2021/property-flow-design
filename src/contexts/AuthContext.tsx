@@ -27,6 +27,8 @@ interface AuthContextType {
   isAuthenticated: boolean;
   loading: boolean;
   needsInitialSetup: (user: User | null) => boolean;
+  isApproved: boolean;
+  requiresApproval: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -49,6 +51,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isApproved, setIsApproved] = useState(false);
+  const [requiresApproval, setRequiresApproval] = useState(false);
 
   // Initialize auth state from localStorage
   useEffect(() => {
@@ -106,6 +110,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       setToken(newToken);
       setUser(userWithId);
+      setIsApproved(userWithId.isApproved || false);
+      setRequiresApproval(!userWithId.isApproved);
       localStorage.setItem('token', newToken);
       localStorage.setItem('user', JSON.stringify(userWithId));
     } catch (error) {
@@ -128,6 +134,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setToken(null);
       setUser(null);
+      setIsApproved(false);
+      setRequiresApproval(false);
       localStorage.removeItem('token');
       localStorage.removeItem('user');
     } catch (error) {
@@ -142,7 +150,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     logout,
     isAuthenticated: !!token && !!user,
     loading,
-    needsInitialSetup
+    needsInitialSetup,
+    isApproved,
+    requiresApproval
   };
 
   return (

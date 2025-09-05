@@ -141,6 +141,31 @@ class AdminApiService {
       body: JSON.stringify({ newPassword }),
     });
   }
+
+  /**
+   * Get pending users awaiting approval
+   */
+  async getPendingUsers(): Promise<User[]> {
+    return this.makeRequest<User[]>('/admin/pending-users');
+  }
+
+  /**
+   * Approve a user
+   */
+  async approveUser(userId: string): Promise<{ approvedUserId: string; approvedUser: User }> {
+    return this.makeRequest<{ approvedUserId: string; approvedUser: User }>(`/admin/users/${userId}/approve`, {
+      method: 'PUT',
+    });
+  }
+
+  /**
+   * Disapprove a user
+   */
+  async disapproveUser(userId: string): Promise<{ disapprovedUserId: string }> {
+    return this.makeRequest<{ disapprovedUserId: string }>(`/admin/users/${userId}/disapprove`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 export const adminApi = new AdminApiService();

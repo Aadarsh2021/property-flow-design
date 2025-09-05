@@ -52,6 +52,9 @@ const AdminDashboard: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [deletingUser, setDeletingUser] = useState<string | null>(null);
   const [resettingPassword, setResettingPassword] = useState<string | null>(null);
+  const [pendingUsers, setPendingUsers] = useState<User[]>([]);
+  const [approvingUser, setApprovingUser] = useState<string | null>(null);
+  const [disapprovingUser, setDisapprovingUser] = useState<string | null>(null);
   const navigate = useNavigate();
   const { isLoggedIn, logout, checkSession } = useAdminAuth();
 
@@ -73,17 +76,19 @@ const AdminDashboard: React.FC = () => {
       setError(null);
       
       // Fetch all data in parallel
-      const [statsData, activityData, healthData, usersData] = await Promise.all([
+      const [statsData, activityData, healthData, usersData, pendingUsersData] = await Promise.all([
         adminApi.getDashboardStats(),
         adminApi.getRecentActivity(10),
         adminApi.getSystemHealth(),
-        adminApi.getAllUsers(1, 10)
+        adminApi.getAllUsers(1, 10),
+        adminApi.getPendingUsers()
       ]);
 
       setStats(statsData);
       setRecentActivity(activityData);
       setSystemHealth(healthData);
       setUsers(usersData.users);
+      setPendingUsers(pendingUsersData);
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
@@ -158,6 +163,48 @@ const AdminDashboard: React.FC = () => {
     setShowPasswordModal(false);
     setSelectedUser(null);
     setNewPassword('');
+  };
+
+  const handleApproveUser = async (userId: string, userName: string) => {
+    if (!window.confirm(`Are you sure you want to approve user "${userName}"?`)) {
+      return;
+    }
+
+    try {
+      setApprovingUser(userId);
+      await adminApi.approveUser(userId);
+      
+      // Refresh the data
+      await loadDashboardData();
+      
+      alert('User approved successfully');
+    } catch (err) {
+      console.error('Failed to approve user:', err);
+      alert('Failed to approve user. Please try again.');
+    } finally {
+      setApprovingUser(null);
+    }
+  };
+
+  const handleDisapproveUser = async (userId: string, userName: string) => {
+    if (!window.confirm(`Are you sure you want to disapprove user "${userName}"? This will permanently delete their account and all data.`)) {
+      return;
+    }
+
+    try {
+      setDisapprovingUser(userId);
+      await adminApi.disapproveUser(userId);
+      
+      // Refresh the data
+      await loadDashboardData();
+      
+      alert('User disapproved and deleted successfully');
+    } catch (err) {
+      console.error('Failed to disapprove user:', err);
+      alert('Failed to disapprove user. Please try again.');
+    } finally {
+      setDisapprovingUser(null);
+    }
   };
 
   const formatCurrency = (amount: number) => {
@@ -320,6 +367,7 @@ const AdminDashboard: React.FC = () => {
         <Tabs defaultValue="overview" className="space-y-6">
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="pending">Pending Approval ({pendingUsers.length})</TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="transactions">Transactions</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
@@ -461,6 +509,72 @@ const AdminDashboard: React.FC = () => {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          <TabsContent value="pending">
+            <Card>
+              <CardHeader>
+                <CardTitle>Pending User Approvals</CardTitle>
+                <CardDescription>
+                  Review and approve new user registrations
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {pendingUsers.length > 0 ? (
+                    <div className="space-y-3">
+                      {pendingUsers.map((user) => (
+                        <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg bg-yellow-50">
+                          <div className="flex items-center space-x-4">
+                            <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
+                              <Clock className="h-5 w-5 text-yellow-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-900">{user.name || 'No Name'}</p>
+                              <p className="text-sm text-gray-500">{user.email}</p>
+                              <p className="text-xs text-gray-400">
+                                {user.city && user.state ? `${user.city}, ${user.state}` : 'Location not set'}
+                              </p>
+                              <p className="text-xs text-yellow-600">
+                                Registered: {new Date(user.created_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex space-x-2">
+                            <Button
+                              onClick={() => handleApproveUser(user.id, user.name || user.email)}
+                              variant="outline"
+                              size="sm"
+                              disabled={approvingUser === user.id}
+                              className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              {approvingUser === user.id ? 'Approving...' : 'Approve'}
+                            </Button>
+                            <Button
+                              onClick={() => handleDisapproveUser(user.id, user.name || user.email)}
+                              variant="outline"
+                              size="sm"
+                              disabled={disapprovingUser === user.id}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <AlertCircle className="h-4 w-4 mr-1" />
+                              {disapprovingUser === user.id ? 'Disapproving...' : 'Disapprove'}
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                      <p className="text-gray-500">No pending user approvals</p>
+                      <p className="text-sm text-gray-400">All users have been reviewed</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="users">
