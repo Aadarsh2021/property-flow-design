@@ -55,6 +55,8 @@ const Login = () => {
   const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
   const [forgotPasswordError, setForgotPasswordError] = useState('');
   const [forgotPasswordSuccess, setForgotPasswordSuccess] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Get the page user was trying to access
   const from = location.state?.from?.pathname || '/dashboard';
@@ -820,38 +822,58 @@ const Login = () => {
                 <Label htmlFor="reset-password" className="text-sm font-medium text-gray-700">
                   New Password
                 </Label>
-                <Input
-                  id="reset-password"
-                  type="password"
-                  placeholder="Enter new password"
-                  value={resetPasswordData.newPassword}
-                  onChange={(e) => {
-                    setResetPasswordData(prev => ({ ...prev, newPassword: e.target.value }));
-                    setForgotPasswordError('');
-                  }}
-                  className={forgotPasswordError ? 'border-red-500 focus:border-red-500' : ''}
-                  required
-                  disabled={forgotPasswordLoading}
-                />
+                <div className="relative">
+                  <Input
+                    id="reset-password"
+                    type={showNewPassword ? 'text' : 'password'}
+                    placeholder="Enter new password"
+                    value={resetPasswordData.newPassword}
+                    onChange={(e) => {
+                      setResetPasswordData(prev => ({ ...prev, newPassword: e.target.value }));
+                      setForgotPasswordError('');
+                    }}
+                    className={`pr-10 ${forgotPasswordError ? 'border-red-500 focus:border-red-500' : ''}`}
+                    required
+                    disabled={forgotPasswordLoading}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    disabled={forgotPasswordLoading}
+                  >
+                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
               
               <div className="space-y-2">
                 <Label htmlFor="confirm-password" className="text-sm font-medium text-gray-700">
                   Confirm Password
                 </Label>
-                <Input
-                  id="confirm-password"
-                  type="password"
-                  placeholder="Confirm new password"
-                  value={resetPasswordData.confirmPassword}
-                  onChange={(e) => {
-                    setResetPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }));
-                    setForgotPasswordError('');
-                  }}
-                  className={forgotPasswordError ? 'border-red-500 focus:border-red-500' : ''}
-                  required
-                  disabled={forgotPasswordLoading}
-                />
+                <div className="relative">
+                  <Input
+                    id="confirm-password"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    placeholder="Confirm new password"
+                    value={resetPasswordData.confirmPassword}
+                    onChange={(e) => {
+                      setResetPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }));
+                      setForgotPasswordError('');
+                    }}
+                    className={`pr-10 ${forgotPasswordError ? 'border-red-500 focus:border-red-500' : ''}`}
+                    required
+                    disabled={forgotPasswordLoading}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    disabled={forgotPasswordLoading}
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
               
               {forgotPasswordError && (
@@ -867,6 +889,8 @@ const Login = () => {
                     setShowForgotPassword(false);
                     setResetPasswordData({ email: '', newPassword: '', confirmPassword: '' });
                     setForgotPasswordError('');
+                    setShowNewPassword(false);
+                    setShowConfirmPassword(false);
                   }}
                   disabled={forgotPasswordLoading}
                 >
@@ -910,6 +934,8 @@ const Login = () => {
                   setResetPasswordData({ email: '', newPassword: '', confirmPassword: '' });
                   setForgotPasswordError('');
                   setForgotPasswordSuccess(false);
+                  setShowNewPassword(false);
+                  setShowConfirmPassword(false);
                 }}
                 className="w-full bg-blue-600 hover:bg-blue-700"
               >
