@@ -21,6 +21,8 @@ const AccountLedger = lazy(() => import("./pages/AccountLedger"));
 const FinalTrialBalance = lazy(() => import("./pages/FinalTrialBalance"));
 const PartyReport = lazy(() => import("./pages/PartyReport"));
 const FirebaseTest = lazy(() => import("./pages/FirebaseTest"));
+const AdminLogin = lazy(() => import("./pages/AdminLogin"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 // Loading component
@@ -74,6 +76,10 @@ const App = () => {
                         <Route path="/login" element={<Login />} />
                         <Route path="/register" element={<Register />} />
                         <Route path="/firebase-test" element={<FirebaseTest />} />
+                        
+                        {/* Admin Routes */}
+                        <Route path="/admin" element={<AdminLogin />} />
+                        <Route path="/admin/dashboard" element={<AdminDashboard />} />
                         
                         {/* Protected Routes */}
                         <Route path="/dashboard" element={
