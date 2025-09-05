@@ -57,7 +57,11 @@ const TopNavigation = () => {
             {/* Logo Section */}
             <div className="flex items-center">
               <Link to="/" className="flex items-center space-x-2">
-                <Database className="w-8 h-8 text-blue-600" />
+                <img 
+                  src="/image.png" 
+                  alt="Company Logo" 
+                  className="w-8 h-8 object-contain"
+                />
                 <span className="text-xl font-bold text-gray-900">{companyName}</span>
               </Link>
             </div>

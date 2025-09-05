@@ -16,12 +16,18 @@ import {
   TrendingUp,
   AlertCircle,
   CheckCircle,
-  Clock
+  Clock,
+  RefreshCw,
+  Trash2,
+  Key,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
+import { adminApi, type DashboardStats, type ActivityItem, type User, type SystemHealth } from '@/lib/adminApi';
 
 const AdminDashboard: React.FC = () => {
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<DashboardStats>({
     totalUsers: 0,
     totalParties: 0,
     totalTransactions: 0,
@@ -29,8 +35,23 @@ const AdminDashboard: React.FC = () => {
     activeUsers: 0,
     pendingTransactions: 0
   });
-  const [recentActivity, setRecentActivity] = useState([]);
+  const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [systemHealth, setSystemHealth] = useState<SystemHealth>({
+    database: 'unknown',
+    api: 'unknown',
+    authentication: 'unknown',
+    fileStorage: 'unknown'
+  });
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [deletingUser, setDeletingUser] = useState<string | null>(null);
+  const [resettingPassword, setResettingPassword] = useState<string | null>(null);
   const navigate = useNavigate();
   const { isLoggedIn, logout, checkSession } = useAdminAuth();
 
@@ -47,35 +68,96 @@ const AdminDashboard: React.FC = () => {
   }, [navigate]);
 
   const loadDashboardData = async () => {
-    setIsLoading(true);
-    
-    // Simulate API calls
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Mock data - in real app, fetch from API
-    setStats({
-      totalUsers: 156,
-      totalParties: 89,
-      totalTransactions: 1247,
-      totalRevenue: 125000,
-      activeUsers: 23,
-      pendingTransactions: 12
-    });
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // Fetch all data in parallel
+      const [statsData, activityData, healthData, usersData] = await Promise.all([
+        adminApi.getDashboardStats(),
+        adminApi.getRecentActivity(10),
+        adminApi.getSystemHealth(),
+        adminApi.getAllUsers(1, 10)
+      ]);
 
-    setRecentActivity([
-      { id: 1, action: 'New party created', user: 'John Doe', time: '2 minutes ago', type: 'success' },
-      { id: 2, action: 'Transaction processed', user: 'Jane Smith', time: '5 minutes ago', type: 'success' },
-      { id: 3, action: 'User registered', user: 'Mike Johnson', time: '10 minutes ago', type: 'info' },
-      { id: 4, action: 'Payment failed', user: 'Sarah Wilson', time: '15 minutes ago', type: 'error' },
-      { id: 5, action: 'Trial balance generated', user: 'Admin', time: '1 hour ago', type: 'success' }
-    ]);
+      setStats(statsData);
+      setRecentActivity(activityData);
+      setSystemHealth(healthData);
+      setUsers(usersData.users);
+    } catch (err) {
+      console.error('Failed to load dashboard data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    setIsLoading(false);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadDashboardData();
+    setRefreshing(false);
   };
 
   const handleLogout = () => {
     logout();
     navigate('/admin');
+  };
+
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (!window.confirm(`Are you sure you want to delete user "${userName}"? This action cannot be undone and will delete all their data including parties and transactions.`)) {
+      return;
+    }
+
+    try {
+      setDeletingUser(userId);
+      await adminApi.deleteUser(userId);
+      
+      // Refresh the users list
+      await loadDashboardData();
+      
+      alert('User deleted successfully');
+    } catch (err) {
+      console.error('Failed to delete user:', err);
+      alert('Failed to delete user. Please try again.');
+    } finally {
+      setDeletingUser(null);
+    }
+  };
+
+  const handleResetPassword = async (user: User) => {
+    setSelectedUser(user);
+    setNewPassword('');
+    setShowPasswordModal(true);
+  };
+
+  const handleConfirmResetPassword = async () => {
+    if (!selectedUser || !newPassword) return;
+
+    if (newPassword.length < 8) {
+      alert('Password must be at least 8 characters long');
+      return;
+    }
+
+    try {
+      setResettingPassword(selectedUser.id);
+      await adminApi.resetUserPassword(selectedUser.id, newPassword);
+      
+      setShowPasswordModal(false);
+      setSelectedUser(null);
+      setNewPassword('');
+      alert('Password reset successfully');
+    } catch (err) {
+      console.error('Failed to reset password:', err);
+      alert('Failed to reset password. Please try again.');
+    } finally {
+      setResettingPassword(null);
+    }
+  };
+
+  const handleCancelResetPassword = () => {
+    setShowPasswordModal(false);
+    setSelectedUser(null);
+    setNewPassword('');
   };
 
   const formatCurrency = (amount: number) => {
@@ -119,15 +201,40 @@ const AdminDashboard: React.FC = () => {
               <Shield className="h-8 w-8 text-blue-600 mr-3" />
               <h1 className="text-xl font-semibold text-gray-900">Admin Dashboard</h1>
             </div>
-            <Button onClick={handleLogout} variant="outline" size="sm">
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </Button>
+            <div className="flex items-center space-x-3">
+              <Button 
+                onClick={handleRefresh} 
+                variant="outline" 
+                size="sm"
+                disabled={refreshing}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+                {refreshing ? 'Refreshing...' : 'Refresh'}
+              </Button>
+              <Button onClick={handleLogout} variant="outline" size="sm">
+                <LogOut className="h-4 w-4 mr-2" />
+                Logout
+              </Button>
+            </div>
           </div>
         </div>
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Error Display */}
+        {error && (
+          <div className="mb-6">
+            <Card className="border-red-200 bg-red-50">
+              <CardContent className="pt-6">
+                <div className="flex items-center">
+                  <AlertCircle className="h-5 w-5 text-red-500 mr-2" />
+                  <p className="text-red-700">{error}</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {/* Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <Card>
@@ -230,19 +337,26 @@ const AdminDashboard: React.FC = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {recentActivity.map((activity) => (
-                      <div key={activity.id} className="flex items-center space-x-3">
-                        {getActivityIcon(activity.type)}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900">
-                            {activity.action}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {activity.user} • {activity.time}
-                          </p>
+                    {recentActivity.length > 0 ? (
+                      recentActivity.map((activity) => (
+                        <div key={activity.id} className="flex items-center space-x-3">
+                          {getActivityIcon(activity.status)}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900">
+                              {activity.action}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {activity.details}
+                            </p>
+                            <p className="text-xs text-gray-400">
+                              {activity.user} • {new Date(activity.timestamp).toLocaleString()}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-500 text-center py-4">No recent activity</p>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -259,43 +373,90 @@ const AdminDashboard: React.FC = () => {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <Database className="h-4 w-4 text-green-500" />
+                        <Database className={`h-4 w-4 ${
+                          systemHealth.database === 'online' ? 'text-green-500' : 
+                          systemHealth.database === 'error' ? 'text-red-500' : 'text-yellow-500'
+                        }`} />
                         <span className="text-sm font-medium">Database</span>
                       </div>
-                      <Badge variant="default" className="bg-green-100 text-green-800">
-                        Online
+                      <Badge variant="default" className={
+                        systemHealth.database === 'online' ? 'bg-green-100 text-green-800' :
+                        systemHealth.database === 'error' ? 'bg-red-100 text-red-800' :
+                        'bg-yellow-100 text-yellow-800'
+                      }>
+                        {systemHealth.database}
                       </Badge>
                     </div>
                     
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <Activity className="h-4 w-4 text-green-500" />
+                        <Activity className={`h-4 w-4 ${
+                          systemHealth.api === 'healthy' ? 'text-green-500' : 
+                          systemHealth.api === 'error' ? 'text-red-500' : 'text-yellow-500'
+                        }`} />
                         <span className="text-sm font-medium">API Server</span>
                       </div>
-                      <Badge variant="default" className="bg-green-100 text-green-800">
-                        Healthy
+                      <Badge variant="default" className={
+                        systemHealth.api === 'healthy' ? 'bg-green-100 text-green-800' :
+                        systemHealth.api === 'error' ? 'bg-red-100 text-red-800' :
+                        'bg-yellow-100 text-yellow-800'
+                      }>
+                        {systemHealth.api}
                       </Badge>
                     </div>
                     
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <Shield className="h-4 w-4 text-green-500" />
+                        <Shield className={`h-4 w-4 ${
+                          systemHealth.authentication === 'active' ? 'text-green-500' : 
+                          systemHealth.authentication === 'error' ? 'text-red-500' : 'text-yellow-500'
+                        }`} />
                         <span className="text-sm font-medium">Authentication</span>
                       </div>
-                      <Badge variant="default" className="bg-green-100 text-green-800">
-                        Active
+                      <Badge variant="default" className={
+                        systemHealth.authentication === 'active' ? 'bg-green-100 text-green-800' :
+                        systemHealth.authentication === 'error' ? 'bg-red-100 text-red-800' :
+                        'bg-yellow-100 text-yellow-800'
+                      }>
+                        {systemHealth.authentication}
                       </Badge>
                     </div>
                     
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <FileText className="h-4 w-4 text-yellow-500" />
+                        <FileText className={`h-4 w-4 ${
+                          systemHealth.fileStorage === 'online' ? 'text-green-500' : 
+                          systemHealth.fileStorage === 'error' ? 'text-red-500' : 'text-yellow-500'
+                        }`} />
                         <span className="text-sm font-medium">File Storage</span>
                       </div>
-                      <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
-                        Warning
+                      <Badge variant="default" className={
+                        systemHealth.fileStorage === 'online' ? 'bg-green-100 text-green-800' :
+                        systemHealth.fileStorage === 'error' ? 'bg-red-100 text-red-800' :
+                        'bg-yellow-100 text-yellow-800'
+                      }>
+                        {systemHealth.fileStorage}
                       </Badge>
                     </div>
+
+                    {systemHealth.cache && (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <Database className={`h-4 w-4 ${
+                            systemHealth.cache === 'online' ? 'text-green-500' : 
+                            systemHealth.cache === 'offline' ? 'text-red-500' : 'text-yellow-500'
+                          }`} />
+                          <span className="text-sm font-medium">Cache</span>
+                        </div>
+                        <Badge variant="default" className={
+                          systemHealth.cache === 'online' ? 'bg-green-100 text-green-800' :
+                          systemHealth.cache === 'offline' ? 'bg-red-100 text-red-800' :
+                          'bg-yellow-100 text-yellow-800'
+                        }>
+                          {systemHealth.cache}
+                        </Badge>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -311,7 +472,63 @@ const AdminDashboard: React.FC = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-500">User management features will be implemented here.</p>
+                <div className="space-y-4">
+                  {users.length > 0 ? (
+                    <div className="space-y-3">
+                      {users.map((user) => (
+                        <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div className="flex items-center space-x-4">
+                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                              <Users className="h-5 w-5 text-blue-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-900">{user.name || 'No Name'}</p>
+                              <p className="text-sm text-gray-500">{user.email}</p>
+                              <p className="text-xs text-gray-400">
+                                {user.city && user.state ? `${user.city}, ${user.state}` : 'Location not set'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-4">
+                            <div className="text-right">
+                              <div className="flex space-x-4 text-sm text-gray-500">
+                                <span>{user.partyCount} parties</span>
+                                <span>{user.transactionCount} transactions</span>
+                              </div>
+                              <p className="text-xs text-gray-400">
+                                Joined {new Date(user.created_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <div className="flex space-x-2">
+                              <Button
+                                onClick={() => handleResetPassword(user)}
+                                variant="outline"
+                                size="sm"
+                                disabled={resettingPassword === user.id}
+                                className="text-blue-600 hover:text-blue-700"
+                              >
+                                <Key className="h-4 w-4 mr-1" />
+                                {resettingPassword === user.id ? 'Resetting...' : 'Reset Password'}
+                              </Button>
+                              <Button
+                                onClick={() => handleDeleteUser(user.id, user.name || user.email)}
+                                variant="outline"
+                                size="sm"
+                                disabled={deletingUser === user.id}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4 mr-1" />
+                                {deletingUser === user.id ? 'Deleting...' : 'Delete'}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-center py-8">No users found</p>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -345,6 +562,60 @@ const AdminDashboard: React.FC = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Password Reset Modal */}
+      {showPasswordModal && selectedUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold mb-4">
+              Reset Password for {selectedUser.name || selectedUser.email}
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  New Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter new password (min 8 characters)"
+                    minLength={8}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Password must be at least 8 characters long
+                </p>
+              </div>
+              <div className="flex space-x-3">
+                <Button
+                  onClick={handleConfirmResetPassword}
+                  disabled={!newPassword || newPassword.length < 8 || resettingPassword === selectedUser.id}
+                  className="flex-1"
+                >
+                  {resettingPassword === selectedUser.id ? 'Resetting...' : 'Reset Password'}
+                </Button>
+                <Button
+                  onClick={handleCancelResetPassword}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
