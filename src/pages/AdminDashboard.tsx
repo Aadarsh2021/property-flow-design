@@ -36,14 +36,15 @@ const AdminDashboard: React.FC = () => {
 
   useEffect(() => {
     // Check if admin is logged in
-    if (!isLoggedIn || !checkSession()) {
+    const adminLoggedIn = localStorage.getItem('adminLoggedIn');
+    if (!adminLoggedIn) {
       navigate('/admin');
       return;
     }
 
     // Simulate loading data
     loadDashboardData();
-  }, [navigate, isLoggedIn, checkSession]);
+  }, [navigate]);
 
   const loadDashboardData = async () => {
     setIsLoading(true);

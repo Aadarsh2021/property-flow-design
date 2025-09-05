@@ -34,11 +34,12 @@ export const useAdminAuth = () => {
           localStorage.setItem('adminLoggedIn', 'true');
           localStorage.setItem('adminLoginTime', now);
           
-          setAdminState({
+          setAdminState(prevState => ({
+            ...prevState,
             isLoggedIn: true,
             loginTime: now,
             isLoading: false
-          });
+          }));
           
           resolve(true);
         } else {
