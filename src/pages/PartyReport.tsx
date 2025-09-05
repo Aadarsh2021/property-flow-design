@@ -1,5 +1,5 @@
 /**
- * Party Report Page
+ * Optimized Party Report Page
  * 
  * Displays a comprehensive report of all parties with their details,
  * status, commission information, and summary statistics.
@@ -10,47 +10,221 @@
  * - Commission system overview
  * - Export functionality
  * - Search and filter options
+ * - Pagination for large datasets
+ * - Auto-suggestions and keyboard navigation
+ * - React Query for efficient data fetching
  * 
  * @author Account Ledger Team
- * @version 1.0.0
+ * @version 2.0.0
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import TopNavigation from '@/components/TopNavigation';
 import { newPartyAPI, partyLedgerAPI } from '@/lib/api';
 import { Party } from '@/types';
-import { Search, Filter, Download, Printer, RefreshCw, Eye, Edit, Trash2, Plus, X } from 'lucide-react';
+import { useParties, useRefreshParties } from '@/hooks/useParties';
+import { Search, Filter, Download, Printer, RefreshCw, Eye, Edit, Trash2, Plus, X, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+
+interface PartyWithMondayFinalStatus extends Party {
+  mondayFinal: 'Yes' | 'No';
+}
+
+// Loading skeleton component
+const PartyRowSkeleton = () => (
+  <tr>
+    <td className="px-4 py-3"><div className="h-4 bg-gray-200 rounded animate-pulse w-8"></div></td>
+    <td className="px-4 py-3"><div className="h-4 bg-gray-200 rounded animate-pulse w-32"></div></td>
+    <td className="px-4 py-3"><div className="h-4 bg-gray-200 rounded animate-pulse w-20"></div></td>
+    <td className="px-4 py-3"><div className="h-4 bg-gray-200 rounded animate-pulse w-24"></div></td>
+    <td className="px-4 py-3"><div className="h-4 bg-gray-200 rounded animate-pulse w-16"></div></td>
+    <td className="px-4 py-3"><div className="h-4 bg-gray-200 rounded animate-pulse w-20"></div></td>
+    <td className="px-4 py-3"><div className="h-4 bg-gray-200 rounded animate-pulse w-16"></div></td>
+  </tr>
+);
 
 const PartyReport = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
-  const [parties, setParties] = useState<Party[]>([]);
-  const [filteredParties, setFilteredParties] = useState<Party[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedParty, setSelectedParty] = useState<Party | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  
+  // Auto-suggestion state
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+  
+  // Refs for auto-complete positioning
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [autoCompleteLeft, setAutoCompleteLeft] = useState(40);
 
-  // Load parties on component mount
-  useEffect(() => {
-    loadParties();
-  }, []);
+  // Use React Query hooks for data fetching
+  const { 
+    data: partiesData = [], 
+    isLoading: partiesLoading, 
+    error: partiesError,
+    refetch: refetchParties 
+  } = useParties();
 
-  // Filter parties when search changes
-  useEffect(() => {
-    let filtered = parties;
+  const refreshParties = useRefreshParties();
 
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(party => 
-        party.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (party.srNo && party.srNo.toString().toLowerCase().includes(searchTerm.toLowerCase()))
-      );
+  // Transform parties data with Monday Final status
+  const parties = useMemo(() => {
+    return partiesData.map((party: any) => ({
+      _id: party.id,
+      name: party.partyName || party.name,
+      srNo: party.srNo,
+      status: party.status,
+      balanceLimit: parseFloat(party.balanceLimit) || 0,
+      mCommission: party.mCommission || 'No Commission',
+      commiSystem: party.commiSystem,
+      rate: party.rate,
+      mondayFinal: 'No' as const, // Will be updated by status check
+    }));
+  }, [partiesData]);
+
+  // Filter parties based on search term
+  const filteredParties = useMemo(() => {
+    if (!searchTerm) return parties;
+    
+    return parties.filter(party => 
+      party.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (party.srNo && party.srNo.toString().includes(searchTerm))
+    );
+  }, [parties, searchTerm]);
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredParties.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedParties = filteredParties.slice(startIndex, endIndex);
+
+  // Reset to first page when search term changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  // Calculate text width for auto-complete positioning
+  const calculateTextWidth = (text: string) => {
+    if (!inputRef.current) return 40;
+    
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) return 40;
+    
+    // Get computed styles from the input
+    const computedStyle = window.getComputedStyle(inputRef.current);
+    context.font = `${computedStyle.fontSize} ${computedStyle.fontFamily}`;
+    
+    const textWidth = context.measureText(text).width;
+    return 40 + textWidth; // 40px for left padding + search icon
+  };
+
+  // Handle input change with suggestions
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    setShowSuggestions(value.length > 0);
+    setSelectedSuggestionIndex(-1);
+    
+    // Update auto-complete position
+    if (value) {
+      const newLeft = calculateTextWidth(value);
+      setAutoCompleteLeft(newLeft);
+    }
+  };
+
+  // Get auto-complete text for current input
+  const getAutoCompleteText = () => {
+    if (!searchTerm || filteredParties.length === 0) return '';
+    
+    const firstMatch = filteredParties[0];
+    if (!firstMatch) return '';
+    
+    const searchLower = searchTerm.toLowerCase();
+    const partyNameLower = firstMatch.name.toLowerCase();
+    
+    if (partyNameLower.startsWith(searchLower)) {
+      return firstMatch.name.substring(searchTerm.length);
+    }
+    
+    return '';
+  };
+
+  // Handle auto-complete with Tab key
+  const handleAutoComplete = () => {
+    const autoCompleteText = getAutoCompleteText();
+    if (autoCompleteText) {
+      setSearchTerm(filteredParties[0].name);
+      setShowSuggestions(false);
+    }
+  };
+
+  // Handle keyboard navigation for suggestions
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      handleAutoComplete();
+      return;
     }
 
-    setFilteredParties(filtered);
-  }, [parties, searchTerm]);
+    if (!showSuggestions || filteredParties.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setSelectedSuggestionIndex(prev => 
+          prev < Math.min(10, filteredParties.length) - 1 ? prev + 1 : prev
+        );
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : prev);
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < filteredParties.length) {
+          const selectedParty = filteredParties[selectedSuggestionIndex];
+          setSearchTerm(selectedParty.name);
+          setShowSuggestions(false);
+          setSelectedSuggestionIndex(-1);
+        }
+        break;
+      case 'Escape':
+        setShowSuggestions(false);
+        setSelectedSuggestionIndex(-1);
+        break;
+    }
+  };
+
+  // Handle suggestion click
+  const handleSuggestionClick = (party: any) => {
+    setSearchTerm(party.name);
+    setShowSuggestions(false);
+    setSelectedSuggestionIndex(-1);
+    setCurrentPage(1);
+  };
+
+  // Handle page change
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  // Handle items per page change
+  const handleItemsPerPageChange = (newItemsPerPage: number) => {
+    setItemsPerPage(newItemsPerPage);
+    setCurrentPage(1);
+  };
 
   // Function to check Monday Final status dynamically
   const checkMondayFinalStatus = async (partyName: string): Promise<'Yes' | 'No'> => {
@@ -80,80 +254,55 @@ const PartyReport = () => {
     }
   };
 
-  const loadParties = useCallback(async () => {
-    setLoading(true);
+  // Handle refresh
+  const handleRefresh = () => {
+    refreshParties();
+    toast({
+      title: "Refreshing...",
+      description: "Party data is being refreshed",
+    });
+  };
+
+  // Handle delete confirmation
+  const handleDeleteConfirm = async () => {
+    if (!selectedParty) return;
+    
+    setActionLoading(true);
     try {
-      const response = await partyLedgerAPI.getAllParties();
+      console.log('🗑️ Deleting party:', selectedParty);
+      const response = await newPartyAPI.delete(selectedParty._id!);
+      console.log('🗑️ Delete response:', response);
+      
       if (response.success) {
-        const partiesData = response.data || [];
-        
-        // Check Monday Final status for each party dynamically
-        const mappedParties = await Promise.all(
-          partiesData.map(async (party: any) => {
-            const mondayFinalStatus = await checkMondayFinalStatus(party.partyName);
-            
-            return {
-              _id: party.id,
-              name: party.partyName,
-              srNo: party.srNo,
-              status: party.status,
-              balanceLimit: parseFloat(party.balanceLimit) || 0,
-              mCommission: party.mCommission || 'No Commission',
-              commiSystem: party.commiSystem,
-              rate: party.rate,
-              mondayFinal: mondayFinalStatus, // Dynamic status instead of static field
-            };
-          })
-        );
-        
-        setParties(mappedParties);
-      } else {
-        console.error('Failed to load parties:', response.message);
+        const deletedTransactions = response.data?.deletedTransactions || 0;
         toast({
-          title: "Error",
-          description: "Failed to load parties",
+          title: "✅ Success",
+          description: `Party "${selectedParty.name}" and ${deletedTransactions} transactions deleted permanently from database`,
+        });
+        
+        // Refresh parties data
+        refreshParties();
+        setSelectedParty(null);
+        setShowDeleteModal(false);
+      } else {
+        console.error('❌ Delete failed:', response);
+        toast({
+          title: "❌ Error",
+          description: response.message || "Failed to delete party",
           variant: "destructive"
         });
       }
     } catch (error) {
-      console.error('Load parties error:', error);
+      console.error('❌ Delete party error:', error);
       toast({
-        title: "Error",
-        description: "Failed to load parties",
+        title: "❌ Error",
+        description: "Failed to delete party. Please try again.",
         variant: "destructive"
       });
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
-  }, [toast]);
-
-  // Event-based Monday Final status updates
-  useEffect(() => {
-    // Refresh Monday Final status when page gains focus
-    const handleFocus = () => {
-      // Only refresh if not currently loading
-      if (!loading) {
-        loadParties();
-      }
-    };
-
-    // Refresh when returning from other pages
-    const handleVisibilityChange = () => {
-      if (!document.hidden && !loading) {
-        loadParties();
-      }
-    };
-
-    // Listen for page focus and visibility changes
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // Cleanup listeners
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [loadParties, loading]);
+  };
 
   const handleModify = async () => {
     if (selectedParty) {
@@ -181,52 +330,9 @@ const PartyReport = () => {
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (selectedParty) {
-      // Show confirmation dialog
-      const confirmed = window.confirm(
-        `Are you sure you want to delete party "${selectedParty.name}"?\n\nThis action cannot be undone and will permanently delete:\n• The party from the database\n• ALL transactions for this party\n\nThis is a permanent action!`
-      );
-      
-      if (confirmed) {
-        try {
-          console.log('🗑️ Deleting party:', selectedParty);
-          const response = await newPartyAPI.delete(selectedParty._id!);
-          console.log('🗑️ Delete response:', response);
-          
-          if (response.success) {
-            const deletedTransactions = response.data?.deletedTransactions || 0;
-            toast({
-              title: "✅ Success",
-              description: `Party "${selectedParty.name}" and ${deletedTransactions} transactions deleted permanently from database`,
-            });
-            
-            // Remove from local state immediately
-            setParties(prev => prev.filter(p => p._id !== selectedParty._id));
-            setFilteredParties(prev => prev.filter(p => p._id !== selectedParty._id));
-            setSelectedParty(null);
-            
-            // Reload parties to refresh the list
-            setTimeout(() => {
-              loadParties();
-            }, 1000);
-          } else {
-            console.error('❌ Delete failed:', response);
-            toast({
-              title: "❌ Error",
-              description: response.message || "Failed to delete party",
-              variant: "destructive"
-            });
-          }
-        } catch (error) {
-          console.error('❌ Delete party error:', error);
-          toast({
-            title: "❌ Error",
-            description: "Failed to delete party. Please try again.",
-            variant: "destructive"
-          });
-        }
-      }
+      setShowDeleteModal(true);
     } else {
       toast({
         title: "⚠️ Select Party",
@@ -255,84 +361,155 @@ const PartyReport = () => {
     return num.toFixed(4);
   };
 
+  if (partiesError) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <TopNavigation />
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Parties</h2>
+            <p className="text-gray-600 mb-4">Failed to load party data</p>
+            <Button onClick={() => refetchParties()}>
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Retry
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <TopNavigation />
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Header Section */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h1 className="text-2xl font-bold text-gray-900">Party Report</h1>
-              <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-2">
-                  <label className="text-sm font-medium text-gray-700">PartyName:</label>
-                  <input
-                    type="text"
+      <div className="container mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Party Report</h1>
+          <p className="text-gray-600">Comprehensive report of all parties with their details and status</p>
+        </div>
+
+        {/* Search and Actions */}
+        <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
+          <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+            <div className="flex-1 max-w-md">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <div className="relative">
+                  <Input
+                    ref={inputRef}
+                    placeholder="Search parties... (Press Tab to auto-complete)"
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Search party name..."
-                    className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onChange={handleSearchChange}
+                    onKeyDown={handleKeyDown}
+                    onFocus={() => setShowSuggestions(searchTerm.length > 0)}
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                    className="pl-10 pr-10"
                   />
+                  
+                  {/* Auto-complete hint */}
+                  {searchTerm && getAutoCompleteText() && (
+                    <div 
+                      className="absolute top-1/2 transform -translate-y-1/2 pointer-events-none text-gray-400 text-sm"
+                      style={{ 
+                        left: `${autoCompleteLeft}px`,
+                        zIndex: 1
+                      }}
+                    >
+                      {getAutoCompleteText()}
+                    </div>
+                  )}
+                  
+                  {/* Tab hint */}
+                  {searchTerm && getAutoCompleteText() && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs">
+                      Tab
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center space-x-2">
-                  <label className="text-sm font-medium text-gray-700">0</label>
-                </div>
+                
+                {/* Auto-suggestion dropdown */}
+                {showSuggestions && searchTerm && filteredParties.length > 0 && (
+                  <div className="absolute z-10 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
+                    {filteredParties.slice(0, 10).map((party, index) => (
+                      <div
+                        key={party._id}
+                        className={`px-4 py-2 cursor-pointer border-b border-gray-100 last:border-b-0 ${
+                          index === selectedSuggestionIndex 
+                            ? 'bg-blue-100 text-blue-900' 
+                            : 'hover:bg-gray-100'
+                        }`}
+                        onClick={() => handleSuggestionClick(party)}
+                      >
+                        <div className="font-medium text-gray-900">{party.name}</div>
+                        {party.srNo && (
+                          <div className="text-sm text-gray-500">Sr. No: {party.srNo}</div>
+                        )}
+                      </div>
+                    ))}
+                    {filteredParties.length > 10 && (
+                      <div className="px-4 py-2 text-sm text-gray-500 text-center bg-gray-50">
+                        And {filteredParties.length - 10} more...
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
             
-            {/* Action Buttons */}
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={() => {
-                  loadParties();
-                  toast({
-                    title: "Refreshing",
-                    description: "Updating Monday Final status for all parties...",
-                  });
-                }}
-                disabled={loading}
-                className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={handleRefresh}
+                disabled={partiesLoading}
               >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                <span>{loading ? 'Refreshing...' : '🔄 Refresh Status'}</span>
-              </button>
-              <button
+                {partiesLoading ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                )}
+                Refresh
+              </Button>
+              
+              <Button
                 onClick={handleModify}
                 disabled={!selectedParty}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-blue-600 hover:bg-blue-700"
               >
-                <Edit className="w-4 h-4" />
-                <span>Modify</span>
-              </button>
-              <button
+                <Edit className="w-4 h-4 mr-2" />
+                Modify
+              </Button>
+              
+              <Button
                 onClick={handleDelete}
                 disabled={!selectedParty}
-                className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-red-600 hover:bg-red-700"
               >
-                <Trash2 className="w-4 h-4" />
-                <span>Delete</span>
-              </button>
-              <button
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete
+              </Button>
+              
+              <Button
                 onClick={handleNewParty}
-                className="flex items-center space-x-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md transition-colors"
+                className="bg-green-600 hover:bg-green-700"
               >
-                <Plus className="w-4 h-4" />
-                <span>New Party</span>
-              </button>
-              <button
+                <Plus className="w-4 h-4 mr-2" />
+                New Party
+              </Button>
+              
+              <Button
                 onClick={handleExit}
-                className="flex items-center space-x-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-md transition-colors"
+                className="bg-orange-600 hover:bg-orange-700"
               >
-                <X className="w-4 h-4" />
-                <span>Exit</span>
-              </button>
+                <X className="w-4 h-4 mr-2" />
+                Exit
+              </Button>
             </div>
           </div>
         </div>
 
         {/* Party Table */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
@@ -358,27 +535,22 @@ const PartyReport = () => {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
                     Monday Final
                   </th>
-
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {loading ? (
+                {partiesLoading ? (
+                  // Show skeleton loading
+                  Array.from({ length: 5 }).map((_, index) => (
+                    <PartyRowSkeleton key={index} />
+                  ))
+                ) : paginatedParties.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-4 text-center">
-                      <div className="flex items-center justify-center space-x-2">
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Loading parties...</span>
-                      </div>
-                    </td>
-                  </tr>
-                ) : filteredParties.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-4 text-center text-gray-500">
-                      No parties found
+                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                      {searchTerm ? 'No parties found matching your search' : 'No parties available'}
                     </td>
                   </tr>
                 ) : (
-                  filteredParties.map((party, index) => (
+                  paginatedParties.map((party, index) => (
                     <tr 
                       key={party._id || index} 
                       className={`hover:bg-gray-50 cursor-pointer ${
@@ -387,7 +559,7 @@ const PartyReport = () => {
                       onClick={() => handleRowClick(party)}
                     >
                       <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {index + 1}
+                        {startIndex + index + 1}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                         {party.name}
@@ -405,13 +577,10 @@ const PartyReport = () => {
                         {party.rate || '0'}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          party.mondayFinal === 'Yes' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
-                        }`}>
+                        <Badge variant={party.mondayFinal === 'Yes' ? 'default' : 'secondary'}>
                           {party.mondayFinal || 'No'}
-                        </span>
+                        </Badge>
                       </td>
-
                     </tr>
                   ))
                 )}
@@ -419,7 +588,146 @@ const PartyReport = () => {
             </table>
           </div>
         </div>
+
+        {/* Pagination Controls */}
+        {filteredParties.length > 0 && (
+          <div className="mt-6 bg-white rounded-lg shadow-sm border p-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              {/* Items per page selector */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-700">Show:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+                  className="border border-gray-300 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <span className="text-sm text-gray-700">per page</span>
+              </div>
+
+              {/* Page info */}
+              <div className="text-sm text-gray-700">
+                Showing {startIndex + 1} to {Math.min(endIndex, filteredParties.length)} of {filteredParties.length} parties
+              </div>
+
+              {/* Pagination buttons */}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(1)}
+                  disabled={currentPage === 1}
+                >
+                  First
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                
+                {/* Page numbers */}
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(pageNum)}
+                        className="w-8 h-8 p-0"
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(totalPages)}
+                  disabled={currentPage === totalPages}
+                >
+                  Last
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Stats */}
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white p-4 rounded-lg shadow-sm border">
+            <h3 className="text-sm font-medium text-gray-500">Total Parties</h3>
+            <p className="text-2xl font-bold text-gray-900">{parties.length}</p>
+          </div>
+          <div className="bg-white p-4 rounded-lg shadow-sm border">
+            <h3 className="text-sm font-medium text-gray-500">Filtered Results</h3>
+            <p className="text-2xl font-bold text-gray-900">{filteredParties.length}</p>
+          </div>
+          <div className="bg-white p-4 rounded-lg shadow-sm border">
+            <h3 className="text-sm font-medium text-gray-500">Selected</h3>
+            <p className="text-2xl font-bold text-gray-900">{selectedParty ? 1 : 0}</p>
+          </div>
+        </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <AlertDialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Party</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete party "{selectedParty?.name}"?
+              This action cannot be undone and will permanently delete:
+              • The party from the database
+              • ALL transactions for this party
+              This is a permanent action!
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={actionLoading}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {actionLoading ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : null}
+              Delete Permanently
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

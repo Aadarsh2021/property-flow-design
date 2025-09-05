@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import TopNavigation from '@/components/TopNavigation';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -622,41 +621,21 @@ const AccountLedger = () => {
       setIsTyping(false);
       setAutoCompleteText('');
       setShowInlineSuggestion(false);
-      
-      // Auto-fill commission if commission is selected
-      if (partyName.toLowerCase().trim() === 'commission') {
-        handleCommissionAutoFill();
-      }
     }
   };
 
   // VS Code style Tab completion
   const handleTabComplete = () => {
     if (showInlineSuggestion && autoCompleteText) {
-      // Find the matching party from filteredParties to get original case
-      const matchingParty = filteredParties.find(party => {
-        const partyName = party.party_name || party.name;
-        return partyName.toLowerCase().startsWith(newEntry.partyName.toLowerCase());
-      });
-      
-      if (matchingParty) {
-        // Use original party name from database (proper case)
-        const originalPartyName = matchingParty.party_name || matchingParty.name;
-        setNewEntry(prev => ({ ...prev, partyName: originalPartyName }));
-      } else {
-        // Fallback to concatenation if no match found
-        const currentValue = newEntry.partyName;
-        const completedValue = currentValue + autoCompleteText;
-        setNewEntry(prev => ({ ...prev, partyName: completedValue }));
-      }
-      
+      const currentValue = newEntry.partyName;
+      const completedValue = currentValue + autoCompleteText;
+      setNewEntry(prev => ({ ...prev, partyName: completedValue }));
       setAutoCompleteText('');
       setShowInlineSuggestion(false);
       setShowPartyDropdown(false);
       
       // Auto-fill commission if commission is selected
-      const finalPartyName = matchingParty ? (matchingParty.party_name || matchingParty.name) : (newEntry.partyName + autoCompleteText);
-      if (finalPartyName.toLowerCase().trim() === 'commission') {
+      if (completedValue.toLowerCase().trim() === 'commission') {
         handleCommissionAutoFill();
       }
     }

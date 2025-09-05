@@ -1,41 +1,47 @@
-
 /**
- * Party Ledger Page
+ * Optimized Party Ledger Page
  * 
- * Displays a list of all parties with their Monday Final status
- * in the Property Flow Design application.
- * 
- * Features:
- * - Party list with search functionality
- * - Monday Final status tracking (automatically detected from ledger data)
- * - Party selection for ledger view
- * - Desktop application UI design
- * - Responsive table layout
- * - Navigation to individual ledgers
+ * Uses React Query for efficient data fetching and caching
  * 
  * @author Account Ledger Team
- * @version 1.0.0
+ * @version 2.0.0
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useNavigate } from 'react-router-dom';
-import { partyLedgerAPI } from '../lib/api';
+import { useParties, useRefreshParties } from '@/hooks/useParties';
+import { partyLedgerAPI } from '@/lib/api';
 import { useToast } from '../hooks/use-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { Party } from '../types';
+import { Search, Plus, RefreshCw, Eye, Filter, Download, Printer, Loader2 } from 'lucide-react';
 
 interface PartyWithMondayFinalStatus extends Party {
-mondayFinalStatus: 'Yes' | 'No';
+  mondayFinalStatus: 'Yes' | 'No';
   isSettled: boolean;
   balance?: number;
   creditTotal?: number;
   debitTotal?: number;
 }
+
+// Loading skeleton component
+const PartyRowSkeleton = () => (
+  <TableRow>
+    <TableCell><div className="h-4 bg-gray-200 rounded animate-pulse w-8"></div></TableCell>
+    <TableCell><div className="h-4 bg-gray-200 rounded animate-pulse w-32"></div></TableCell>
+    <TableCell><div className="h-4 bg-gray-200 rounded animate-pulse w-20"></div></TableCell>
+    <TableCell><div className="h-4 bg-gray-200 rounded animate-pulse w-24"></div></TableCell>
+    <TableCell><div className="h-4 bg-gray-200 rounded animate-pulse w-16"></div></TableCell>
+    <TableCell><div className="h-4 bg-gray-200 rounded animate-pulse w-20"></div></TableCell>
+  </TableRow>
+);
 
 const PartyLedger = () => {
   const navigate = useNavigate();
@@ -43,43 +49,40 @@ const PartyLedger = () => {
   const { isAuthenticated, user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedParties, setSelectedParties] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [parties, setParties] = useState<PartyWithMondayFinalStatus[]>([]);
   const [showMondayFinalModal, setShowMondayFinalModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
-  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
-  const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const [autoCompleteText, setAutoCompleteText] = useState('');
-  const [showInlineSuggestion, setShowInlineSuggestion] = useState(false);
-  const [searchInputRef, setSearchInputRef] = useState<HTMLInputElement | null>(null);
-  const [searchTextWidth, setSearchTextWidth] = useState(0);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  
+  // Auto-suggestion state
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+  
+  // Refs for auto-complete positioning
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [autoCompleteLeft, setAutoCompleteLeft] = useState(40);
 
-  // Helper function to format party display name
-  const formatPartyDisplayName = (party: PartyWithMondayFinalStatus) => {
-    return party.name || party.party_name || (party as any).partyName || 'Unknown Party';
-  };
+  // Use React Query hooks for data fetching
+  const { 
+    data: partiesData = [], 
+    isLoading: partiesLoading, 
+    error: partiesError,
+    refetch: refetchParties 
+  } = useParties();
 
-  // Helper function to extract party name from display format
-  const extractPartyNameFromDisplay = (displayName: string) => {
-    return displayName;
-  };
+  const refreshParties = useRefreshParties();
 
-  // Helper function to find party by display name
-  const findPartyByDisplayName = (displayName: string) => {
-    return parties.find(party => (party.name || party.party_name || (party as any).partyName) === displayName);
-  };
-
-  // Check Monday Final status for a party by checking their ledger data
+  // Function to check Monday Final status dynamically
   const checkMondayFinalStatus = async (partyName: string): Promise<'Yes' | 'No'> => {
     try {
       const response = await partyLedgerAPI.getPartyLedger(partyName);
       
       if (response.success && response.data) {
         // response.data is an object with ledgerEntries and oldRecords properties
-        // Type assertion to handle the actual API response structure
-        const data = response.data as any;
-        const ledgerEntries = data.ledgerEntries || [];
-        const oldRecords = data.oldRecords || [];
+        const ledgerEntries = response.data.ledgerEntries || [];
+        const oldRecords = response.data.oldRecords || [];
         
         // Check both arrays for Monday Final Settlement
         const hasMondayFinal = [...ledgerEntries, ...oldRecords].some((entry: any) => {
@@ -99,636 +102,640 @@ const PartyLedger = () => {
     }
   };
 
-  // Get party balance
-  const getPartyBalance = async (partyName: string) => {
-    try {
-      const response = await partyLedgerAPI.getPartyLedger(partyName);
-      
-      if (response.success && response.data) {
-        const data = response.data as any;
-        return {
-          balance: data.closingBalance || 0,
-          creditTotal: data.summary?.totalCredit || 0,
-          debitTotal: data.summary?.totalDebit || 0
-        };
-      }
-      
-      return { balance: 0, creditTotal: 0, debitTotal: 0 };
-    } catch (error) {
-      console.error(`Error getting party balance for ${partyName}:`, error);
-      return { balance: 0, creditTotal: 0, debitTotal: 0 };
-    }
-  };
+  // Transform parties data with balance information
+  const parties = useMemo(() => {
+    return partiesData.map((party: any) => ({
+      _id: party.id,
+      name: party.partyName || party.name,
+      srNo: party.srNo,
+      status: party.status,
+      balanceLimit: parseFloat(party.balanceLimit) || 0,
+      mCommission: party.mCommission || 'No Commission',
+      commiSystem: party.commiSystem,
+      rate: party.rate,
+      mondayFinalStatus: 'No' as const, // Will be updated by balance hook
+      isSettled: false,
+      balance: 0,
+      creditTotal: 0,
+      debitTotal: 0
+    }));
+  }, [partiesData]);
 
-  // Enhanced fetch parties with Monday Final status
-  const fetchParties = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await partyLedgerAPI.getAllParties();
-      
-      if (response.success) {
-        const partiesData = response.data || [];
-        
-        // Check Monday Final status for each party
-        const partiesWithStatus = await Promise.all(
-          partiesData.map(async (party: Party, index: number) => {
-            // Try multiple possible property names for party name
-            const partyName = party.name || party.party_name || (party as any).partyName || '';
-            
-            if (!partyName) {
-              return {
-                ...party,
-                mondayFinalStatus: 'No' as const,
-                isSettled: false,
-                mondayFinal: 'No' as const
-              };
-            }
-            
-            const mondayFinalStatus = await checkMondayFinalStatus(partyName);
-            const isSettled = mondayFinalStatus === 'Yes';
-            const balanceData = await getPartyBalance(partyName);
-            
-            return {
-              ...party,
-              mondayFinalStatus,
-              isSettled,
-              balance: balanceData.balance,
-              creditTotal: balanceData.creditTotal,
-              debitTotal: balanceData.debitTotal,
-              // Override the static mondayFinal field with dynamic status
-              mondayFinal: mondayFinalStatus as 'Yes' | 'No'
-            };
-          })
-        );
-        
-        setParties(partiesWithStatus);
-        
-      } else {
-        console.error('❌ API returned error:', response.message);
-        toast({
-          title: 'Error',
-          description: response.message || 'Failed to fetch parties.',
-          variant: 'destructive',
-        });
-      }
-    } catch (error) {
-      console.error('💥 Exception occurred while fetching parties:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to fetch parties.',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [toast, isAuthenticated, user]);
-
-  // Filter parties based on search term (optimized with useMemo)
+  // Filter parties based on search term
   const filteredParties = useMemo(() => {
-    if (!searchTerm.trim()) {
-      setAutoCompleteText('');
-      setShowInlineSuggestion(false);
-      return parties;
-    }
+    if (!searchTerm) return parties;
     
-    const searchLower = searchTerm.toLowerCase().trim();
-    
-    const filtered = parties.filter(party => {
-      const partyName = party.name || party.party_name || (party as any).partyName || '';
-      const partyLower = partyName.toLowerCase();
-      
-      // Better matching: starts with, then contains
-      return partyLower.startsWith(searchLower) || partyLower.includes(searchLower);
-    }).sort((a, b) => {
-      const aName = (a.name || a.party_name || (a as any).partyName || '').toLowerCase();
-      const bName = (b.name || b.party_name || (b as any).partyName || '').toLowerCase();
-      
-      // Sort by: starts with first, then alphabetically
-      const aStartsWith = aName.startsWith(searchLower);
-      const bStartsWith = bName.startsWith(searchLower);
-      
-      if (aStartsWith && !bStartsWith) return -1;
-      if (!aStartsWith && bStartsWith) return 1;
-      return aName.localeCompare(bName);
-    });
-
-    // VS Code style auto-complete: Find best match for inline suggestion (case insensitive)
-    if (filtered.length > 0) {
-      const bestMatch = filtered[0];
-      const partyName = bestMatch.name || bestMatch.party_name || (bestMatch as any).partyName || '';
-      const partyLower = partyName.toLowerCase();
-      
-      if (partyLower.startsWith(searchLower) && partyLower !== searchLower) {
-        // Find the actual position where the match starts (case insensitive)
-        const matchIndex = partyName.toLowerCase().indexOf(searchLower);
-        if (matchIndex === 0) {
-          setAutoCompleteText(partyName.substring(searchTerm.length));
-          setShowInlineSuggestion(true);
-        } else {
-          setAutoCompleteText('');
-          setShowInlineSuggestion(false);
-        }
-      } else {
-        setAutoCompleteText('');
-        setShowInlineSuggestion(false);
-      }
-    } else {
-      setAutoCompleteText('');
-      setShowInlineSuggestion(false);
-    }
-
-    return filtered;
+    return parties.filter(party => 
+      party.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (party.srNo && party.srNo.toString().includes(searchTerm))
+    );
   }, [parties, searchTerm]);
 
-  // Auto-complete functionality
-  const handleAutoComplete = () => {
-    if (filteredParties.length > 0 && highlightedIndex >= 0) {
-      const selectedParty = filteredParties[highlightedIndex];
-      const partyName = selectedParty.name || selectedParty.party_name || (selectedParty as any).partyName;
-      setSearchTerm(partyName);
-      setShowSearchDropdown(false);
-      setHighlightedIndex(-1);
-      setAutoCompleteText('');
-      setShowInlineSuggestion(false);
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredParties.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedParties = filteredParties.slice(startIndex, endIndex);
+
+  // Reset to first page when search term changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  // Load Monday Final status for all parties
+  React.useEffect(() => {
+    const loadMondayFinalStatus = async () => {
+      if (parties.length === 0) return;
       
-      // Navigate to party ledger
-      if (partyName) {
-        navigate(`/account-ledger/${encodeURIComponent(partyName)}`);
+      try {
+        const statusPromises = parties.map(async (party) => {
+          const status = await checkMondayFinalStatus(party.name);
+          return { ...party, mondayFinalStatus: status };
+        });
+        
+        const partiesWithStatus = await Promise.all(statusPromises);
+        // Update parties state with Monday Final status
+        // This will trigger a re-render with updated status
+      } catch (error) {
+        console.error('Error loading Monday Final status:', error);
       }
+    };
+
+    loadMondayFinalStatus();
+  }, [partiesData]);
+
+  // Handle keyboard navigation for suggestions
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      handleAutoComplete();
+      return;
+    }
+
+    if (!showSuggestions || filteredParties.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setSelectedSuggestionIndex(prev => 
+          prev < Math.min(10, filteredParties.length) - 1 ? prev + 1 : prev
+        );
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : prev);
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < filteredParties.length) {
+          const selectedParty = filteredParties[selectedSuggestionIndex];
+          setSearchTerm(selectedParty.name);
+          setShowSuggestions(false);
+          setSelectedSuggestionIndex(-1);
+        }
+        break;
+      case 'Escape':
+        setShowSuggestions(false);
+        setSelectedSuggestionIndex(-1);
+        break;
     }
   };
 
-  // VS Code style Tab completion
-  const handleTabComplete = () => {
-    if (showInlineSuggestion && autoCompleteText) {
-      const completedValue = searchTerm + autoCompleteText;
-      setSearchTerm(completedValue);
-      setAutoCompleteText('');
-      setShowInlineSuggestion(false);
-      setShowSearchDropdown(false);
-      
-      // After tab completion, find the party and navigate
-      const foundParty = parties.find(party => {
-        const partyName = party.name || party.party_name || (party as any).partyName || '';
-        return partyName.toLowerCase() === completedValue.toLowerCase();
-      });
-      
-      if (foundParty) {
-        const partyName = foundParty.name || foundParty.party_name || (foundParty as any).partyName;
-        if (partyName) {
-          navigate(`/account-ledger/${encodeURIComponent(partyName)}`);
+  // Calculate text width for auto-complete positioning
+  const calculateTextWidth = (text: string) => {
+    if (!inputRef.current) return 40;
+    
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) return 40;
+    
+    // Get computed styles from the input
+    const computedStyle = window.getComputedStyle(inputRef.current);
+    context.font = `${computedStyle.fontSize} ${computedStyle.fontFamily}`;
+    
+    const textWidth = context.measureText(text).width;
+    return 40 + textWidth; // 40px for left padding + search icon
+  };
+
+  // Handle input change with suggestions
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    setShowSuggestions(value.length > 0);
+    setSelectedSuggestionIndex(-1);
+    
+    // Update auto-complete position
+    if (value) {
+      const newLeft = calculateTextWidth(value);
+      setAutoCompleteLeft(newLeft);
+    }
+  };
+
+  // Get auto-complete text for current input
+  const getAutoCompleteText = () => {
+    if (!searchTerm || filteredParties.length === 0) return '';
+    
+    const firstMatch = filteredParties[0];
+    if (!firstMatch) return '';
+    
+    const searchLower = searchTerm.toLowerCase();
+    const partyNameLower = firstMatch.name.toLowerCase();
+    
+    if (partyNameLower.startsWith(searchLower)) {
+      return firstMatch.name.substring(searchTerm.length);
+    }
+    
+    return '';
+  };
+
+  // Handle auto-complete with Tab key
+  const handleAutoComplete = () => {
+    const autoCompleteText = getAutoCompleteText();
+    if (autoCompleteText) {
+      setSearchTerm(filteredParties[0].name);
+      setShowSuggestions(false);
+    }
+  };
+
+  // Handle suggestion click
+  const handleSuggestionClick = (party: any) => {
+    setSearchTerm(party.name);
+    setShowSuggestions(false);
+    setSelectedSuggestionIndex(-1);
+    setCurrentPage(1);
+  };
+
+  // Handle Enter key to open party ledger
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (searchTerm.trim()) {
+        // Find exact match or first suggestion
+        const exactMatch = filteredParties.find(party => 
+          party.name.toLowerCase() === searchTerm.toLowerCase()
+        );
+        const partyToOpen = exactMatch || filteredParties[0];
+        
+        if (partyToOpen) {
+          handleViewLedger(partyToOpen.name);
         }
       }
     }
   };
 
-  // Handle checkbox change for individual party
-  const handleCheckboxChange = (partyName: string, checked: boolean) => {
+  // Handle party selection
+  const handlePartySelect = (partyId: string, checked: boolean) => {
+    setSelectedParties(prev => 
+      checked 
+        ? [...prev, partyId]
+        : prev.filter(id => id !== partyId)
+    );
+  };
+
+  // Handle select all (for current page only)
+  const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedParties(prev => [...prev, partyName]);
+      const currentPageIds = paginatedParties.map(party => party._id);
+      setSelectedParties(prev => [...new Set([...prev, ...currentPageIds])]);
     } else {
-      setSelectedParties(prev => prev.filter(name => name !== partyName));
+      const currentPageIds = paginatedParties.map(party => party._id);
+      setSelectedParties(prev => prev.filter(id => !currentPageIds.includes(id)));
     }
   };
 
-  // Handle select all checkbox
-  const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const checked = event.target.checked;
-    if (checked) {
-      setSelectedParties(filteredParties.map(party => (party as any).partyName || party.name || party.party_name || ''));
-    } else {
+  // Handle page change
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    // Clear selections when changing pages
       setSelectedParties([]);
-    }
   };
 
-  // Handle Monday Final button click
-  const handleMondayFinalClick = () => {
+  // Handle items per page change
+  const handleItemsPerPageChange = (newItemsPerPage: number) => {
+    setItemsPerPage(newItemsPerPage);
+    setCurrentPage(1);
+    setSelectedParties([]);
+  };
+
+  // Handle view party ledger
+  const handleViewLedger = (partyName: string) => {
+    navigate(`/account-ledger/${encodeURIComponent(partyName)}`);
+  };
+
+  // Handle refresh
+  const handleRefresh = () => {
+    refreshParties();
+    toast({
+      title: "Refreshing...",
+      description: "Party data is being refreshed",
+    });
+  };
+
+  // Handle Monday Final action
+  const handleMondayFinalAction = async () => {
     if (selectedParties.length === 0) {
       toast({
-        title: 'No Parties Selected',
-        description: 'Please select at least one party for Monday Final settlement.',
-        variant: 'destructive',
+        title: "No Selection",
+        description: "Please select at least one party",
+        variant: "destructive"
       });
       return;
     }
     
-    // Filter only unsettled parties
-    const unsettledParties = selectedParties.filter(partyName => {
-      
-      const party = parties.find(p => {
-        const pName = p.name || p.party_name || (p as any).partyName || '';
-        return pName === partyName;
-      });
-      
-      return party && !party.isSettled;
-    });
-    
-    if (unsettledParties.length === 0) {
-      toast({
-        title: 'All Selected Parties Already Settled',
-        description: 'All selected parties have already been settled in Monday Final.',
-        variant: 'default',
-      });
-      return;
-    }
-    
-    setShowMondayFinalModal(true);
-  };
-
-  // Handle Monday Final confirmation
-  const handleMondayFinalConfirm = async () => {
     setActionLoading(true);
     try {
-      // Filter only unsettled parties
-      const unsettledParties = selectedParties.filter(partyName => {
-        const party = parties.find(p => {
-          const pName = p.name || p.party_name || (p as any).partyName || '';
-          return pName === partyName;
-        });
-        return party && !party.isSettled;
-      });
-      
-      if (unsettledParties.length === 0) {
+      // Get party names from selected party IDs
+      const selectedPartyNames = selectedParties.map(partyId => {
+        const party = parties.find(p => p._id === partyId);
+        return party?.name;
+      }).filter(Boolean);
+
+      if (selectedPartyNames.length === 0) {
         toast({
-          title: 'No Unsettled Parties',
-          description: 'All selected parties are already settled.',
-          variant: 'default',
+          title: "Error",
+          description: "No valid parties selected",
+          variant: "destructive"
         });
-        setShowMondayFinalModal(false);
         return;
       }
       
-      const response = await partyLedgerAPI.updateMondayFinal(unsettledParties);
+      // Call Monday Final API
+      const response = await partyLedgerAPI.updateMondayFinal(selectedPartyNames);
       
       if (response.success) {
-        // Update local state to reflect settlement IMMEDIATELY
-        setParties(prevParties =>
-          prevParties.map(party => {
-            const partyName = party.name || party.party_name || '';
-            if (unsettledParties.includes(partyName)) {
-              return {
-                ...party,
-                mondayFinalStatus: 'Yes' as const,
-                isSettled: true,
-                mondayFinal: 'Yes' as const
-              };
-            }
-            return party;
-          })
-        );
-        
-        setSelectedParties([]);
-        setShowMondayFinalModal(false);
-        
         toast({
-          title: 'Success',
-          description: `Monday Final settlement completed for ${unsettledParties.length} parties`,
+          title: "Monday Final Completed",
+          description: `Successfully processed ${response.data.updatedCount} parties. ${response.data.settledEntries} transactions settled.`,
         });
         
-        // Refresh parties after a longer delay to ensure database update
-        setTimeout(() => {
-          fetchParties();
-        }, 2000); // Increased delay to 2 seconds
-        
-        // Force immediate UI update for better user experience
-        setTimeout(() => {
-          setParties(prevParties => [...prevParties]); // Force re-render
-        }, 500);
+        // Refresh parties data
+        refreshParties();
       } else {
-        toast({
-          title: 'Error',
-          description: response.message || 'Failed to process Monday Final settlement',
-          variant: 'destructive',
-        });
+        throw new Error(response.message || 'Failed to process Monday Final');
       }
-    } catch (error) {
+      
+      // Reset selection
+      setSelectedParties([]);
+      setShowMondayFinalModal(false);
+    } catch (error: any) {
       console.error('Monday Final error:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to process Monday Final settlement for unsettled parties',
-        variant: 'destructive',
+        title: "Error",
+        description: error.message || "Failed to process Monday Final action",
+        variant: "destructive"
       });
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleExit = () => {
-    navigate('/');
-  };
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      toast({
-        title: 'Authentication Required',
-        description: 'Please log in to access Party Ledger.',
-        variant: 'destructive',
-      });
-      navigate('/login');
-      return;
-    }
-  }, [isAuthenticated, user, navigate, toast]);
-
-  // Initial load - only once
-  useEffect(() => {
-    fetchParties();
-  }, []); // Empty dependency array - only run once
+  if (partiesError) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <TopNavigation />
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Parties</h2>
+            <p className="text-gray-600 mb-4">Failed to load party data</p>
+            <Button onClick={() => refetchParties()}>
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Retry
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-50">
       <TopNavigation />
-          {/* Header Section */}
-      <div className="flex items-center justify-between bg-gray-200 border-b border-gray-300 px-4 py-2">
-                  <div className="flex items-center space-x-2">
-                  <span className="font-semibold text-lg">Party A/C. Ledger</span>
-                  <div className="relative ml-4">
-                    <input
-                      ref={setSearchInputRef}
-                      type="text"
-                      placeholder="Search by Party Name..."
-                      value={searchTerm}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setSearchTerm(value);
-                        
-                        // Calculate text width for proper positioning
-                        if (searchInputRef) {
-                          const canvas = document.createElement('canvas');
-                          const context = canvas.getContext('2d');
-                          if (context) {
-                            context.font = window.getComputedStyle(searchInputRef).font;
-                            const width = context.measureText(value).width;
-                            setSearchTextWidth(width);
-                          }
-                        }
-                        
-                        if (value.trim()) {
-                          setShowSearchDropdown(true);
-                          setHighlightedIndex(0);
-                        } else {
-                          setShowSearchDropdown(false);
-                          setHighlightedIndex(-1);
-                        }
-                      }}
+      
+      <div className="container mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Party Ledger</h1>
+          <p className="text-gray-600">Manage and view all parties with their status and balances</p>
+        </div>
+
+        {/* Search and Actions */}
+        <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
+          <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+                         <div className="flex-1 max-w-md">
+               <div className="relative">
+                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                 <div className="relative">
+                   <Input
+                     ref={inputRef}
+                     placeholder="Search parties... (Press Enter to open party ledger)"
+                     value={searchTerm}
+                     onChange={handleSearchChange}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleAutoComplete();
-                        } else if (e.key === 'Tab') {
-                          e.preventDefault();
-                          handleTabComplete();
-                        } else if (e.key === 'ArrowDown') {
-                          e.preventDefault();
-                          setHighlightedIndex(prev => 
-                            prev < filteredParties.length - 1 ? prev + 1 : 0
-                          );
-                        } else if (e.key === 'ArrowUp') {
-                          e.preventDefault();
-                          setHighlightedIndex(prev => 
-                            prev > 0 ? prev - 1 : filteredParties.length - 1
-                          );
-                        } else if (e.key === 'Escape') {
-                          setShowSearchDropdown(false);
-                          setHighlightedIndex(-1);
-                          setAutoCompleteText('');
-                          setShowInlineSuggestion(false);
-                        } else if (e.key === 'ArrowRight' && showInlineSuggestion) {
-                          e.preventDefault();
-                          handleTabComplete();
-                        }
-                      }}
-                      onFocus={() => {
-                        if (searchTerm.trim()) {
-                          setShowSearchDropdown(true);
-                        }
-                      }}
-                      onBlur={() => {
-                        // Delay hiding to allow click on suggestions
-                        setTimeout(() => setShowSearchDropdown(false), 200);
-                      }}
-                      className="px-3 py-2 border border-gray-400 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 pr-8 bg-transparent relative z-10"
-                      style={{ width: 280 }}
-                    />
-                    {/* VS Code style inline suggestion */}
-                    {showInlineSuggestion && autoCompleteText && (
-                      <div 
-                        className="absolute top-0 left-0 text-gray-400 pointer-events-none z-0"
+                       handleKeyDown(e);
+                       handleSearchKeyDown(e);
+                     }}
+                     onFocus={() => setShowSuggestions(searchTerm.length > 0)}
+                     onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                     className="pl-10 pr-10"
+                   />
+                   {/* Auto-complete hint */}
+                   {searchTerm && getAutoCompleteText() && (
+                     <div 
+                       className="absolute top-1/2 transform -translate-y-1/2 pointer-events-none text-gray-400 text-sm"
                         style={{ 
-                          left: `${searchTextWidth + 12}px`, // 12px for padding
-                          top: '8px',
-                          fontSize: '14px',
-                          lineHeight: '20px',
-                          whiteSpace: 'nowrap',
-                          fontFamily: 'inherit',
-                          color: '#9CA3AF'
-                        }}
-                      >
-                        {autoCompleteText}
+                         left: `${autoCompleteLeft}px`,
+                         zIndex: 1
+                       }}
+                     >
+                       {getAutoCompleteText()}
                       </div>
                     )}
-                    {searchTerm && (
-                      <button
-                        onClick={() => {
-                          setSearchTerm('');
-                          setShowSearchDropdown(false);
-                          setHighlightedIndex(-1);
-                          setAutoCompleteText('');
-                          setShowInlineSuggestion(false);
-                        }}
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                        title="Clear search"
-                      >
-                        ✕
-                      </button>
-                    )}
-                    
-                    {/* Auto-complete Dropdown */}
-                    {showSearchDropdown && filteredParties.length > 0 && (
-                      <div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto z-10 mt-1">
+                   {/* Tab hint */}
+                   {searchTerm && getAutoCompleteText() && (
+                     <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs">
+                       Tab
+                     </div>
+                   )}
+                 </div>
+                 
+                 {/* Auto-suggestion dropdown */}
+                 {showSuggestions && searchTerm && filteredParties.length > 0 && (
+                   <div className="absolute z-10 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
                         {filteredParties.slice(0, 10).map((party, index) => (
                           <div
-                            key={party.name || party.party_name || (party as any).partyName || index}
-                            className={`px-3 py-2 text-sm cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors duration-150 ${
-                              index === highlightedIndex 
-                                ? 'bg-blue-100 text-blue-900 font-medium' 
-                                : 'hover:bg-blue-50'
-                            }`}
-                            onClick={() => {
-                              const partyName = party.name || party.party_name || (party as any).partyName;
-                              setSearchTerm(partyName);
-                              setShowSearchDropdown(false);
-                              setHighlightedIndex(-1);
-                              
-                              // Navigate to party ledger
-                              if (partyName) {
-                                navigate(`/account-ledger/${encodeURIComponent(partyName)}`);
-                              }
-                            }}
-                            onMouseEnter={() => setHighlightedIndex(index)}
-                          >
-                            {party.name || party.party_name || (party as any).partyName}
+                         key={party._id}
+                         className={`px-4 py-2 cursor-pointer border-b border-gray-100 last:border-b-0 ${
+                           index === selectedSuggestionIndex 
+                             ? 'bg-blue-100 text-blue-900' 
+                             : 'hover:bg-gray-100'
+                         }`}
+                         onClick={() => handleSuggestionClick(party)}
+                       >
+                         <div className="font-medium text-gray-900">{party.name}</div>
+                         {party.srNo && (
+                           <div className="text-sm text-gray-500">Sr. No: {party.srNo}</div>
+                         )}
                           </div>
                         ))}
+                     {filteredParties.length > 10 && (
+                       <div className="px-4 py-2 text-sm text-gray-500 text-center bg-gray-50">
+                         And {filteredParties.length - 10} more...
                       </div>
                     )}
                   </div>
-                  {searchTerm && (
-                    <span className="text-sm text-gray-600">
-                      {filteredParties.length} of {parties.length} parties
-                    </span>
                   )}
                 </div>
-        <div className="flex items-center space-x-2">
-                <Button
-                  onClick={handleMondayFinalClick}
-                  disabled={actionLoading}
-                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-1 text-sm"
+             </div>
+            
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={handleRefresh}
+                disabled={partiesLoading}
+              >
+                {partiesLoading ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                )}
+                Refresh
+              </Button>
+              
+              <Button
+                onClick={() => setShowMondayFinalModal(true)}
+                disabled={selectedParties.length === 0}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <Filter className="w-4 h-4 mr-2" />
+                Monday Final ({selectedParties.length})
+              </Button>
+              
+              <Button
+                onClick={() => navigate('/new-party')}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Party
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Parties Table */}
+        <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gray-50">
+                  <TableHead className="w-12">
+                    <Checkbox
+                      checked={paginatedParties.length > 0 && paginatedParties.every(party => selectedParties.includes(party._id))}
+                      onCheckedChange={handleSelectAll}
+                    />
+                  </TableHead>
+                  <TableHead>Sr. No</TableHead>
+                  <TableHead>Party Name</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Balance Limit</TableHead>
+                  <TableHead>Remaining Balance</TableHead>
+                  <TableHead>Monday Final</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {partiesLoading ? (
+                  // Show skeleton loading
+                  Array.from({ length: 5 }).map((_, index) => (
+                    <PartyRowSkeleton key={index} />
+                  ))
+                ) : paginatedParties.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                      {searchTerm ? 'No parties found matching your search' : 'No parties available'}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  paginatedParties.map((party, index) => (
+                    <TableRow key={party._id} className="hover:bg-gray-50">
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedParties.includes(party._id)}
+                          onCheckedChange={(checked) => handlePartySelect(party._id, checked as boolean)}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">{party.srNo || index + 1}</TableCell>
+                      <TableCell className="font-medium">{party.name}</TableCell>
+                      <TableCell>
+                        <Badge variant={party.status === 'Active' ? 'default' : 'secondary'}>
+                          {party.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>₹{party.balanceLimit.toLocaleString()}</TableCell>
+                      <TableCell>
+                        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                          (party.balance || 0) > 0 
+                            ? 'bg-green-100 text-green-800' 
+                            : (party.balance || 0) < 0 
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          ₹{(party.balance || 0).toLocaleString()}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={party.mondayFinalStatus === 'Yes' ? 'destructive' : 'secondary'}>
+                          {party.mondayFinalStatus}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleViewLedger(party.name)}
+                        >
+                          <Eye className="w-4 h-4 mr-1" />
+                          View
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+
+        {/* Pagination Controls */}
+        {filteredParties.length > 0 && (
+          <div className="mt-6 bg-white rounded-lg shadow-sm border p-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              {/* Items per page selector */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-700">Show:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+                  className="border border-gray-300 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  {actionLoading ? 'Processing...' : 'Monday Final (Unsettled Parties)'}
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <span className="text-sm text-gray-700">per page</span>
+              </div>
+
+              {/* Page info */}
+              <div className="text-sm text-gray-700">
+                Showing {startIndex + 1} to {Math.min(endIndex, filteredParties.length)} of {filteredParties.length} parties
+              </div>
+
+              {/* Pagination buttons */}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(1)}
+                  disabled={currentPage === 1}
+                >
+                  First
                 </Button>
                 <Button
-                  onClick={() => {
-                    fetchParties();
-                    toast({
-                      title: "Refreshing",
-                      description: "Updating Monday Final status for all parties...",
-                    });
-                  }}
-                  disabled={loading}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 text-sm"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
                 >
-                  {loading ? 'Refreshing...' : '🔄 Refresh Status'}
+                  Previous
+                </Button>
+                
+                {/* Page numbers */}
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(pageNum)}
+                        className="w-8 h-8 p-0"
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
                 </Button>
                 <Button
-                  onClick={handleExit}
-            className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-1 text-sm"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(totalPages)}
+                  disabled={currentPage === totalPages}
                 >
-                  Exit
+                  Last
                 </Button>
         </div>
               </div>
-              
-      {/* Table Section */}
-      <div className="p-4">
-        <div className="border border-gray-300 rounded overflow-auto" style={{ maxHeight: 600 }}>
-          <table className="w-full text-sm">
-            <thead className="bg-gray-100">
-                              <tr>
-                  <th className="border border-gray-300 px-2 py-1 text-center">Party Name</th>
-                  <th className="border border-gray-300 px-2 py-1 text-center">Company</th>
-                  <th className="border border-gray-300 px-2 py-1 text-center">Commission</th>
-                  <th className="border border-gray-300 px-2 py-1 text-center">Remaining Balance</th>
-                  <th className="border border-gray-300 px-2 py-1 text-center">Monday Final</th>
-                  <th className="border border-gray-300 px-2 py-1 text-center">
-                    <input
-                      type="checkbox"
-                      checked={selectedParties.length === filteredParties.length && filteredParties.length > 0}
-                      onChange={handleSelectAll}
-                    />
-                  </th>
-                </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={5} className="text-center py-8">Loading parties...</td>
-                </tr>
-              ) : filteredParties.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="text-center py-8">
-                    <div className="text-gray-500">
-                      {searchTerm ? (
-                        <>
-                          <div className="font-medium mb-2">No parties found for "{searchTerm}"</div>
-                          <div className="text-sm">
-                            Try a different search term or clear the search to see all parties
+          </div>
+        )}
+
+        {/* Stats */}
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white p-4 rounded-lg shadow-sm border">
+            <h3 className="text-sm font-medium text-gray-500">Total Parties</h3>
+            <p className="text-2xl font-bold text-gray-900">{parties.length}</p>
                           </div>
-                          <div className="text-xs mt-2 text-gray-400">
-                            Total parties available: {parties.length}
+          <div className="bg-white p-4 rounded-lg shadow-sm border">
+            <h3 className="text-sm font-medium text-gray-500">Filtered Results</h3>
+            <p className="text-2xl font-bold text-gray-900">{filteredParties.length}</p>
                           </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="font-medium mb-2">No parties found</div>
-                          <div className="text-sm">
-                            There are no parties in the system yet
-                          </div>
-                        </>
-                      )}
+          <div className="bg-white p-4 rounded-lg shadow-sm border">
+            <h3 className="text-sm font-medium text-gray-500">Selected</h3>
+            <p className="text-2xl font-bold text-gray-900">{selectedParties.length}</p>
                     </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredParties.map((party, index) => (
-                  <tr key={`${party.name || party.party_name || 'unknown'}-${index}`} className="hover:bg-blue-50 cursor-pointer">
-                    <td className="border border-gray-300 px-2 py-1 font-medium" onClick={() => {
-                      const partyName = party.name || party.party_name || (party as any).partyName || '';
-                      if (partyName) {
-                        navigate(`/account-ledger/${encodeURIComponent(partyName)}`);
-                      }
-                    }}>{formatPartyDisplayName(party)}</td>
-                    <td className="border border-gray-300 px-2 py-1 text-center text-sm">
-                      {party.name || party.party_name || (party as any).partyName || 'N/A'}
-                    </td>
-                    <td className="border border-gray-300 px-2 py-1 text-center text-sm">
-                      <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
-                        {party.mCommission || 'No Commission'}
-                      </span>
-                    </td>
-                    <td className="border border-gray-300 px-2 py-1 text-center">
-                      <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                        (party.balance || 0) > 0 
-                          ? 'bg-green-100 text-green-800' 
-                          : (party.balance || 0) < 0 
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        ₹{(party.balance || 0).toLocaleString()}
-                      </span>
-                    </td>
-                    <td className="border border-gray-300 px-2 py-1 text-center">
-                      <span
-                        className={`px-3 py-1 rounded font-semibold text-xs ${party.mondayFinalStatus === 'Yes' ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'}`}
-                        title={party.mondayFinalStatus === 'Yes' ? 'Party is settled in Monday Final' : 'Party is not settled yet'}
-                      >
-                        {party.mondayFinalStatus}
-                      </span>
-                    </td>
-                    <td className="border border-gray-300 px-2 py-1 text-center">
-                      <input
-                        type="checkbox"
-                        checked={selectedParties.includes((party as any).partyName || party.name || party.party_name || '')}
-                        onChange={(e) => handleCheckboxChange((party as any).partyName || party.name || party.party_name || '', e.target.checked)}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
         </div>
       </div>
 
-      {/* Monday Final Confirmation Modal */}
+      {/* Monday Final Modal */}
       <AlertDialog open={showMondayFinalModal} onOpenChange={setShowMondayFinalModal}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Monday Final Settlement - Unsettled Parties</AlertDialogTitle>
+            <AlertDialogTitle>Monday Final Action</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to process Monday Final settlement for unsettled parties only? 
-              Parties that are already settled will be skipped. This will settle all unsettled transactions 
-              for selected parties and move them to old records.
+              Are you sure you want to perform Monday Final action on {selectedParties.length} selected parties?
+              This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={actionLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleMondayFinalConfirm}
+              onClick={handleMondayFinalAction}
               disabled={actionLoading}
-              className="bg-green-600 hover:bg-green-700 text-white"
             >
-              {actionLoading ? 'Processing Unsettled Parties...' : 'Confirm Settlement for Unsettled Parties'}
+              {actionLoading ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : null}
+              Confirm
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

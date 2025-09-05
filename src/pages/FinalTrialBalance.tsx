@@ -248,16 +248,16 @@ const FinalTrialBalance = () => {
     loadTrialBalance();
   }, [loadTrialBalance]);
 
-  // Auto-refresh trial balance every 30 seconds for real-time updates
+  // Auto-refresh trial balance every 30 seconds for real-time updates (only in development)
   useEffect(() => {
-    const autoRefreshInterval = setInterval(() => {
-      if (import.meta.env.DEV) {
+    if (import.meta.env.DEV) {
+      const autoRefreshInterval = setInterval(() => {
         console.log('🔄 Auto-refreshing trial balance for real-time updates...');
-      }
-      loadTrialBalance(true); // Force refresh
-    }, 30000); // 30 seconds
+        loadTrialBalance(true); // Force refresh
+      }, 30000); // 30 seconds
 
-    return () => clearInterval(autoRefreshInterval);
+      return () => clearInterval(autoRefreshInterval);
+    }
   }, [loadTrialBalance]);
 
   // Extract parties from trial balance when data is loaded
