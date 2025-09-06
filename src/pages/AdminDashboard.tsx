@@ -88,6 +88,15 @@ const AdminDashboard: React.FC = () => {
     };
   }, [navigate]);
 
+  // Cleanup interval on component unmount
+  useEffect(() => {
+    return () => {
+      if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+      }
+    };
+  }, [autoRefreshInterval]);
+
   const loadDashboardData = async (showLoading = true) => {
     try {
       if (showLoading) {
@@ -96,23 +105,46 @@ const AdminDashboard: React.FC = () => {
       setError(null);
       
       // Fetch critical data first (pending users and stats)
-      const [statsData, pendingUsersData] = await Promise.all([
+      const [statsData, pendingUsersData] = await Promise.allSettled([
         adminApi.getDashboardStats(),
         adminApi.getPendingUsers()
       ]);
 
-      setStats(statsData);
-      setPendingUsers(pendingUsersData);
+      // Handle stats data
+      if (statsData.status === 'fulfilled') {
+        setStats(statsData.value);
+      } else {
+        console.error('Failed to load stats:', statsData.reason);
+        setError('Failed to load dashboard statistics');
+      }
+
+      // Handle pending users data
+      if (pendingUsersData.status === 'fulfilled') {
+        setPendingUsers(pendingUsersData.value);
+      } else {
+        console.error('Failed to load pending users:', pendingUsersData.reason);
+        // Don't set error for pending users as it's not critical
+      }
 
       // Fetch secondary data in background
-      Promise.all([
+      Promise.allSettled([
         adminApi.getRecentActivity(10),
         adminApi.getSystemHealth(),
         adminApi.getAllUsers(1, 10)
-      ]).then(([activityData, healthData, usersData]) => {
-        setRecentActivity(activityData);
-        setSystemHealth(healthData);
-        setUsers(usersData.users);
+      ]).then((results) => {
+        const [activityResult, healthResult, usersResult] = results;
+        
+        if (activityResult.status === 'fulfilled') {
+          setRecentActivity(activityResult.value);
+        }
+        
+        if (healthResult.status === 'fulfilled') {
+          setSystemHealth(healthResult.value);
+        }
+        
+        if (usersResult.status === 'fulfilled') {
+          setUsers(usersResult.value.users);
+        }
       }).catch(err => {
         console.warn('Background data loading failed:', err);
       });
@@ -129,7 +161,8 @@ const AdminDashboard: React.FC = () => {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadDashboardData();
+    await loadDashboardData(false); // Silent refresh
+    setLastRefresh(new Date());
     setRefreshing(false);
   };
 
