@@ -46,6 +46,13 @@ const AdminDashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingStates, setLoadingStates] = useState({
+    stats: false,
+    pendingUsers: false,
+    activity: false,
+    health: false,
+    users: false
+  });
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [newPassword, setNewPassword] = useState('');
@@ -98,56 +105,90 @@ const AdminDashboard: React.FC = () => {
   }, [autoRefreshInterval]);
 
   const loadDashboardData = async (showLoading = true) => {
+    const startTime = performance.now();
+    
     try {
       if (showLoading) {
         setIsLoading(true);
       }
       setError(null);
       
-      // Fetch critical data first (pending users and stats)
-      const [statsData, pendingUsersData] = await Promise.allSettled([
-        adminApi.getDashboardStats(),
-        adminApi.getPendingUsers()
-      ]);
-
-      // Handle stats data
-      if (statsData.status === 'fulfilled') {
-        setStats(statsData.value);
-      } else {
-        console.error('Failed to load stats:', statsData.reason);
+      // Load critical data first (stats only for initial load)
+      setLoadingStates(prev => ({ ...prev, stats: true }));
+      const statsPromise = adminApi.getDashboardStats();
+      
+      // Handle stats data immediately
+      try {
+        const statsData = await statsPromise;
+        setStats(statsData);
+        setLoadingStates(prev => ({ ...prev, stats: false }));
+        console.log(`📊 Stats loaded in ${(performance.now() - startTime).toFixed(2)}ms`);
+      } catch (err) {
+        console.error('Failed to load stats:', err);
         setError('Failed to load dashboard statistics');
+        setLoadingStates(prev => ({ ...prev, stats: false }));
       }
 
-      // Handle pending users data
-      if (pendingUsersData.status === 'fulfilled') {
-        setPendingUsers(pendingUsersData.value);
-      } else {
-        console.error('Failed to load pending users:', pendingUsersData.reason);
-        // Don't set error for pending users as it's not critical
-      }
+      // Load other data in parallel without blocking UI
+      const loadSecondaryData = async () => {
+        const secondaryStartTime = performance.now();
+        
+        // Set loading states for secondary data
+        setLoadingStates(prev => ({ 
+          ...prev, 
+          pendingUsers: true, 
+          activity: true, 
+          health: true, 
+          users: true 
+        }));
+        
+        try {
+          const [pendingUsersData, activityData, healthData, usersData] = await Promise.allSettled([
+            adminApi.getPendingUsers(),
+            adminApi.getRecentActivity(10),
+            adminApi.getSystemHealth(),
+            adminApi.getAllUsers(1, 10)
+          ]);
 
-      // Fetch secondary data in background
-      Promise.allSettled([
-        adminApi.getRecentActivity(10),
-        adminApi.getSystemHealth(),
-        adminApi.getAllUsers(1, 10)
-      ]).then((results) => {
-        const [activityResult, healthResult, usersResult] = results;
-        
-        if (activityResult.status === 'fulfilled') {
-          setRecentActivity(activityResult.value);
+          // Handle pending users
+          if (pendingUsersData.status === 'fulfilled') {
+            setPendingUsers(pendingUsersData.value);
+            setLoadingStates(prev => ({ ...prev, pendingUsers: false }));
+          }
+
+          // Handle activity data
+          if (activityData.status === 'fulfilled') {
+            setRecentActivity(activityData.value);
+            setLoadingStates(prev => ({ ...prev, activity: false }));
+          }
+          
+          // Handle health data
+          if (healthData.status === 'fulfilled') {
+            setSystemHealth(healthData.value);
+            setLoadingStates(prev => ({ ...prev, health: false }));
+          }
+          
+          // Handle users data
+          if (usersData.status === 'fulfilled') {
+            setUsers(usersData.value.users);
+            setLoadingStates(prev => ({ ...prev, users: false }));
+          }
+
+          console.log(`🔄 Secondary data loaded in ${(performance.now() - secondaryStartTime).toFixed(2)}ms`);
+        } catch (err) {
+          console.warn('Secondary data loading failed:', err);
+          setLoadingStates(prev => ({ 
+            ...prev, 
+            pendingUsers: false, 
+            activity: false, 
+            health: false, 
+            users: false 
+          }));
         }
-        
-        if (healthResult.status === 'fulfilled') {
-          setSystemHealth(healthResult.value);
-        }
-        
-        if (usersResult.status === 'fulfilled') {
-          setUsers(usersResult.value.users);
-        }
-      }).catch(err => {
-        console.warn('Background data loading failed:', err);
-      });
+      };
+
+      // Start secondary data loading in background
+      loadSecondaryData();
 
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
@@ -156,6 +197,7 @@ const AdminDashboard: React.FC = () => {
       if (showLoading) {
         setIsLoading(false);
       }
+      console.log(`⚡ Total dashboard load time: ${(performance.now() - startTime).toFixed(2)}ms`);
     }
   };
 
@@ -316,6 +358,10 @@ const AdminDashboard: React.FC = () => {
                 <p className="text-sm text-gray-500">
                   Last updated: {lastRefresh.toLocaleTimeString()} (Auto-refresh every 30s)
                 </p>
+                <div className="text-xs text-gray-400 mt-1">
+                  Performance: {loadingStates.stats ? 'Loading...' : 'Ready'} | 
+                  Data: {Object.values(loadingStates).some(state => state) ? 'Updating...' : 'Current'}
+                </div>
               </div>
             </div>
             <div className="flex items-center space-x-3">
@@ -360,10 +406,19 @@ const AdminDashboard: React.FC = () => {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.totalUsers}</div>
-              <p className="text-xs text-muted-foreground">
-                +12% from last month
-              </p>
+              {loadingStates.stats ? (
+                <div className="space-y-2">
+                  <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                </div>
+              ) : (
+                <>
+                  <div className="text-2xl font-bold">{stats.totalUsers}</div>
+                  <p className="text-xs text-muted-foreground">
+                    +12% from last month
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -373,10 +428,19 @@ const AdminDashboard: React.FC = () => {
               <FileText className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.totalParties}</div>
-              <p className="text-xs text-muted-foreground">
-                +8% from last month
-              </p>
+              {loadingStates.stats ? (
+                <div className="space-y-2">
+                  <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                </div>
+              ) : (
+                <>
+                  <div className="text-2xl font-bold">{stats.totalParties}</div>
+                  <p className="text-xs text-muted-foreground">
+                    +8% from last month
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -386,10 +450,19 @@ const AdminDashboard: React.FC = () => {
               <BarChart3 className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.totalTransactions.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">
-                +23% from last month
-              </p>
+              {loadingStates.stats ? (
+                <div className="space-y-2">
+                  <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                </div>
+              ) : (
+                <>
+                  <div className="text-2xl font-bold">{stats.totalTransactions.toLocaleString()}</div>
+                  <p className="text-xs text-muted-foreground">
+                    +23% from last month
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -399,10 +472,19 @@ const AdminDashboard: React.FC = () => {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(stats.totalRevenue)}</div>
-              <p className="text-xs text-muted-foreground">
-                +15% from last month
-              </p>
+              {loadingStates.stats ? (
+                <div className="space-y-2">
+                  <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                </div>
+              ) : (
+                <>
+                  <div className="text-2xl font-bold">{formatCurrency(stats.totalRevenue)}</div>
+                  <p className="text-xs text-muted-foreground">
+                    +15% from last month
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -412,10 +494,19 @@ const AdminDashboard: React.FC = () => {
               <Activity className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.activeUsers}</div>
-              <p className="text-xs text-muted-foreground">
-                Currently online
-              </p>
+              {loadingStates.stats ? (
+                <div className="space-y-2">
+                  <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                </div>
+              ) : (
+                <>
+                  <div className="text-2xl font-bold">{stats.activeUsers}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Currently online
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -425,10 +516,19 @@ const AdminDashboard: React.FC = () => {
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.pendingTransactions}</div>
-              <p className="text-xs text-muted-foreground">
-                Require attention
-              </p>
+              {loadingStates.stats ? (
+                <div className="space-y-2">
+                  <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                </div>
+              ) : (
+                <>
+                  <div className="text-2xl font-bold">{stats.pendingTransactions}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Require attention
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -454,28 +554,43 @@ const AdminDashboard: React.FC = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    {recentActivity.length > 0 ? (
-                      recentActivity.map((activity) => (
-                        <div key={activity.id} className="flex items-center space-x-3">
-                          {getActivityIcon(activity.status)}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900">
-                              {activity.action}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              {activity.details}
-                            </p>
-                            <p className="text-xs text-gray-400">
-                              {activity.user} • {new Date(activity.timestamp).toLocaleString()}
-                            </p>
+                  {loadingStates.activity ? (
+                    <div className="space-y-4">
+                      {[...Array(5)].map((_, i) => (
+                        <div key={i} className="flex items-center space-x-3">
+                          <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse"></div>
+                          <div className="flex-1 space-y-2">
+                            <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                            <div className="h-3 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                            <div className="h-3 bg-gray-200 rounded w-1/2 animate-pulse"></div>
                           </div>
                         </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-gray-500 text-center py-4">No recent activity</p>
-                    )}
-                  </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {recentActivity.length > 0 ? (
+                        recentActivity.map((activity) => (
+                          <div key={activity.id} className="flex items-center space-x-3">
+                            {getActivityIcon(activity.status)}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900">
+                                {activity.action}
+                              </p>
+                              <p className="text-sm text-gray-500">
+                                {activity.details}
+                              </p>
+                              <p className="text-xs text-gray-400">
+                                {activity.user} • {new Date(activity.timestamp).toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-gray-500 text-center py-4">No recent activity</p>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -488,23 +603,36 @@ const AdminDashboard: React.FC = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <Database className={`h-4 w-4 ${
-                          systemHealth.database === 'online' ? 'text-green-500' : 
-                          systemHealth.database === 'error' ? 'text-red-500' : 'text-yellow-500'
-                        }`} />
-                        <span className="text-sm font-medium">Database</span>
-                      </div>
-                      <Badge variant="default" className={
-                        systemHealth.database === 'online' ? 'bg-green-100 text-green-800' :
-                        systemHealth.database === 'error' ? 'bg-red-100 text-red-800' :
-                        'bg-yellow-100 text-yellow-800'
-                      }>
-                        {systemHealth.database}
-                      </Badge>
+                  {loadingStates.health ? (
+                    <div className="space-y-4">
+                      {[...Array(4)].map((_, i) => (
+                        <div key={i} className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-4 h-4 bg-gray-200 rounded animate-pulse"></div>
+                            <div className="h-4 bg-gray-200 rounded w-20 animate-pulse"></div>
+                          </div>
+                          <div className="h-6 bg-gray-200 rounded w-16 animate-pulse"></div>
+                        </div>
+                      ))}
                     </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <Database className={`h-4 w-4 ${
+                            systemHealth.database === 'online' ? 'text-green-500' : 
+                            systemHealth.database === 'error' ? 'text-red-500' : 'text-yellow-500'
+                          }`} />
+                          <span className="text-sm font-medium">Database</span>
+                        </div>
+                        <Badge variant="default" className={
+                          systemHealth.database === 'online' ? 'bg-green-100 text-green-800' :
+                          systemHealth.database === 'error' ? 'bg-red-100 text-red-800' :
+                          'bg-yellow-100 text-yellow-800'
+                        }>
+                          {systemHealth.database}
+                        </Badge>
+                      </div>
                     
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
@@ -575,7 +703,8 @@ const AdminDashboard: React.FC = () => {
                         </Badge>
                       </div>
                     )}
-                  </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -590,10 +719,31 @@ const AdminDashboard: React.FC = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {pendingUsers.length > 0 ? (
-                    <div className="space-y-3">
-                      {pendingUsers.map((user) => (
+                {loadingStates.pendingUsers ? (
+                  <div className="space-y-4">
+                    {[...Array(3)].map((_, i) => (
+                      <div key={i} className="flex items-center justify-between p-4 border rounded-lg bg-gray-50">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse"></div>
+                          <div className="space-y-2">
+                            <div className="h-4 bg-gray-200 rounded w-32 animate-pulse"></div>
+                            <div className="h-3 bg-gray-200 rounded w-48 animate-pulse"></div>
+                            <div className="h-3 bg-gray-200 rounded w-24 animate-pulse"></div>
+                            <div className="h-3 bg-gray-200 rounded w-28 animate-pulse"></div>
+                          </div>
+                        </div>
+                        <div className="flex space-x-2">
+                          <div className="h-8 bg-gray-200 rounded w-16 animate-pulse"></div>
+                          <div className="h-8 bg-gray-200 rounded w-20 animate-pulse"></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {pendingUsers.length > 0 ? (
+                      <div className="space-y-3">
+                        {pendingUsers.map((user) => (
                         <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg bg-yellow-50">
                           <div className="flex items-center space-x-4">
                             <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
@@ -642,7 +792,8 @@ const AdminDashboard: React.FC = () => {
                       <p className="text-sm text-gray-400">All users have been reviewed</p>
                     </div>
                   )}
-                </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -656,10 +807,36 @@ const AdminDashboard: React.FC = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {users.length > 0 ? (
-                    <div className="space-y-3">
-                      {users.map((user) => (
+                {loadingStates.users ? (
+                  <div className="space-y-4">
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse"></div>
+                          <div className="space-y-2">
+                            <div className="h-4 bg-gray-200 rounded w-32 animate-pulse"></div>
+                            <div className="h-3 bg-gray-200 rounded w-48 animate-pulse"></div>
+                            <div className="h-3 bg-gray-200 rounded w-24 animate-pulse"></div>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-4">
+                          <div className="text-right space-y-2">
+                            <div className="h-3 bg-gray-200 rounded w-20 animate-pulse"></div>
+                            <div className="h-3 bg-gray-200 rounded w-16 animate-pulse"></div>
+                          </div>
+                          <div className="flex space-x-2">
+                            <div className="h-8 bg-gray-200 rounded w-16 animate-pulse"></div>
+                            <div className="h-8 bg-gray-200 rounded w-20 animate-pulse"></div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {users.length > 0 ? (
+                      <div className="space-y-3">
+                        {users.map((user) => (
                         <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
                           <div className="flex items-center space-x-4">
                             <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
@@ -709,10 +886,11 @@ const AdminDashboard: React.FC = () => {
                         </div>
                       ))}
                     </div>
-                  ) : (
-                    <p className="text-gray-500 text-center py-8">No users found</p>
-                  )}
-                </div>
+                    ) : (
+                      <p className="text-gray-500 text-center py-8">No users found</p>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
