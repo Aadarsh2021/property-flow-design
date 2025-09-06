@@ -113,86 +113,89 @@ const AdminDashboard: React.FC = () => {
       }
       setError(null);
       
-      // Load critical data first (stats only for initial load)
-      setLoadingStates(prev => ({ ...prev, stats: true }));
-      const statsPromise = adminApi.getDashboardStats();
-      
-      // Handle stats data immediately
+      // Set all loading states
+      setLoadingStates({
+        stats: true,
+        pendingUsers: true,
+        activity: true,
+        health: true,
+        users: true
+      });
+
+      console.log('🚀 Loading all dashboard data in single batch request...');
+
+      // Use batch API to get all data in single request
       try {
-        const statsData = await statsPromise;
-        setStats(statsData);
-        setLoadingStates(prev => ({ ...prev, stats: false }));
-        console.log(`📊 Stats loaded in ${(performance.now() - startTime).toFixed(2)}ms`);
+        const dashboardData = await adminApi.getDashboardData(10);
+        
+        // Set all data at once
+        setStats(dashboardData.stats);
+        setRecentActivity(dashboardData.activity);
+        setSystemHealth(dashboardData.health);
+        setUsers(dashboardData.users.users);
+        setPendingUsers(dashboardData.pendingUsers);
+        
+        // Clear all loading states
+        setLoadingStates({
+          stats: false,
+          pendingUsers: false,
+          activity: false,
+          health: false,
+          users: false
+        });
+
+        console.log(`⚡ All dashboard data loaded in ${(performance.now() - startTime).toFixed(2)}ms`);
       } catch (err) {
-        console.error('Failed to load stats:', err);
-        setError('Failed to load dashboard statistics');
-        setLoadingStates(prev => ({ ...prev, stats: false }));
-      }
-
-      // Load other data in parallel without blocking UI
-      const loadSecondaryData = async () => {
-        const secondaryStartTime = performance.now();
+        console.error('Batch API failed, falling back to individual requests:', err);
         
-        // Set loading states for secondary data
-        setLoadingStates(prev => ({ 
-          ...prev, 
-          pendingUsers: true, 
-          activity: true, 
-          health: true, 
-          users: true 
-        }));
-        
-        try {
-          const [pendingUsersData, activityData, healthData, usersData] = await Promise.allSettled([
-            adminApi.getPendingUsers(),
-            adminApi.getRecentActivity(10),
-            adminApi.getSystemHealth(),
-            adminApi.getAllUsers(1, 10)
-          ]);
+        // Fallback to individual API calls if batch fails
+        const [statsResult, activityResult, healthResult, usersResult, pendingUsersResult] = await Promise.allSettled([
+          adminApi.getDashboardStats(),
+          adminApi.getRecentActivity(10),
+          adminApi.getSystemHealth(),
+          adminApi.getAllUsers(1, 10),
+          adminApi.getPendingUsers()
+        ]);
 
-          // Handle pending users
-          if (pendingUsersData.status === 'fulfilled') {
-            setPendingUsers(pendingUsersData.value);
-            setLoadingStates(prev => ({ ...prev, pendingUsers: false }));
-          }
-
-          // Handle activity data
-          if (activityData.status === 'fulfilled') {
-            setRecentActivity(activityData.value);
-            setLoadingStates(prev => ({ ...prev, activity: false }));
-          }
-          
-          // Handle health data
-          if (healthData.status === 'fulfilled') {
-            setSystemHealth(healthData.value);
-            setLoadingStates(prev => ({ ...prev, health: false }));
-          }
-          
-          // Handle users data
-          if (usersData.status === 'fulfilled') {
-            setUsers(usersData.value.users);
-            setLoadingStates(prev => ({ ...prev, users: false }));
-          }
-
-          console.log(`🔄 Secondary data loaded in ${(performance.now() - secondaryStartTime).toFixed(2)}ms`);
-        } catch (err) {
-          console.warn('Secondary data loading failed:', err);
-          setLoadingStates(prev => ({ 
-            ...prev, 
-            pendingUsers: false, 
-            activity: false, 
-            health: false, 
-            users: false 
-          }));
+        // Process results
+        if (statsResult.status === 'fulfilled') {
+          setStats(statsResult.value);
+          setLoadingStates(prev => ({ ...prev, stats: false }));
         }
-      };
 
-      // Start secondary data loading in background
-      loadSecondaryData();
+        if (activityResult.status === 'fulfilled') {
+          setRecentActivity(activityResult.value);
+          setLoadingStates(prev => ({ ...prev, activity: false }));
+        }
+
+        if (healthResult.status === 'fulfilled') {
+          setSystemHealth(healthResult.value);
+          setLoadingStates(prev => ({ ...prev, health: false }));
+        }
+
+        if (usersResult.status === 'fulfilled') {
+          setUsers(usersResult.value.users);
+          setLoadingStates(prev => ({ ...prev, users: false }));
+        }
+
+        if (pendingUsersResult.status === 'fulfilled') {
+          setPendingUsers(pendingUsersResult.value);
+          setLoadingStates(prev => ({ ...prev, pendingUsers: false }));
+        }
+
+        console.log(`⚡ Fallback data loaded in ${(performance.now() - startTime).toFixed(2)}ms`);
+      }
 
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
+      setLoadingStates({
+        stats: false,
+        pendingUsers: false,
+        activity: false,
+        health: false,
+        users: false
+      });
     } finally {
       if (showLoading) {
         setIsLoading(false);

@@ -58,8 +58,40 @@ interface SystemHealth {
 }
 
 class AdminApiService {
+  private cache = new Map<string, { data: any; timestamp: number; ttl: number }>();
+  private pendingRequests = new Map<string, Promise<any>>();
+
   private async makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
+    const cacheKey = `${options.method || 'GET'}:${url}`;
+    
+    // Check cache first
+    const cached = this.cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < cached.ttl) {
+      console.log(`🚀 Cache hit for ${endpoint}`);
+      return cached.data;
+    }
+
+    // Check if request is already pending
+    if (this.pendingRequests.has(cacheKey)) {
+      console.log(`⏳ Request already pending for ${endpoint}`);
+      return this.pendingRequests.get(cacheKey)!;
+    }
+
+    // Make new request
+    const requestPromise = this.executeRequest<T>(url, options, cacheKey);
+    this.pendingRequests.set(cacheKey, requestPromise);
+
+    try {
+      const result = await requestPromise;
+      return result;
+    } finally {
+      this.pendingRequests.delete(cacheKey);
+    }
+  }
+
+  private async executeRequest<T>(url: string, options: RequestInit, cacheKey: string): Promise<T> {
+    const startTime = Date.now();
     
     const response = await fetch(url, {
       headers: {
@@ -79,7 +111,45 @@ class AdminApiService {
       throw new Error(data.message || 'API request failed');
     }
 
+    // Cache the result
+    const ttl = this.getCacheTTL(url);
+    this.cache.set(cacheKey, {
+      data: data.data,
+      timestamp: Date.now(),
+      ttl: ttl
+    });
+
+    const loadTime = Date.now() - startTime;
+    console.log(`⚡ ${url} loaded in ${loadTime}ms`);
+
     return data.data;
+  }
+
+  private getCacheTTL(url: string): number {
+    if (url.includes('/stats')) return 300000; // 5 minutes
+    if (url.includes('/activity')) return 180000; // 3 minutes
+    if (url.includes('/users')) return 600000; // 10 minutes
+    if (url.includes('/health')) return 120000; // 2 minutes
+    return 60000; // 1 minute default
+  }
+
+  /**
+   * Get all dashboard data in a single request (BATCH API)
+   */
+  async getDashboardData(limit: number = 10): Promise<{
+    stats: DashboardStats;
+    activity: ActivityItem[];
+    users: UsersResponse;
+    health: SystemHealth;
+    pendingUsers: User[];
+  }> {
+    return this.makeRequest<{
+      stats: DashboardStats;
+      activity: ActivityItem[];
+      users: UsersResponse;
+      health: SystemHealth;
+      pendingUsers: User[];
+    }>(`/admin/dashboard-data?limit=${limit}`);
   }
 
   /**
