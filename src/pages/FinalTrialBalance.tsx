@@ -20,7 +20,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { useNavigate } from 'react-router-dom';
-import { finalTrialBalanceAPI, newPartyAPI, partyLedgerAPI } from '../lib/api';
+import { finalTrialBalanceAPI, partyLedgerAPI } from '../lib/api';
 import { useToast } from '../hooks/use-toast';
 
 interface TrialBalanceEntry {
@@ -164,7 +164,7 @@ const FinalTrialBalance = () => {
     setLoading(true);
     try {
       // Get all parties first
-      const partiesResponse = await newPartyAPI.getAllParties();
+      const partiesResponse = await partyLedgerAPI.getAllParties();
       
       if (!partiesResponse.success) {
         throw new Error('Failed to load parties');
@@ -177,17 +177,17 @@ const FinalTrialBalance = () => {
       const partyBalances = await Promise.all(
         allParties.map(async (party) => {
           try {
-            const ledgerResponse = await partyLedgerAPI.getPartyLedger(party.party_name);
+            const ledgerResponse = await partyLedgerAPI.getPartyLedger(party.name);
             if (ledgerResponse.success && ledgerResponse.data) {
               const closingBalance = ledgerResponse.data.closingBalance || 0;
               return {
-                name: party.party_name,
+                name: party.name,
                 closingBalance: closingBalance
               };
             }
             return null;
           } catch (error) {
-            console.warn(`Failed to load ledger for ${party.party_name}:`, error);
+            console.warn(`Failed to load ledger for ${party.name}:`, error);
             return null;
           }
         })
