@@ -18,6 +18,14 @@ import { newPartyAPI, partyLedgerAPI, userSettingsAPI } from '@/lib/api';
 import { Party, LedgerEntry, LedgerData } from '@/types';
 import { debounce } from 'lodash'; // Add lodash for debouncing
 import { useCompanyName } from '@/hooks/useCompanyName';
+import { 
+  isCompanyParty, 
+  isMondayFinalAllowed, 
+  isPartyEditingAllowed, 
+  isPartyDeletionAllowed, 
+  isTransactionAdditionAllowed,
+  getCompanyPartyRestrictionMessage 
+} from '@/lib/companyPartyUtils';
 
 // Memoized table row component for performance
 const TableRow = memo(({ 
@@ -2552,9 +2560,24 @@ const AccountLedger = () => {
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700">&nbsp;</label>
                     <button
-                  onClick={handleAddEntry}
-                      disabled={actionLoading}
-                      className="w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105"
+                  onClick={() => {
+                    if (isCompanyParty(selectedPartyName, companyName)) {
+                      toast({
+                        title: "Company Party Restriction",
+                        description: getCompanyPartyRestrictionMessage(),
+                        variant: "destructive"
+                      });
+                      return;
+                    }
+                    handleAddEntry();
+                  }}
+                      disabled={actionLoading || !isTransactionAdditionAllowed(selectedPartyName, companyName)}
+                      className={`w-full px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 ${
+                        isCompanyParty(selectedPartyName, companyName)
+                          ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white'
+                      }`}
+                      title={isCompanyParty(selectedPartyName, companyName) ? getCompanyPartyRestrictionMessage() : ''}
                     >
                       {actionLoading ? (
                         <div className="flex items-center justify-center space-x-2">
@@ -2604,10 +2627,23 @@ const AccountLedger = () => {
               
                           <button
               onClick={() => {
+                if (isCompanyParty(selectedPartyName, companyName)) {
+                  toast({
+                    title: "Company Party Restriction",
+                    description: getCompanyPartyRestrictionMessage(),
+                    variant: "destructive"
+                  });
+                  return;
+                }
                 setShowMondayFinalModal(true);
               }}
-              disabled={actionLoading}
-              className="w-full px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
+              disabled={actionLoading || !isMondayFinalAllowed(selectedPartyName, companyName)}
+              className={`w-full px-4 py-3 rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2 ${
+                isCompanyParty(selectedPartyName, companyName)
+                  ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white'
+              }`}
+              title={isCompanyParty(selectedPartyName, companyName) ? getCompanyPartyRestrictionMessage() : ''}
             >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -2627,6 +2663,14 @@ const AccountLedger = () => {
               
               <button
               onClick={() => {
+                if (isCompanyParty(selectedPartyName, companyName)) {
+                  toast({
+                    title: "Company Party Restriction",
+                    description: getCompanyPartyRestrictionMessage(),
+                    variant: "destructive"
+                  });
+                  return;
+                }
                 if (selectedEntries.length === 1) {
                   const displayEntries = showOldRecords ? ledgerData.oldRecords : ledgerData.ledgerEntries;
                   const selectedEntry = displayEntries.find(entry => 
@@ -2642,7 +2686,7 @@ const AccountLedger = () => {
                 const displayEntries = showOldRecords ? ledgerData?.oldRecords : ledgerData?.ledgerEntries;
                 const entry = displayEntries?.find(e => (e.id || e._id || e.ti || '').toString() === entryId);
                 return entry?.is_old_record === true;
-              })}
+              }) || isCompanyParty(selectedPartyName, companyName)}
                 className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
                 title={selectedEntries.some(entryId => {
                   const displayEntries = showOldRecords ? ledgerData?.oldRecords : ledgerData?.ledgerEntries;
@@ -2657,12 +2701,22 @@ const AccountLedger = () => {
               </button>
               
               <button
-              onClick={() => setShowDeleteModal(true)}
+              onClick={() => {
+                if (isCompanyParty(selectedPartyName, companyName)) {
+                  toast({
+                    title: "Company Party Restriction",
+                    description: getCompanyPartyRestrictionMessage(),
+                    variant: "destructive"
+                  });
+                  return;
+                }
+                setShowDeleteModal(true);
+              }}
               disabled={selectedEntries.length === 0 || selectedEntries.some(entryId => {
                 const displayEntries = showOldRecords ? ledgerData?.oldRecords : ledgerData?.ledgerEntries;
                 const entry = displayEntries?.find(e => (e.id || e._id || e.ti || '').toString() === entryId);
                 return entry?.is_old_record === true;
-              })}
+              }) || isCompanyParty(selectedPartyName, companyName)}
                 className="w-full px-4 py-3 bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
                 title={selectedEntries.some(entryId => {
                   const displayEntries = showOldRecords ? ledgerData?.oldRecords : ledgerData?.ledgerEntries;

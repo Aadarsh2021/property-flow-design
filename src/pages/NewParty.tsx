@@ -23,11 +23,14 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { newPartyAPI } from '../lib/api';
 import { useToast } from '../hooks/use-toast';
 import { NewPartyData } from '../types';
+import { useCompanyName } from '../hooks/useCompanyName';
+import { isCompanyParty, getCompanyPartyRestrictionMessage } from '../lib/companyPartyUtils';
 
 const NewParty = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
+  const { companyName } = useCompanyName();
   const [loading, setLoading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editPartyId, setEditPartyId] = useState<string | null>(null);
@@ -222,6 +225,16 @@ const NewParty = () => {
       toast({
         title: "Error",
         description: "Party name is required",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check if trying to create a company party
+    if (isCompanyParty(formData.partyName.trim(), companyName)) {
+      toast({
+        title: "Company Party Restriction",
+        description: "Company parties are automatically created based on your company settings. You cannot manually create a party with your company name.",
         variant: "destructive"
       });
       return;
