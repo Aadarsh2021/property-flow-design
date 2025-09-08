@@ -115,6 +115,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setRequiresApproval(userWithId.isApproved === false); // Only true if explicitly false
       localStorage.setItem('token', newToken);
       localStorage.setItem('user', JSON.stringify(userWithId));
+      
+      // Dispatch user change event for company name reload
+      window.dispatchEvent(new CustomEvent('userChanged', { 
+        detail: { userId: userWithId.id, email: userWithId.email } 
+      }));
+      console.log('🔄 User change event dispatched for company name reload');
     } catch (error) {
       console.error('Error saving auth data:', error);
     }
@@ -139,6 +145,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setRequiresApproval(false);
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      
+      // Dispatch user change event for company name reset
+      window.dispatchEvent(new CustomEvent('userChanged', { 
+        detail: { userId: null, email: null } 
+      }));
+      console.log('🔄 User logout event dispatched for company name reset');
     } catch (error) {
       console.error('Error clearing auth data:', error);
     }
