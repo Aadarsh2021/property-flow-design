@@ -609,12 +609,14 @@ const Login = () => {
               to="/" 
               className="flex items-center space-x-3 hover:opacity-80 transition-opacity"
             >
-              <div className="flex items-center justify-center w-8 h-8 bg-blue-600 rounded-lg shadow-md">
-                <Home className="w-4 h-4 text-white" />
-              </div>
+              <img 
+                src="/image.png" 
+                alt="Escrow Ledger Logo" 
+                className="w-8 h-8 object-contain"
+              />
               <div className="flex flex-col">
                 <span className="text-sm font-bold text-gray-900 leading-tight">
-                  Account Ledger
+                  Escrow Ledger
                 </span>
                 <span className="text-xs text-gray-500 leading-tight">
                   Back to Home

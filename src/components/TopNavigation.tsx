@@ -62,7 +62,9 @@ const TopNavigation = () => {
                   alt="Company Logo" 
                   className="w-8 h-8 object-contain"
                 />
-                <span className="text-xl font-bold text-gray-900">{companyName}</span>
+                <span className="text-xl font-bold text-gray-900">
+                  {isAuthenticated ? companyName : 'Escrow Ledger'}
+                </span>
               </Link>
             </div>
 

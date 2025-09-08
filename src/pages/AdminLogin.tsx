@@ -45,8 +45,33 @@ const AdminLogin: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      {/* Header with Logo */}
+      <div className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-center">
+            <div className="flex items-center space-x-3">
+              <img 
+                src="/image.png" 
+                alt="Escrow Ledger Logo" 
+                className="w-8 h-8 object-contain"
+              />
+              <div className="flex flex-col">
+                <span className="text-lg font-bold text-gray-900 leading-tight">
+                  Escrow Ledger
+                </span>
+                <span className="text-xs text-gray-500 leading-tight">
+                  Admin Portal
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Admin Login Form */}
+      <div className="flex items-center justify-center p-4 flex-1">
+        <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
             <Shield className="h-6 w-6 text-blue-600" />
@@ -121,6 +146,7 @@ const AdminLogin: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 };
