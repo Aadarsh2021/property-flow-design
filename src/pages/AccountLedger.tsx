@@ -2112,9 +2112,19 @@ const AccountLedger = () => {
                     <input
                       ref={setTopInputRef}
                       type="text"
-                      value={typingPartyName}
+                      value={selectedPartyName === companyName ? companyName : typingPartyName}
+                      readOnly={selectedPartyName === companyName}
+                      className={`px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        selectedPartyName === companyName 
+                          ? 'bg-blue-50 text-blue-800 font-semibold cursor-default' 
+                          : 'bg-white'
+                      }`}
                       onChange={(e) => {
                         const value = e.target.value;
+                        // If it's the company party, don't allow editing the display name
+                        if (selectedPartyName === companyName) {
+                          return;
+                        }
                         setTypingPartyName(value);
                         
                         // Calculate text width for proper positioning
@@ -2143,12 +2153,18 @@ const AccountLedger = () => {
                         setShowTopPartyDropdown(true);
                       }}
                     onFocus={() => {
+                      // If it's the company party, don't show dropdown
+                      if (selectedPartyName === companyName) {
+                        return;
+                      }
                       setShowTopPartyDropdown(true);
                       // Show available parties (excluding current) when focusing on top dropdown
                       const availablePartiesExcludingCurrent = availableParties.filter(party => 
                         (party.party_name || party.name) !== selectedPartyName
                       );
                       setFilteredTopParties(availablePartiesExcludingCurrent);
+                      setTopAutoCompleteText('');
+                      setShowTopInlineSuggestion(false);
                     }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
