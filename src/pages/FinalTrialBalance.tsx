@@ -177,17 +177,17 @@ const FinalTrialBalance = () => {
       const partyBalances = await Promise.all(
         allParties.map(async (party) => {
           try {
-            const ledgerResponse = await partyLedgerAPI.getPartyLedger(party.name);
+            const ledgerResponse = await partyLedgerAPI.getPartyLedger(party.partyName);
             if (ledgerResponse.success && ledgerResponse.data) {
               const closingBalance = ledgerResponse.data.closingBalance || 0;
               return {
-                name: party.name,
+                name: party.partyName,
                 closingBalance: closingBalance
               };
             }
             return null;
           } catch (error) {
-            console.warn(`Failed to load ledger for ${party.name}:`, error);
+            console.warn(`Failed to load ledger for ${party.partyName}:`, error);
             return null;
           }
         })
