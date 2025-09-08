@@ -860,7 +860,8 @@ const AccountLedger = () => {
             
             const partyEntries = ledgerData.ledgerEntries.filter(entry => 
               (entry.partyName || entry.party_name) === selectedPartyName && 
-              entry.tnsType !== 'Monday Settlement'
+              !entry.remarks?.includes('Monday Final Settlement') &&
+              !entry.remarks?.includes('Monday Settlement')
               // Include Commission transactions for calculation
             );
             
@@ -873,7 +874,7 @@ const AccountLedger = () => {
             const baseTransactions = partyEntries.filter(entry => {
               const tType = entry.tnsType;
               const r = entry.remarks || '';
-              if (tType === 'Monday Settlement') return false;
+              if (r.includes('Monday Final Settlement') || r.includes('Monday Settlement')) return false;
               if (r === companyName || r === 'Commission') return false;
               return isTakeSystem ? tType === 'CR' : tType === 'DR';
             });
