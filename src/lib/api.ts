@@ -8,7 +8,7 @@
 import { ApiResponse, NewPartyData, NewParty, Party, LedgerEntry, LedgerEntryInput, UserSettings, TrialBalanceEntry, GoogleUserData, GoogleAuthResponse } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ||
-  (import.meta.env.DEV ? 'http://localhost:5000/api' : 'https://account-ledger-software.vercel.app/api');
+  (import.meta.env.DEV ? 'http://localhost:5000/api' : 'https://account-ledger-software-kc0ajffp0-aadarsh2021s-projects.vercel.app/api');
 
 const getAuthToken = (): string | null => {
   return localStorage.getItem('token');

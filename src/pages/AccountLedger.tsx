@@ -2239,8 +2239,14 @@ const AccountLedger = () => {
               </div>
               <div className="flex items-center space-x-3">
                 <label className="text-sm font-semibold text-gray-700">Closing Balance:</label>
-                <span className="text-lg font-bold text-green-600 bg-green-50 px-3 py-1 rounded-lg">
-                  ₹{ledgerData?.closingBalance || 0}
+                <span className={`text-lg font-bold px-3 py-1 rounded-lg ${
+                  (ledgerData?.closingBalance || 0) > 0 
+                    ? 'text-green-600 bg-green-50' 
+                    : (ledgerData?.closingBalance || 0) < 0 
+                      ? 'text-red-600 bg-red-50'
+                      : 'text-gray-600 bg-gray-50'
+                }`}>
+                  ₹{(ledgerData?.closingBalance || 0).toLocaleString()}
                 </span>
                 </div>
               </div>
