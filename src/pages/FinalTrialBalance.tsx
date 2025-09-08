@@ -20,7 +20,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { useNavigate } from 'react-router-dom';
-import { finalTrialBalanceAPI } from '../lib/api';
+import { finalTrialBalanceAPI, newPartyAPI, partyLedgerAPI } from '../lib/api';
 import { useToast } from '../hooks/use-toast';
 
 interface TrialBalanceEntry {
@@ -159,45 +159,93 @@ const FinalTrialBalance = () => {
     }
   }, [partyName, parties]);
 
-  // Load trial balance data
+  // Load trial balance data using Account Ledger API for each party
   const loadTrialBalance = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     try {
-      // Use force refresh API if requested
-      const response = forceRefresh 
-        ? await finalTrialBalanceAPI.forceRefresh()
-        : await finalTrialBalanceAPI.getAll();
+      // Get all parties first
+      const partiesResponse = await newPartyAPI.getAllParties();
       
-      if (response.success) {
-        // Trial balance data received - now comes pre-formatted from backend
-        const backendData = response.data;
-        
-        // Backend now sends creditEntries and debitEntries directly
-        const creditEntries: TrialBalanceEntry[] = backendData.creditEntries || [];
-        const debitEntries: TrialBalanceEntry[] = backendData.debitEntries || [];
-        
-        // Use totals from backend
-        const creditTotal = backendData.creditTotal || 0;
-        const debitTotal = backendData.debitTotal || 0;
-        const balanceDifference = backendData.balanceDifference || 0;
-        
-        const transformedData: TrialBalanceData = {
-          creditEntries,
-          debitEntries,
-          creditTotal,
-          debitTotal,
-          balanceDifference
-        };
-        
-        setTrialBalanceData(transformedData);
-      } else {
-        console.error('❌ Failed to load trial balance:', response.message);
-        toast({
-          title: "Error",
-          description: response.message || "Failed to load trial balance",
-          variant: "destructive"
-        });
+      if (!partiesResponse.success) {
+        throw new Error('Failed to load parties');
       }
+      
+      const allParties = partiesResponse.data || [];
+      console.log('📊 Loading trial balance for', allParties.length, 'parties');
+      
+      // Get closing balance for each party using Account Ledger API
+      const partyBalances = await Promise.all(
+        allParties.map(async (party) => {
+          try {
+            const ledgerResponse = await partyLedgerAPI.getPartyLedger(party.party_name);
+            if (ledgerResponse.success && ledgerResponse.data) {
+              const closingBalance = ledgerResponse.data.closingBalance || 0;
+              return {
+                name: party.party_name,
+                closingBalance: closingBalance
+              };
+            }
+            return null;
+          } catch (error) {
+            console.warn(`Failed to load ledger for ${party.party_name}:`, error);
+            return null;
+          }
+        })
+      );
+      
+      // Filter out null results and parties with zero balance
+      const validBalances = partyBalances.filter(balance => 
+        balance && balance.closingBalance !== 0
+      );
+      
+      console.log('📊 Valid party balances:', validBalances);
+      
+      // Separate credit and debit entries
+      const creditEntries: TrialBalanceEntry[] = [];
+      const debitEntries: TrialBalanceEntry[] = [];
+      
+      validBalances.forEach((balance, index) => {
+        if (balance.closingBalance > 0) {
+          creditEntries.push({
+            id: `credit-${balance.name}-${index}`,
+            name: balance.name,
+            amount: balance.closingBalance,
+            type: 'credit',
+            remarks: `Closing Balance for ${balance.name}`,
+            date: new Date().toISOString()
+          });
+        } else if (balance.closingBalance < 0) {
+          debitEntries.push({
+            id: `debit-${balance.name}-${index}`,
+            name: balance.name,
+            amount: Math.abs(balance.closingBalance),
+            type: 'debit',
+            remarks: `Closing Balance for ${balance.name}`,
+            date: new Date().toISOString()
+          });
+        }
+      });
+      
+      // Sort by amount (largest first)
+      creditEntries.sort((a, b) => b.amount - a.amount);
+      debitEntries.sort((a, b) => b.amount - a.amount);
+      
+      // Calculate totals
+      const creditTotal = creditEntries.reduce((sum, entry) => sum + entry.amount, 0);
+      const debitTotal = debitEntries.reduce((sum, entry) => sum + entry.amount, 0);
+      const balanceDifference = creditTotal - debitTotal;
+      
+      const transformedData: TrialBalanceData = {
+        creditEntries,
+        debitEntries,
+        creditTotal,
+        debitTotal,
+        balanceDifference
+      };
+      
+      setTrialBalanceData(transformedData);
+      console.log('✅ Trial balance loaded successfully:', transformedData);
+      
     } catch (error) {
       console.error('❌ Error loading trial balance:', error);
       toast({
