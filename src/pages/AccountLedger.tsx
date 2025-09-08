@@ -222,28 +222,43 @@ const AccountLedger = () => {
       }));
       
       // Create virtual parties with current company account
-      const createVirtualParties = () => [
-        {
-          _id: 'virtual_commission',
-          name: 'Commission',
-          srNo: 999,
-          status: 'Active',
-          mCommission: 'With Commission',
-          rate: '3',
-          commiSystem: 'Take',
-          mondayFinal: 'No' as 'No'
-        },
-        {
-          _id: 'virtual_company',
-          name: companyName,
-          srNo: 998,
-          status: 'Active',
-          mCommission: 'With Commission',
-          rate: '1',
-          commiSystem: 'Give',
-          mondayFinal: 'No' as 'No'
+      const createVirtualParties = () => {
+        const virtualParties = [
+          {
+            _id: 'virtual_commission',
+            name: 'Commission',
+            srNo: 999,
+            status: 'Active',
+            mCommission: 'With Commission',
+            rate: '3',
+            commiSystem: 'Take',
+            mondayFinal: 'No' as 'No'
+          }
+        ];
+        
+        // Only add virtual company party if real company party doesn't exist
+        const companyPartyExists = mappedParties.some(party => 
+          party.name === companyName || party.party_name === companyName
+        );
+        
+        if (!companyPartyExists && companyName !== 'Company') {
+          virtualParties.push({
+            _id: 'virtual_company',
+            name: companyName,
+            srNo: 998,
+            status: 'Active',
+            mCommission: 'With Commission',
+            rate: '1',
+            commiSystem: 'Give',
+            mondayFinal: 'No' as 'No'
+          });
+          console.log(`🔄 Added virtual company party: ${companyName}`);
+        } else if (companyPartyExists) {
+          console.log(`ℹ️ Real company party exists, skipping virtual: ${companyName}`);
         }
-      ];
+        
+        return virtualParties;
+      };
       
       // Add virtual parties (Commission and Company) for transaction creation
       const virtualParties = createVirtualParties();
@@ -1874,6 +1889,20 @@ const AccountLedger = () => {
       loadAvailableParties();
     }
   }, [companyName]); // Removed function dependency
+
+  // Listen for parties refresh events (e.g., when company party is created)
+  useEffect(() => {
+    const handlePartiesRefresh = (event: CustomEvent) => {
+      console.log('🔄 Parties refresh event received:', event.detail);
+      loadAvailableParties();
+    };
+
+    window.addEventListener('partiesRefreshed', handlePartiesRefresh as EventListener);
+    
+    return () => {
+      window.removeEventListener('partiesRefreshed', handlePartiesRefresh as EventListener);
+    };
+  }, [loadAvailableParties]);
 
   // Handle click outside to close dropdown
   useEffect(() => {

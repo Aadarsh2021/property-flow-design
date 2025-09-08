@@ -109,9 +109,15 @@ const UserSettings = () => {
         // Refresh company name globally after successful update
         await refreshCompanyName();
         
+        // Dispatch event to refresh parties list (for company party creation)
+        window.dispatchEvent(new CustomEvent('partiesRefreshed', { 
+          detail: { reason: 'company_settings_updated', companyName: settings.companyAccount } 
+        }));
+        console.log('🔄 Parties refresh event dispatched after company settings update');
+        
         toast({
           title: "Success",
-          description: "Settings saved successfully with double verification!",
+          description: "Settings saved successfully! Company party created automatically.",
         });
         
         // Auto-close modal after successful save
