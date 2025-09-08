@@ -635,8 +635,12 @@ const Login = () => {
         <Card className="w-full max-w-md shadow-xl">
           <CardHeader className="text-center space-y-4">
             <div className="flex justify-center">
-              <div className="flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full shadow-lg">
-                <Building2 className="w-8 h-8 text-white" />
+              <div className="flex items-center justify-center w-16 h-16 bg-white rounded-full shadow-lg border-2 border-blue-100">
+                <img 
+                  src="/image.png" 
+                  alt="Escrow Ledger Logo" 
+                  className="w-10 h-10 object-contain"
+                />
               </div>
             </div>
             <div>
@@ -644,7 +648,7 @@ const Login = () => {
                 Welcome Back
               </CardTitle>
               <CardDescription className="text-gray-600">
-                Sign in to your Account Ledger
+                Sign in to your Escrow Ledger
               </CardDescription>
             </div>
           </CardHeader>
