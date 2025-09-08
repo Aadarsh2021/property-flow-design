@@ -497,17 +497,17 @@ const FinalTrialBalance = () => {
 
           {/* Table Section */}
           <div className="p-4">
-            {/* Traditional Trial Balance Info */}
+            {/* Party Closing Balance Info */}
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="text-sm text-blue-800">
-                <strong>Traditional Trial Balance:</strong> Shows all credit and debit amounts for each party.
+                <strong>Party Closing Balance Trial Balance:</strong> Shows each party's closing balance (Credit - Debit).
                 <br />
-                <span className="font-semibold text-green-700">Credit Side:</span> All credit amounts (Jama/Dena)
+                <span className="font-semibold text-green-700">Credit Side:</span> Parties with positive closing balance (Jama/Dena)
                 <br />
-                <span className="font-semibold text-red-700">Debit Side:</span> All debit amounts (Name/Lena)
+                <span className="font-semibold text-red-700">Debit Side:</span> Parties with negative closing balance (Name/Lena)
                 <br />
                 <span className="text-xs text-gray-600 mt-1 block">
-                  In a balanced system, Total Credit = Total Debit. Data updates automatically when transactions are added/deleted.
+                  Only parties with non-zero closing balance are shown. Data updates automatically when transactions are added/deleted.
                 </span>
               </div>
             </div>
@@ -516,14 +516,14 @@ const FinalTrialBalance = () => {
               {/* Credit Entries Table */}
               <div className="border border-gray-300 rounded-lg overflow-hidden shadow-lg">
                 <div className="bg-green-600 text-white px-4 py-3">
-                  <h3 className="text-lg font-semibold">Credit Entries (Jama/Dena)</h3>
+                  <h3 className="text-lg font-semibold">Credit Side - Positive Closing Balances</h3>
                 </div>
                 <div className="overflow-auto" style={{ maxHeight: 500 }}>
                   <table className="w-full text-sm">
                     <thead className="bg-green-50">
                       <tr>
                         <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">Party Name</th>
-                        <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">Amount (Cr)</th>
+                        <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">Closing Balance</th>
                         <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">Type</th>
                       </tr>
                     </thead>
@@ -534,7 +534,7 @@ const FinalTrialBalance = () => {
                         </tr>
                       ) : trialBalanceData?.creditEntries.length === 0 ? (
                         <tr>
-                          <td colSpan={3} className="text-center py-8 text-gray-500">No credit entries found</td>
+                          <td colSpan={3} className="text-center py-8 text-gray-500">No parties with positive closing balance</td>
                         </tr>
                       ) : (
                         trialBalanceData?.creditEntries.map((entry, index) => (
@@ -570,14 +570,14 @@ const FinalTrialBalance = () => {
               {/* Debit Entries Table */}
               <div className="border border-gray-300 rounded-lg overflow-hidden shadow-lg">
                 <div className="bg-red-600 text-white px-4 py-3">
-                  <h3 className="text-lg font-semibold">Debit Entries (Name/Lena)</h3>
+                  <h3 className="text-lg font-semibold">Debit Side - Negative Closing Balances</h3>
                 </div>
                 <div className="overflow-auto" style={{ maxHeight: 500 }}>
                   <table className="w-full text-sm">
                     <thead className="bg-red-50">
                       <tr>
                         <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">Party Name</th>
-                        <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">Amount (Dr)</th>
+                        <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">Closing Balance</th>
                         <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">Type</th>
                       </tr>
                     </thead>
@@ -588,7 +588,7 @@ const FinalTrialBalance = () => {
                         </tr>
                       ) : trialBalanceData?.debitEntries.length === 0 ? (
                         <tr>
-                          <td colSpan={3} className="text-center py-8 text-gray-500">No debit entries found</td>
+                          <td colSpan={3} className="text-center py-8 text-gray-500">No parties with negative closing balance</td>
                         </tr>
                       ) : (
                         trialBalanceData?.debitEntries.map((entry, index) => (
@@ -631,14 +631,14 @@ const FinalTrialBalance = () => {
                     <div className="text-2xl font-bold text-green-600">
                       ₹{trialBalanceData.creditTotal.toLocaleString()}
                     </div>
-                    <div className="text-xs text-gray-500 mt-1">All credit amounts</div>
+                    <div className="text-xs text-gray-500 mt-1">All positive closing balances</div>
                   </div>
                   <div className="text-center">
                     <div className="text-sm text-gray-600">Total Debit</div>
                     <div className="text-2xl font-bold text-red-600">
                       ₹{trialBalanceData.debitTotal.toLocaleString()}
                     </div>
-                    <div className="text-xs text-gray-500 mt-1">All debit amounts</div>
+                    <div className="text-xs text-gray-500 mt-1">All negative closing balances</div>
                   </div>
                   <div className="text-center">
                     <div className="text-sm text-gray-600">Balance Difference</div>
