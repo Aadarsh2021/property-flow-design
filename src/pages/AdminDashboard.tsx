@@ -523,7 +523,7 @@ const AdminDashboard: React.FC = () => {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="pending">Pending Approval ({pendingUsers.length})</TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
-            <TabsTrigger value="transactions">Transactions</TabsTrigger>
+            {/* Transactions tab removed - not implemented */}
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
 
@@ -832,19 +832,7 @@ const AdminDashboard: React.FC = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="transactions">
-            <Card>
-              <CardHeader>
-                <CardTitle>Transaction Management</CardTitle>
-                <CardDescription>
-                  Monitor and manage all transactions
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-500">Transaction management features will be implemented here.</p>
-              </CardContent>
-            </Card>
-          </TabsContent>
+          {/* Transaction Management tab removed - not implemented */}
 
           <TabsContent value="settings">
             <Card>

@@ -244,6 +244,14 @@ const Index = () => {
         ) : (
           // Dashboard - Logged In User
           <>
+            {/* Dashboard Statistics Section */}
+            <div className="mb-8">
+              <div className="text-center mb-8">
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard Overview</h1>
+                <p className="text-gray-600">Your business performance at a glance</p>
+              </div>
+            </div>
+
             {/* Balance Dashboard */}
                          <div className="mb-8">
                <div className="flex items-center justify-between mb-6">
@@ -472,6 +480,19 @@ const Index = () => {
             </div>
 
             {/* Recent Activity feature removed */}
+
+            {/* Section Divider */}
+            <div className="my-12">
+              <div className="flex items-center">
+                <div className="flex-1 border-t border-gray-200"></div>
+                <div className="px-6">
+                  <h2 className="text-lg font-semibold text-gray-600 bg-gray-50 px-4 py-2 rounded-full border border-gray-200">
+                    Quick Actions
+                  </h2>
+                </div>
+                <div className="flex-1 border-t border-gray-200"></div>
+              </div>
+            </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
           <Link to="/user-settings" className="group">
