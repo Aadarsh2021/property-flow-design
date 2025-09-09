@@ -193,58 +193,8 @@ const FinalTrialBalance = () => {
         })
       );
 
-      // Add Commission entries as virtual party
-      try {
-        // Get all ledger entries to find commission entries
-        const allLedgerEntries = await Promise.all(
-          allParties.map(async (party) => {
-            try {
-              const ledgerResponse = await partyLedgerAPI.getPartyLedger(party.partyName);
-              if (ledgerResponse.success && ledgerResponse.data) {
-                return ledgerResponse.data.ledgerEntries || [];
-              }
-              return [];
-            } catch (error) {
-              return [];
-            }
-          })
-        );
-
-        // Flatten all entries
-        const allEntries = allLedgerEntries.flat();
-        
-        // Find commission entries
-        const commissionEntries = allEntries.filter(entry => 
-          entry.remarks?.toLowerCase().includes('commission') ||
-          entry.remarks?.toLowerCase().includes('auto-calculated')
-        );
-
-        if (commissionEntries.length > 0) {
-          // Calculate commission closing balance
-          let commissionCredit = 0;
-          let commissionDebit = 0;
-
-          commissionEntries.forEach(entry => {
-            if (entry.tnsType === 'CR' && entry.credit > 0) {
-              commissionCredit += entry.credit;
-            } else if (entry.tnsType === 'DR' && entry.debit > 0) {
-              commissionDebit += entry.debit;
-            }
-          });
-
-          const commissionClosingBalance = commissionCredit - commissionDebit;
-          
-          if (commissionClosingBalance !== 0) {
-            partyBalances.push({
-              name: 'Commission',
-              closingBalance: commissionClosingBalance
-            });
-            console.log('✅ Added Commission to trial balance:', commissionClosingBalance);
-          }
-        }
-      } catch (error) {
-        console.warn('Failed to load commission entries:', error);
-      }
+      // Commission party is now automatically created for all users
+      // It will be included in allParties and processed normally
       
       // Filter out null results and parties with zero balance
       const validBalances = partyBalances.filter(balance => 

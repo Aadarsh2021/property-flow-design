@@ -24,7 +24,7 @@ import { newPartyAPI } from '../lib/api';
 import { useToast } from '../hooks/use-toast';
 import { NewPartyData } from '../types';
 import { useCompanyName } from '../hooks/useCompanyName';
-import { isCompanyParty, getCompanyPartyRestrictionMessage } from '../lib/companyPartyUtils';
+import { isCompanyParty, isCommissionParty, getCompanyPartyRestrictionMessage, getCommissionPartyRestrictionMessage } from '../lib/companyPartyUtils';
 
 const NewParty = () => {
   const navigate = useNavigate();
@@ -230,15 +230,25 @@ const NewParty = () => {
       return;
     }
 
-    // Check if trying to create a company party
-    if (isCompanyParty(formData.partyName.trim(), companyName)) {
-      toast({
-        title: "Company Party Restriction",
-        description: "Company parties are automatically created based on your company settings. You cannot manually create a party with your company name.",
-        variant: "destructive"
-      });
-      return;
-    }
+        // Check if trying to create a company party
+        if (isCompanyParty(formData.partyName.trim(), companyName)) {
+          toast({
+            title: "Company Party Restriction",
+            description: getCompanyPartyRestrictionMessage(),
+            variant: "destructive"
+          });
+          return;
+        }
+
+        // Check if trying to create a commission party
+        if (isCommissionParty(formData.partyName.trim())) {
+          toast({
+            title: "Commission Party Restriction",
+            description: getCommissionPartyRestrictionMessage(),
+            variant: "destructive"
+          });
+          return;
+        }
 
     setLoading(true);
     try {
