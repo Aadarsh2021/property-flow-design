@@ -24,7 +24,7 @@ import {
   EyeOff
 } from 'lucide-react';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
-import { adminApi, type DashboardStats, type ActivityItem, type User, type SystemHealth } from '@/lib/adminApi';
+import { adminApi, type DashboardStats, type User, type SystemHealth } from '@/lib/adminApi';
 
 const AdminDashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats>({
@@ -35,7 +35,7 @@ const AdminDashboard: React.FC = () => {
     activeUsers: 0,
     pendingTransactions: 0
   });
-  const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
+  // Recent activity feature removed
   const [users, setUsers] = useState<User[]>([]);
   const [systemHealth, setSystemHealth] = useState<SystemHealth>({
     database: 'unknown',
@@ -49,7 +49,6 @@ const AdminDashboard: React.FC = () => {
   const [loadingStates, setLoadingStates] = useState({
     stats: false,
     pendingUsers: false,
-    activity: false,
     health: false,
     users: false
   });
@@ -117,7 +116,6 @@ const AdminDashboard: React.FC = () => {
       setLoadingStates({
         stats: true,
         pendingUsers: true,
-        activity: true,
         health: true,
         users: true
       });
@@ -130,7 +128,6 @@ const AdminDashboard: React.FC = () => {
         
         // Set all data at once
         setStats(dashboardData.stats);
-        setRecentActivity(dashboardData.activity);
         setSystemHealth(dashboardData.health);
         setUsers(dashboardData.users.users);
         setPendingUsers(dashboardData.pendingUsers);
@@ -139,7 +136,6 @@ const AdminDashboard: React.FC = () => {
         setLoadingStates({
           stats: false,
           pendingUsers: false,
-          activity: false,
           health: false,
           users: false
         });
@@ -149,9 +145,8 @@ const AdminDashboard: React.FC = () => {
         console.error('Batch API failed, falling back to individual requests:', err);
         
         // Fallback to individual API calls if batch fails
-        const [statsResult, activityResult, healthResult, usersResult, pendingUsersResult] = await Promise.allSettled([
+        const [statsResult, healthResult, usersResult, pendingUsersResult] = await Promise.allSettled([
           adminApi.getDashboardStats(),
-          adminApi.getRecentActivity(10),
           adminApi.getSystemHealth(),
           adminApi.getAllUsers(1, 10),
           adminApi.getPendingUsers()
@@ -163,10 +158,7 @@ const AdminDashboard: React.FC = () => {
           setLoadingStates(prev => ({ ...prev, stats: false }));
         }
 
-        if (activityResult.status === 'fulfilled') {
-          setRecentActivity(activityResult.value);
-          setLoadingStates(prev => ({ ...prev, activity: false }));
-        }
+        // Recent activity feature removed
 
         if (healthResult.status === 'fulfilled') {
           setSystemHealth(healthResult.value);
@@ -324,18 +316,7 @@ const AdminDashboard: React.FC = () => {
     }).format(amount);
   };
 
-  const getActivityIcon = (type: string) => {
-    switch (type) {
-      case 'success':
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case 'error':
-        return <AlertCircle className="h-4 w-4 text-red-500" />;
-      case 'info':
-        return <Activity className="h-4 w-4 text-blue-500" />;
-      default:
-        return <Clock className="h-4 w-4 text-gray-500" />;
-    }
-  };
+  // getActivityIcon function removed - recent activity feature removed
 
   if (isLoading) {
     return (
@@ -548,54 +529,7 @@ const AdminDashboard: React.FC = () => {
 
           <TabsContent value="overview" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Recent Activity */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recent Activity</CardTitle>
-                  <CardDescription>
-                    Latest actions in the system
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loadingStates.activity ? (
-                    <div className="space-y-4">
-                      {[...Array(5)].map((_, i) => (
-                        <div key={i} className="flex items-center space-x-3">
-                          <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse"></div>
-                          <div className="flex-1 space-y-2">
-                            <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
-                            <div className="h-3 bg-gray-200 rounded w-3/4 animate-pulse"></div>
-                            <div className="h-3 bg-gray-200 rounded w-1/2 animate-pulse"></div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {recentActivity.length > 0 ? (
-                        recentActivity.map((activity) => (
-                          <div key={activity.id} className="flex items-center space-x-3">
-                            {getActivityIcon(activity.status)}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900">
-                                {activity.action}
-                              </p>
-                              <p className="text-sm text-gray-500">
-                                {activity.details}
-                              </p>
-                              <p className="text-xs text-gray-400">
-                                {activity.user} • {new Date(activity.timestamp).toLocaleString()}
-                              </p>
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-sm text-gray-500 text-center py-4">No recent activity</p>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              {/* Recent Activity feature removed */}
 
               {/* System Status */}
               <Card>

@@ -15,16 +15,7 @@ interface DashboardStats {
   pendingTransactions: number;
 }
 
-interface ActivityItem {
-  id: string;
-  type: string;
-  action: string;
-  details: string;
-  user: string;
-  userEmail: string;
-  timestamp: string;
-  status: 'success' | 'error' | 'info' | 'warning';
-}
+// ActivityItem interface removed - recent activity feature removed
 
 interface User {
   id: string;
@@ -159,12 +150,7 @@ class AdminApiService {
     return this.makeRequest<DashboardStats>('/admin/stats');
   }
 
-  /**
-   * Get recent activity
-   */
-  async getRecentActivity(limit: number = 10): Promise<ActivityItem[]> {
-    return this.makeRequest<ActivityItem[]>(`/admin/activity?limit=${limit}`);
-  }
+  // Recent activity feature removed
 
   /**
    * Get all users with pagination
@@ -239,4 +225,4 @@ class AdminApiService {
 }
 
 export const adminApi = new AdminApiService();
-export type { DashboardStats, ActivityItem, User, UsersResponse, SystemHealth };
+export type { DashboardStats, User, UsersResponse, SystemHealth };
