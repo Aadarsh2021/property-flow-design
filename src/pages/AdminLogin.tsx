@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -50,12 +50,10 @@ const AdminLogin: React.FC = () => {
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-center">
-            <div className="flex items-center space-x-3">
-              <img 
-                src="/image.png" 
-                alt="Escrow Ledger Logo" 
-                className="w-8 h-8 object-contain"
-              />
+            <Link to="/" className="flex items-center space-x-3 hover:opacity-80 transition-opacity">
+              <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-lg">EL</span>
+              </div>
               <div className="flex flex-col">
                 <span className="text-lg font-bold text-gray-900 leading-tight">
                   Escrow Ledger
@@ -64,7 +62,7 @@ const AdminLogin: React.FC = () => {
                   Admin Portal
                 </span>
               </div>
-            </div>
+            </Link>
           </div>
         </div>
       </div>

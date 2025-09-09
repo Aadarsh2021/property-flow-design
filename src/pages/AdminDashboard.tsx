@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -184,7 +184,6 @@ const AdminDashboard: React.FC = () => {
       setLoadingStates({
         stats: false,
         pendingUsers: false,
-        activity: false,
         health: false,
         users: false
       });
@@ -331,23 +330,32 @@ const AdminDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <Shield className="h-8 w-8 text-blue-600 mr-3" />
-              <div>
-                <h1 className="text-xl font-semibold text-gray-900">Admin Dashboard</h1>
-                <p className="text-sm text-gray-500">
-                  Last updated: {lastRefresh.toLocaleTimeString()} (Auto-refresh every 30s)
-                </p>
-                <div className="text-xs text-gray-400 mt-1">
-                  Performance: {loadingStates.stats ? 'Loading...' : 'Ready'} | 
-                  Data: {Object.values(loadingStates).some(state => state) ? 'Updating...' : 'Current'}
-                </div>
-              </div>
-            </div>
+       {/* Header */}
+       <header className="bg-white shadow-sm border-b">
+         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+           <div className="flex justify-between items-center h-16">
+             <div className="flex items-center">
+               {/* Logo and Company Name - Clickable to Home */}
+               <Link to="/" className="flex items-center space-x-3 hover:opacity-80 transition-opacity">
+                 <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                   <span className="text-white font-bold text-lg">EL</span>
+                 </div>
+                 <div>
+                   <h1 className="text-xl font-semibold text-gray-900">Escrow Ledger</h1>
+                   <p className="text-sm text-gray-500">Admin Dashboard</p>
+                 </div>
+               </Link>
+             </div>
+             <div className="flex items-center space-x-4">
+               <div className="text-right">
+                 <p className="text-sm text-gray-500">
+                   Last updated: {lastRefresh.toLocaleTimeString()}
+                 </p>
+                 <div className="text-xs text-gray-400">
+                   Auto-refresh every 30s | {loadingStates.stats ? 'Loading...' : 'Ready'}
+                 </div>
+               </div>
+             </div>
             <div className="flex items-center space-x-3">
               <Button 
                 onClick={handleRefresh} 
