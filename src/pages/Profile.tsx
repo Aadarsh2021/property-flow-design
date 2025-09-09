@@ -47,7 +47,96 @@ import {
 } from 'lucide-react';
 import { authAPI, userSettingsAPI } from '@/lib/api';
 import { updateUserPassword, updateUserProfile, sendEmailVerificationToUser } from '@/lib/firebase';
-import { uploadProfileImage, deleteProfileImage } from '@/lib/supabase-auth';
+// Profile image upload functions using backend API
+const uploadProfileImage = async (file: File, userId: string): Promise<{ success: boolean; url?: string; error?: string }> => {
+  try {
+    // Convert file to base64 for backend upload
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    // Create a unique filename
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${userId}-${Date.now()}.${fileExt}`;
+
+    console.log('🔄 Uploading image via backend API:', {
+      fileName,
+      userId,
+      fileSize: file.size
+    });
+
+    // Upload via backend API
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software.vercel.app/api'}/upload/profile-image`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify({
+        fileName,
+        base64Data: base64,
+        userId
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      console.error('❌ Backend upload error:', result.message);
+      return {
+        success: false,
+        error: result.message || 'Upload failed'
+      };
+    }
+
+    console.log('✅ Upload successful:', result.url);
+
+    return {
+      success: true,
+      url: result.url
+    };
+  } catch (error: any) {
+    console.error('❌ Image upload error:', error);
+    return {
+      success: false,
+      error: error.message || 'Image upload failed'
+    };
+  }
+};
+
+const deleteProfileImage = async (imageUrl: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software.vercel.app/api'}/upload/profile-image`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify({ imageUrl })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      console.error('❌ Backend delete error:', result.message);
+      return {
+        success: false,
+        error: result.message || 'Delete failed'
+      };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('❌ Image delete error:', error);
+    return {
+      success: false,
+      error: error.message || 'Image delete failed'
+    };
+  }
+};
 
 const Profile = () => {
   const { user, login, token } = useAuth();
