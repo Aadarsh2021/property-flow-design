@@ -28,11 +28,34 @@ export default defineConfig(({ mode }) => ({
   build: {
     target: 'esnext',
     minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true,
+        pure_funcs: ['console.log', 'console.info', 'console.debug']
+      },
+      mangle: {
+        safari10: true
+      }
+    },
     rollupOptions: {
       output: {
         entryFileNames: `assets/[name]-[hash].js`,
         chunkFileNames: `assets/[name]-[hash].js`,
-        assetFileNames: `assets/[name]-[hash].[ext]`,
+        assetFileNames: (assetInfo) => {
+          const info = assetInfo.name.split('.');
+          const ext = info[info.length - 1];
+          if (/\.(css)$/.test(assetInfo.name)) {
+            return `assets/css/[name]-[hash].${ext}`;
+          }
+          if (/\.(png|jpe?g|gif|svg|webp|avif)$/.test(assetInfo.name)) {
+            return `assets/images/[name]-[hash].${ext}`;
+          }
+          if (/\.(woff2?|eot|ttf|otf)$/.test(assetInfo.name)) {
+            return `assets/fonts/[name]-[hash].${ext}`;
+          }
+          return `assets/[name]-[hash].${ext}`;
+        },
         manualChunks: {
           // Core React libraries
           'react-vendor': ['react', 'react-dom'],
@@ -63,15 +86,23 @@ export default defineConfig(({ mode }) => ({
         }
       }
     },
-    chunkSizeWarningLimit: 500,
+    chunkSizeWarningLimit: 1000,
     sourcemap: false,
     reportCompressedSize: true,
     // Enable tree shaking
-    treeshake: true,
+    treeshake: {
+      moduleSideEffects: false,
+      propertyReadSideEffects: false,
+      unknownGlobalSideEffects: false
+    },
     // Optimize dependencies
     commonjsOptions: {
       include: [/node_modules/]
-    }
+    },
+    // Enable CSS code splitting
+    cssCodeSplit: true,
+    // Optimize asset handling
+    assetsInlineLimit: 4096
   },
   plugins: [
     react(),
