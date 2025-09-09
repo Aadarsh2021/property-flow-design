@@ -219,7 +219,6 @@ export const authAPI = {
 
 export const dashboardAPI = {
   getStats: () => apiCall<any>('/dashboard/stats'),
-  getRecentActivity: () => apiCall<any>('/dashboard/recent-activity'),
   getSummary: () => apiCall<any>('/dashboard/summary'),
 };
 

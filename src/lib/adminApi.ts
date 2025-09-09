@@ -129,14 +129,12 @@ class AdminApiService {
    */
   async getDashboardData(limit: number = 10): Promise<{
     stats: DashboardStats;
-    activity: ActivityItem[];
     users: UsersResponse;
     health: SystemHealth;
     pendingUsers: User[];
   }> {
     return this.makeRequest<{
       stats: DashboardStats;
-      activity: ActivityItem[];
       users: UsersResponse;
       health: SystemHealth;
       pendingUsers: User[];
