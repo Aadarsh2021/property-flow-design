@@ -1781,10 +1781,21 @@ const AccountLedger = () => {
             description: `Monday Final deleted and ${successCount} transactions unsettled`
           });
         } else {
-        toast({
-          title: "Success",
-          description: `Successfully deleted ${successCount} entr${successCount === 1 ? 'y' : 'ies'}`
-        });
+          // Check if any related transactions were deleted
+          const hasRelatedTransactions = successCount > regularEntries.length;
+          const relatedCount = successCount - regularEntries.length;
+          
+          if (hasRelatedTransactions) {
+            toast({
+              title: "Success",
+              description: `Successfully deleted ${successCount} transactions (including ${relatedCount} related company/commission transactions)`
+            });
+          } else {
+            toast({
+              title: "Success",
+              description: `Successfully deleted ${successCount} entr${successCount === 1 ? 'y' : 'ies'}`
+            });
+          }
         }
       } else if (successCount > 0 && errorCount > 0) {
         toast({
