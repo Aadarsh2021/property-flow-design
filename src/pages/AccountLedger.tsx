@@ -751,17 +751,17 @@ const AccountLedger = () => {
   };
 
   // Load ledger data for selected party
-  const loadLedgerData = useCallback(async (showLoading = true) => {
+  const loadLedgerData = useCallback(async (showLoading = true, forceRefresh = false) => {
     if (!selectedPartyName) return;
     
-    // Prevent multiple simultaneous calls
-    if (loading) {
+    // Prevent multiple simultaneous calls only if not forcing refresh
+    if (loading && !forceRefresh) {
       console.log('⏳ Ledger data already loading, skipping...');
       return;
     }
     
     const startTime = performance.now();
-    console.log(`🚀 FUNCTION: loadLedgerData started for ${selectedPartyName}...`);
+    console.log(`🚀 FUNCTION: loadLedgerData started for ${selectedPartyName}... (forceRefresh: ${forceRefresh})`);
     
     if (showLoading) {
       setLoading(true);
@@ -1362,7 +1362,7 @@ const AccountLedger = () => {
           clearCacheByPattern(`.*all-parties.*`);
           
           // Refresh ledger data to show new entries
-          await loadLedgerData(false);
+          await loadLedgerData(false, true); // Force refresh to bypass loading check
           
           // Clear form after successful transaction
           setNewEntry({
@@ -1535,7 +1535,7 @@ const AccountLedger = () => {
       });
 
       // Reload ledger data and update balance
-      await loadLedgerData(false);
+      await loadLedgerData(false, true); // Force refresh to bypass loading check
       
       // Enhanced balance refresh with multiple attempts
       await refreshBalanceColumn();
@@ -1564,7 +1564,7 @@ const AccountLedger = () => {
   const refreshBalanceColumn = async () => {
     try {
       // Reload ledger data to get updated balances
-      await loadLedgerData(false);
+      await loadLedgerData(false, true); // Force refresh to bypass loading check
       
       // Force table re-render
       // Removed setForceUpdate to prevent unnecessary re-renders
@@ -1820,7 +1820,7 @@ const AccountLedger = () => {
         await new Promise(resolve => setTimeout(resolve, 1000));
         
         // Force reload data with loading spinner for better UX
-        await loadLedgerData(true);
+        await loadLedgerData(true, true); // Force refresh to bypass loading check
         
                  // Force table refresh
          // Removed setTableRefreshKey to prevent unnecessary re-renders
@@ -1829,7 +1829,7 @@ const AccountLedger = () => {
         setShowOldRecords(false);
       } else {
         // Regular deletion - standard refresh
-        await loadLedgerData(false);
+        await loadLedgerData(false, true); // Force refresh to bypass loading check
       }
       
       setEntryToDelete(null);
@@ -1938,7 +1938,7 @@ const AccountLedger = () => {
       clearCacheByPattern(`.*party-ledger.*${selectedPartyName}.*`);
       clearCacheByPattern(`.*all-parties.*`);
       
-      await loadLedgerData(false);
+      await loadLedgerData(false, true); // Force refresh to bypass loading check
       toast({
         title: "Success",
         description: "Ledger data refreshed successfully"
