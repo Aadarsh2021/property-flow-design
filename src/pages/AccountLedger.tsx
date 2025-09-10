@@ -17,6 +17,7 @@ import {
 import { newPartyAPI, partyLedgerAPI, userSettingsAPI } from '@/lib/api';
 import { Party, LedgerEntry, LedgerData } from '@/types';
 import { debounce } from 'lodash'; // Add lodash for debouncing
+import { clearCacheByPattern } from '@/lib/apiCache';
 import { useCompanyName } from '@/hooks/useCompanyName';
 import { 
   isCompanyParty, 
