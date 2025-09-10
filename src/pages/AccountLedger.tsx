@@ -1607,6 +1607,108 @@ const AccountLedger = () => {
     }
   };
 
+  // Function to create missing commission and company entries for existing transactions
+  const createMissingEntries = async () => {
+    if (!selectedPartyName || !ledgerData?.ledgerEntries) return;
+    
+    console.log('🔧 Creating missing commission and company entries...');
+    
+    try {
+      const selectedParty = allPartiesForTransaction.find(party => 
+        party.name === selectedPartyName || party.party_name === selectedPartyName
+      );
+      
+      if (!selectedParty || selectedParty.mCommission !== 'With Commission') {
+        console.log('ℹ️ No commission system or party not found, skipping...');
+        return;
+      }
+      
+      const rate = parseFloat(selectedParty.rate) || 0;
+      if (rate <= 0) {
+        console.log('ℹ️ No commission rate, skipping...');
+        return;
+      }
+      
+      // Find transactions that need commission/company entries
+      const transactionsNeedingEntries = ledgerData.ledgerEntries.filter(entry => {
+        const remarks = entry.remarks || '';
+        // Skip if already has commission or company entries
+        if (remarks.includes('Commission') || remarks.includes(companyName)) {
+          return false;
+        }
+        // Skip Monday Final settlements
+        if (remarks.includes('Monday Final Settlement') || remarks.includes('Monday Settlement')) {
+          return false;
+        }
+        // Include base transactions
+        return true;
+      });
+      
+      console.log(`🔧 Found ${transactionsNeedingEntries.length} transactions needing entries`);
+      
+      for (const transaction of transactionsNeedingEntries) {
+        const amount = transaction.tnsType === 'CR' ? transaction.credit : transaction.debit;
+        const commissionAmount = (amount * rate) / 100;
+        
+        // Create Commission entry
+        const commissionEntry = {
+          partyName: 'Commission',
+          amount: commissionAmount,
+          remarks: `Commission Auto-calculated (${rate})`,
+          tnsType: selectedParty.commiSystem === 'Take' ? 'CR' : 'DR',
+          credit: selectedParty.commiSystem === 'Take' ? commissionAmount : 0,
+          debit: selectedParty.commiSystem === 'Take' ? 0 : commissionAmount,
+          date: transaction.date,
+          ti: `${Date.now() + Math.random()}::`
+        };
+        
+        // Create Company entry
+        const companyEntry = {
+          partyName: companyName,
+          amount: amount,
+          remarks: `Transaction with ${selectedPartyName}`,
+          tnsType: transaction.tnsType === 'CR' ? 'DR' : 'CR',
+          credit: transaction.tnsType === 'CR' ? 0 : amount,
+          debit: transaction.tnsType === 'CR' ? amount : 0,
+          date: transaction.date,
+          ti: `${Date.now() + Math.random() + 1}::`
+        };
+        
+        try {
+          // Add Commission entry
+          const commissionResponse = await partyLedgerAPI.addEntry(commissionEntry);
+          if (commissionResponse.success) {
+            console.log(`✅ Created commission entry for transaction ${transaction.id}`);
+          }
+          
+          // Add Company entry
+          const companyResponse = await partyLedgerAPI.addEntry(companyEntry);
+          if (companyResponse.success) {
+            console.log(`✅ Created company entry for transaction ${transaction.id}`);
+          }
+        } catch (error) {
+          console.error(`❌ Error creating entries for transaction ${transaction.id}:`, error);
+        }
+      }
+      
+      // Refresh data after creating entries
+      await loadLedgerData(false, true);
+      
+      toast({
+        title: "Success",
+        description: `Created missing entries for ${transactionsNeedingEntries.length} transactions`
+      });
+      
+    } catch (error) {
+      console.error('❌ Error creating missing entries:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create missing entries",
+        variant: "destructive"
+      });
+    }
+  };
+
   // Handle modifying an existing ledger entry
   const handleModifyEntry = async () => {
     // Validate that we have an entry to modify
@@ -2761,6 +2863,17 @@ const AccountLedger = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
                 <span>Refresh All</span>
+              </button>
+              
+              <button
+                onClick={createMissingEntries}
+                disabled={actionLoading}
+                className="w-full px-4 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                </svg>
+                <span>Create Missing Entries</span>
               </button>
               
               <button
