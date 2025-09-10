@@ -225,25 +225,24 @@ const AccountLedger = () => {
     try {
       const response = await partyLedgerAPI.getAllParties();
       if (response.success) {
-        setAvailableParties(response.data);
         const endTime = performance.now();
         const duration = endTime - startTime;
         console.log(`✅ FUNCTION: loadAvailableParties completed in ${duration.toFixed(2)}ms`);
         console.log(`📊 PARTIES: Loaded ${response.data.length} parties`);
-      }
-      // Map backend party data to frontend Party type
-      const mappedParties = (response.data || []).map((party: any) => ({
-        _id: party.id || party._id,
-        name: party.name || party.party_name || party.partyName, // Support multiple field names
-        party_name: party.party_name || party.partyName, // Keep original for compatibility
-        srNo: party.sr_no || party.srNo,
-        status: party.status || 'A',
-        mCommission: party.mCommission || party.m_commission || 'No Commission',
-        rate: party.rate || '0',
-        commiSystem: party.commiSystem || party.commi_system || 'Take',
-        mondayFinal: party.mondayFinal || party.monday_final || 'No',
-        companyName: party.companyName || party.company_name || party.party_name || party.partyName
-      }));
+        
+        // Map backend party data to frontend Party type
+        const mappedParties = (response.data || []).map((party: any) => ({
+          _id: party.id || party._id,
+          name: party.name || party.party_name || party.partyName, // Support multiple field names
+          party_name: party.party_name || party.partyName, // Keep original for compatibility
+          srNo: party.sr_no || party.srNo,
+          status: party.status || 'A',
+          mCommission: party.mCommission || party.m_commission || 'No Commission',
+          rate: party.rate || '0',
+          commiSystem: party.commiSystem || party.commi_system || 'Take',
+          mondayFinal: party.mondayFinal || party.monday_final || 'No',
+          companyName: party.companyName || party.company_name || party.party_name || party.partyName
+        }));
       
       // Create virtual parties with current company account
       const createVirtualParties = () => {
@@ -287,13 +286,14 @@ const AccountLedger = () => {
       // Add virtual parties (Commission and Company) for transaction creation
       const virtualParties = createVirtualParties();
       
-      // Combined parties for different purposes
-      const allPartiesWithVirtual = [...mappedParties, ...virtualParties];
-      
-      setAvailableParties(mappedParties); // Only real parties for top selection
-      setAllPartiesForTransaction(allPartiesWithVirtual); // Store all parties for transaction dropdown
-      setFilteredParties(allPartiesWithVirtual); // All parties (including virtual) for bottom dropdown
-      setFilteredTopParties(mappedParties); // Only real parties for top dropdown
+        // Combined parties for different purposes
+        const allPartiesWithVirtual = [...mappedParties, ...virtualParties];
+        
+        setAvailableParties(mappedParties); // Only real parties for top selection
+        setAllPartiesForTransaction(allPartiesWithVirtual); // Store all parties for transaction dropdown
+        setFilteredParties(allPartiesWithVirtual); // All parties (including virtual) for bottom dropdown
+        setFilteredTopParties(mappedParties); // Only real parties for top dropdown
+      }
     } catch (error: any) {
       console.error('❌ Load parties error:', error);
       toast({
