@@ -244,65 +244,14 @@ const AccountLedger = () => {
           companyName: party.companyName || party.company_name || party.party_name || party.partyName
         }));
       
-      // Create virtual parties with current company account
-      const createVirtualParties = () => {
-        const virtualParties = [
-          {
-            _id: 'virtual_commission',
-            name: 'Commission',
-            srNo: 999,
-            status: 'Active',
-            mCommission: 'With Commission',
-            rate: '3',
-            commiSystem: 'Take',
-            mondayFinal: 'No' as 'No'
-          }
-        ];
+      // No virtual parties needed - use only real parties from database
+      // All parties (Commission, Company, etc.) are now created as real parties
+      const allPartiesWithVirtual = [...mappedParties];
         
-        // Only add virtual company party if real company party doesn't exist
-        const companyPartyExists = mappedParties.some(party => 
-          party.name === companyName || party.party_name === companyName
-        );
-        
-        if (!companyPartyExists && companyName !== 'Company') {
-          virtualParties.push({
-            _id: 'virtual_company',
-            name: companyName,
-            srNo: 998,
-            status: 'Active',
-            mCommission: 'With Commission',
-            rate: '1',
-            commiSystem: 'Give',
-            mondayFinal: 'No' as 'No'
-          });
-          console.log(`🔄 Added virtual company party: ${companyName}`);
-        } else if (companyPartyExists) {
-          console.log(`ℹ️ Real company party exists, skipping virtual: ${companyName}`);
-        }
-        
-        return virtualParties;
-      };
-      
-      // Add virtual parties (Commission and Company) for transaction creation
-      const virtualParties = createVirtualParties();
-      
-      // Remove duplicates - check if Commission already exists in mappedParties
-      const commissionExists = mappedParties.some(party => 
-        party.name === 'Commission' || party.party_name === 'Commission'
-      );
-      
-      // Filter out Commission from virtual parties if it already exists
-      const filteredVirtualParties = virtualParties.filter(party => 
-        !(party.name === 'Commission' && commissionExists)
-      );
-      
-        // Combined parties for different purposes
-        const allPartiesWithVirtual = [...mappedParties, ...filteredVirtualParties];
-        
-        setAvailableParties(mappedParties); // Only real parties for top selection
-        setAllPartiesForTransaction(allPartiesWithVirtual); // Store all parties for transaction dropdown
-        setFilteredParties(allPartiesWithVirtual); // All parties (including virtual) for bottom dropdown
-        setFilteredTopParties(mappedParties); // Only real parties for top dropdown
+        setAvailableParties(mappedParties); // Real parties for top selection
+        setAllPartiesForTransaction(allPartiesWithVirtual); // All real parties for transaction dropdown
+        setFilteredParties(allPartiesWithVirtual); // All real parties for bottom dropdown
+        setFilteredTopParties(mappedParties); // Real parties for top dropdown
       }
     } catch (error: any) {
       console.error('❌ Load parties error:', error);
@@ -316,34 +265,8 @@ const AccountLedger = () => {
     }
   }, [companyName]);
 
-  // State for storing all parties including virtual ones for bottom dropdown
+  // State for storing all parties for transaction dropdown
   const [allPartiesForTransaction, setAllPartiesForTransaction] = useState<Party[]>([]);
-
-  // Update virtual parties when company account changes
-  const updateVirtualParties = useCallback(() => {
-    if (allPartiesForTransaction.length > 0) {
-      // Find and update the virtual company party
-      const updatedParties = allPartiesForTransaction.map(party => {
-        if (party._id === 'virtual_company') {
-          return {
-            ...party,
-            name: companyName
-          };
-        }
-        return party;
-      });
-      
-      setAllPartiesForTransaction(updatedParties);
-      setFilteredParties(updatedParties);
-    }
-  }, [companyName]);
-
-  // Update virtual parties when company account changes
-  useEffect(() => {
-    if (companyName !== 'Company' && allPartiesForTransaction.length > 0) {
-      updateVirtualParties();
-    }
-  }, [companyName, updateVirtualParties]);
 
   // Filter parties based on search input (bottom section) - Exclude current party
   const filterParties = useCallback((searchTerm: string) => {
