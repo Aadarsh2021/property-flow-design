@@ -1401,8 +1401,28 @@ const AccountLedger = () => {
             commissionTnsType = tnsType === 'CR' ? 'DR' : 'CR';
           }
 
-          // DISABLED: Automatic commission creation to prevent unwanted transactions
-          // Commission entries will be created manually when needed
+          // Create Commission entry
+          const commissionEntry = {
+            partyName: 'Commission',
+            amount: commissionAmount,
+            remarks: `Commission ${commissionType} (${commissionAmount.toLocaleString()})`,
+            tnsType: commissionTnsType,
+            credit: commissionTnsType === 'CR' ? commissionAmount : 0,
+            debit: commissionTnsType === 'DR' ? commissionAmount : 0,
+            date: new Date().toISOString().split('T')[0],
+            ti: `${Date.now() + 1}::`
+          };
+
+          try {
+            const commissionResponse = await partyLedgerAPI.addEntry(commissionEntry);
+            if (commissionResponse.success) {
+              console.log('✅ Commission entry created successfully');
+            } else {
+              console.error('❌ Failed to create commission entry:', commissionResponse.message);
+            }
+          } catch (error) {
+            console.error('❌ Error creating commission entry:', error);
+          }
           
           toast({
             title: "Success",
@@ -1454,7 +1474,32 @@ const AccountLedger = () => {
             });
           }
           
-          // 3. Success Message
+          // 3. Create Company party entry for regular transactions
+          if (otherPartyName === companyName || otherPartyName.toLowerCase().includes('aqc')) {
+            const aqcEntry = {
+              partyName: companyName,
+              amount: Math.abs(amount),
+              remarks: `Transaction with ${selectedPartyName}`,
+              tnsType: tnsType === 'CR' ? 'DR' : 'CR', // Opposite transaction type
+              credit: tnsType === 'CR' ? 0 : Math.abs(amount),
+              debit: tnsType === 'CR' ? Math.abs(amount) : 0,
+              date: new Date().toISOString().split('T')[0],
+              ti: `${Date.now() + 2}::`
+            };
+
+            try {
+              const aqcResponse = await partyLedgerAPI.addEntry(aqcEntry);
+              if (aqcResponse.success) {
+                console.log('✅ Company party entry created successfully');
+              } else {
+                console.error('❌ Failed to create company party entry:', aqcResponse.message);
+              }
+            } catch (error) {
+              console.error('❌ Error creating company party entry:', error);
+            }
+          }
+          
+          // 4. Success Message
           toast({
             title: "Success",
             description: `Transaction of ₹${transactionAmount.toLocaleString()} added successfully`
