@@ -2381,9 +2381,9 @@ const AccountLedger = () => {
       {/* Main Content Area - Two Column Layout */}
       <div className="flex">
         {/* Left Side - Top Section + Main Content */}
-        <div className="flex-1">
+        <div className="flex-1 pr-4">
           {/* Top Section - Party Information */}
-          <div className="bg-white shadow-lg border-b border-gray-200 px-6 py-4">
+          <div className="bg-white shadow-lg border-b border-gray-200 px-6 py-4 rounded-lg">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-8">
               <div className="flex items-center space-x-3">
@@ -2846,7 +2846,7 @@ const AccountLedger = () => {
           </div>
           
           {/* Main Content - Ledger Tables */}
-          <div className="p-6">
+          <div className="p-6 pt-0">
             {/* Ledger Table */}
             <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-200">
@@ -2893,7 +2893,7 @@ const AccountLedger = () => {
         </div>
 
         {/* Right Side Action Buttons */}
-        <div className="w-64 bg-white shadow-lg border-l border-gray-200 p-6">
+        <div className="w-64 bg-white shadow-lg border-l border-gray-200 p-6 rounded-l-lg">
             <div className="mb-6">
               <h3 className="text-lg font-semibold text-gray-800 mb-4">Actions</h3>
               <div className="text-sm text-gray-600 mb-4">
