@@ -52,6 +52,28 @@ class AdminApiService {
   private cache = new Map<string, { data: any; timestamp: number; ttl: number }>();
   private pendingRequests = new Map<string, Promise<any>>();
 
+  // Clear all cache entries
+  clearCache(): void {
+    this.cache.clear();
+    this.pendingRequests.clear();
+    console.log('💾 ADMIN API: Cleared all cache entries');
+  }
+
+  // Clear cache entries by pattern
+  clearCacheByPattern(pattern: string): void {
+    const regex = new RegExp(pattern);
+    let clearedCount = 0;
+    
+    for (const key of this.cache.keys()) {
+      if (regex.test(key)) {
+        this.cache.delete(key);
+        clearedCount++;
+      }
+    }
+    
+    console.log(`💾 ADMIN API: Cleared ${clearedCount} cache entries matching pattern: ${pattern}`);
+  }
+
   private async makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
     const cacheKey = `${options.method || 'GET'}:${url}`;

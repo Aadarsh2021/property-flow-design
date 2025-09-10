@@ -34,6 +34,20 @@ const NewParty = () => {
   const [loading, setLoading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editPartyId, setEditPartyId] = useState<string | null>(null);
+
+  // Performance monitoring
+  useEffect(() => {
+    const startTime = performance.now();
+    console.log('🚀 PAGE: NewParty started loading...');
+    console.log('📊 COMPONENT: NewParty component mounted');
+    
+    return () => {
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      console.log(`✅ PAGE: NewParty loaded in ${duration.toFixed(2)}ms`);
+      console.log('📊 COMPONENT: NewParty component unmounted');
+    };
+  }, []);
   const [formData, setFormData] = useState<NewPartyData>({
     srNo: '163',
     partyName: '',
@@ -219,6 +233,11 @@ const NewParty = () => {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
+    const startTime = performance.now();
+    console.log('🚀 ACTION: handleSubmit started...');
+    console.log('📊 JOURNEY: Step 4 - Creating New Party');
+    console.log('📊 FORM: Starting party form submission...');
+    
     e.preventDefault();
     
     if (!formData.partyName.trim()) {
@@ -292,11 +311,24 @@ const NewParty = () => {
       });
     } finally {
       setLoading(false);
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      console.log(`✅ ACTION: handleSubmit completed in ${duration.toFixed(2)}ms`);
+      console.log('📊 FORM: Party form submission finished');
     }
   };
 
   const handleExit = () => {
+    const startTime = performance.now();
+    console.log('🚀 ACTION: handleExit started...');
+    console.log('🚪 NAVIGATION: Navigating to Dashboard...');
+    
     navigate('/');
+    
+    const endTime = performance.now();
+    const duration = endTime - startTime;
+    console.log(`✅ ACTION: handleExit completed in ${duration.toFixed(2)}ms`);
+    console.log('🚪 NAVIGATION: Navigation completed');
   };
 
   return (

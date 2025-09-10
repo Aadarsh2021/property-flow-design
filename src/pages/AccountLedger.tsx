@@ -108,18 +108,17 @@ const TableRow = memo(({
 TableRow.displayName = 'TableRow';
 
 const AccountLedger = () => {
-  // Performance monitoring - only in development
+  // Performance monitoring
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      const startTime = performance.now();
-      requestAnimationFrame(() => {
-        const endTime = performance.now();
-        if (endTime - startTime > 10) { // Only log if render takes > 10ms
-          console.log(`🚀 AccountLedger rendered in ${(endTime - startTime).toFixed(2)}ms`);
-        }
-      });
-    }
-  }, []); // Empty dependency array to run only once
+    console.log('🔥 CONSOLE LOG TEST - AccountLedger page loaded!');
+    const startTime = performance.now();
+    console.log('🚀 AccountLedger page started loading...');
+    
+    return () => {
+      const endTime = performance.now();
+      console.log(`✅ AccountLedger page loaded in ${(endTime - startTime).toFixed(2)}ms`);
+    };
+  }, []);
   // Router hooks for navigation and URL parameters
   const { partyName: initialPartyName } = useParams<{ partyName: string }>();
   const navigate = useNavigate();
@@ -211,11 +210,24 @@ const AccountLedger = () => {
 
   // Load available parties for dropdown
   const loadAvailableParties = useCallback(async () => {
+    // Prevent multiple simultaneous calls
+    if (partiesLoading) {
+      console.log('⏳ Parties already loading, skipping...');
+      return;
+    }
+    
+    const startTime = performance.now();
+    console.log('🚀 FUNCTION: loadAvailableParties started...');
+    
     setPartiesLoading(true);
     try {
       const response = await partyLedgerAPI.getAllParties();
       if (response.success) {
         setAvailableParties(response.data);
+        const endTime = performance.now();
+        const duration = endTime - startTime;
+        console.log(`✅ FUNCTION: loadAvailableParties completed in ${duration.toFixed(2)}ms`);
+        console.log(`📊 PARTIES: Loaded ${response.data.length} parties`);
       }
       // Map backend party data to frontend Party type
       const mappedParties = (response.data || []).map((party: any) => ({
@@ -456,6 +468,9 @@ const AccountLedger = () => {
 
   // Handle party selection from dropdown (bottom section)
   const handlePartySelect = (partyName: string) => {
+    const startTime = performance.now();
+    console.log(`🚀 ACTION: handlePartySelect started for ${partyName}...`);
+    
     setNewEntry(prev => ({ ...prev, partyName }));
     setShowPartyDropdown(false);
     
@@ -466,6 +481,10 @@ const AccountLedger = () => {
     if (partyName.toLowerCase().trim() === 'commission') {
       calculateCommissionAmount(partyName);
     }
+    
+    const endTime = performance.now();
+    const duration = endTime - startTime;
+    console.log(`✅ ACTION: handlePartySelect completed in ${duration.toFixed(2)}ms`);
   };
 
   // Handle party selection from top dropdown
@@ -734,6 +753,15 @@ const AccountLedger = () => {
   const loadLedgerData = useCallback(async (showLoading = true) => {
     if (!selectedPartyName) return;
     
+    // Prevent multiple simultaneous calls
+    if (loading) {
+      console.log('⏳ Ledger data already loading, skipping...');
+      return;
+    }
+    
+    const startTime = performance.now();
+    console.log(`🚀 FUNCTION: loadLedgerData started for ${selectedPartyName}...`);
+    
     if (showLoading) {
       setLoading(true);
     }
@@ -785,6 +813,11 @@ const AccountLedger = () => {
         };
         
         setLedgerData(transformedData);
+        
+        const endTime = performance.now();
+        const duration = endTime - startTime;
+        console.log(`✅ FUNCTION: loadLedgerData completed for ${selectedPartyName} in ${duration.toFixed(2)}ms`);
+        console.log(`📊 LEDGER: Loaded ${ledgerEntries.length} entries`);
         
         // Auto-enable old records view if all transactions are settled
         if (transformedData.ledgerEntries.length === 0 && transformedData.oldRecords.length > 0) {
@@ -1104,12 +1137,20 @@ const AccountLedger = () => {
 
   // Handle adding new ledger entry
   const handleAddEntry = async () => {
+    const startTime = performance.now();
+    console.log('🚀 ACTION: handleAddEntry started...');
+    console.log('📊 JOURNEY: Step 6 - Adding Transactions to Party');
+    console.log('📊 FORM: Starting new entry submission...');
+    
     if (!selectedPartyName) {
       toast({
         title: "Error",
         description: "Please select a party first",
         variant: "destructive"
       });
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      console.log(`❌ ACTION: handleAddEntry failed in ${duration.toFixed(2)}ms - No party selected`);
       return;
     }
 
@@ -1506,6 +1547,10 @@ const AccountLedger = () => {
       });
     } finally {
       setLoading(false);
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      console.log(`✅ ACTION: handleAddEntry completed in ${duration.toFixed(2)}ms`);
+      console.log('📊 FORM: New entry submission finished');
     }
   };
 
@@ -1853,6 +1898,10 @@ const AccountLedger = () => {
 
   // Handle refresh functionality
   const handleRefresh = useCallback(async () => {
+    const startTime = performance.now();
+    console.log('🚀 ACTION: handleRefresh started...');
+    console.log('🔄 REFRESH: Starting data refresh...');
+    
     if (!selectedPartyName) return;
     
     setActionLoading(true);
@@ -1862,8 +1911,15 @@ const AccountLedger = () => {
         title: "Success",
         description: "Ledger data refreshed successfully"
       });
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      console.log(`✅ ACTION: handleRefresh completed in ${duration.toFixed(2)}ms`);
+      console.log('🔄 REFRESH: Data refresh finished');
     } catch (error) {
       console.error('Refresh error:', error);
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      console.log(`❌ ACTION: handleRefresh failed in ${duration.toFixed(2)}ms`);
     } finally {
       setActionLoading(false);
     }
@@ -1871,12 +1927,24 @@ const AccountLedger = () => {
 
   // Handle exit functionality
   const handleExit = () => {
+    const startTime = performance.now();
+    console.log('🚀 ACTION: handleExit started...');
+    console.log('🚪 NAVIGATION: Navigating to Party Ledger...');
+    
     navigate('/party-ledger');
+    
+    const endTime = performance.now();
+    const duration = endTime - startTime;
+    console.log(`✅ ACTION: handleExit completed in ${duration.toFixed(2)}ms`);
+    console.log('🚪 NAVIGATION: Navigation completed');
   };
 
   // Load data on component mount - OPTIMIZED
   useEffect(() => {
     const initializeData = async () => {
+      const startTime = performance.now();
+      console.log('🚀 FUNCTION: initializeData started...');
+      
       try {
         // Load parties and ledger data
         await loadAvailableParties();
@@ -1885,6 +1953,10 @@ const AccountLedger = () => {
         if (selectedPartyName) {
           await loadLedgerData(true);
         }
+        
+        const endTime = performance.now();
+        const duration = endTime - startTime;
+        console.log(`✅ FUNCTION: initializeData completed in ${duration.toFixed(2)}ms`);
       } catch (error) {
         console.error('Initialization error:', error);
       }
@@ -1898,7 +1970,7 @@ const AccountLedger = () => {
     if (companyName !== 'Company') {
       loadAvailableParties();
     }
-  }, [companyName]); // Removed function dependency
+  }, [companyName, loadAvailableParties]); // Added function dependency back
 
   // Listen for parties refresh events (e.g., when company party is created)
   useEffect(() => {

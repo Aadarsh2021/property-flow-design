@@ -1,4 +1,5 @@
 
+import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -54,6 +55,20 @@ const queryClient = new QueryClient({
 });
 
 const App = () => {
+  // Track overall app performance
+  React.useEffect(() => {
+    const startTime = performance.now();
+    console.log('🚀 APP: Application started loading...');
+    console.log('📊 JOURNEY: Starting complete user journey tracking...');
+    
+    return () => {
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      console.log(`✅ APP: Application loaded in ${duration.toFixed(2)}ms`);
+      console.log('📊 JOURNEY: Application journey tracking completed');
+    };
+  }, []);
+
   return (
     <Suspense fallback={<PageLoader />}>
       <ErrorBoundary>

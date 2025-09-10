@@ -265,6 +265,10 @@ const PartyReport = () => {
 
   // Handle delete confirmation
   const handleDeleteConfirm = async () => {
+    const startTime = performance.now();
+    console.log('🚀 ACTION: handleDeleteConfirm started...');
+    console.log('📊 DELETE: Starting party deletion...');
+    
     if (!selectedParty) return;
     
     setActionLoading(true);
@@ -301,10 +305,18 @@ const PartyReport = () => {
       });
     } finally {
       setActionLoading(false);
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      console.log(`✅ ACTION: handleDeleteConfirm completed in ${duration.toFixed(2)}ms`);
+      console.log('📊 DELETE: Party deletion finished');
     }
   };
 
   const handleModify = async () => {
+    const startTime = performance.now();
+    console.log('🚀 ACTION: handleModify started...');
+    console.log('📊 MODIFY: Starting party modification...');
+    
     if (selectedParty) {
       try {
         // Navigate to modify party page with party data
@@ -313,6 +325,10 @@ const PartyReport = () => {
           title: "Modify Party",
           description: `Opening ${selectedParty.name} for editing`,
         });
+        const endTime = performance.now();
+        const duration = endTime - startTime;
+        console.log(`✅ ACTION: handleModify completed in ${duration.toFixed(2)}ms`);
+        console.log('📊 MODIFY: Party modification navigation finished');
       } catch (error) {
         console.error('Modify party error:', error);
         toast({
@@ -320,6 +336,9 @@ const PartyReport = () => {
           description: "Failed to open party for modification",
           variant: "destructive"
         });
+        const endTime = performance.now();
+        const duration = endTime - startTime;
+        console.log(`❌ ACTION: handleModify failed in ${duration.toFixed(2)}ms`);
       }
     } else {
       toast({
@@ -327,6 +346,9 @@ const PartyReport = () => {
         description: "Please select a party to modify",
         variant: "destructive"
       });
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      console.log(`❌ ACTION: handleModify failed in ${duration.toFixed(2)}ms - No party selected`);
     }
   };
 

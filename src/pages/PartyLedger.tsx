@@ -51,6 +51,22 @@ const PartyLedger = () => {
   const [selectedParties, setSelectedParties] = useState<string[]>([]);
   const [showMondayFinalModal, setShowMondayFinalModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Performance monitoring
+  useEffect(() => {
+    const startTime = performance.now();
+    console.log('🚀 PAGE: PartyLedger started loading...');
+    console.log('📊 JOURNEY: Step 5 - Opening Party Ledger');
+    console.log('📊 COMPONENT: PartyLedger component mounted');
+    
+    return () => {
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      console.log(`✅ PAGE: PartyLedger loaded in ${duration.toFixed(2)}ms`);
+      console.log('📊 JOURNEY: Step 5 - Party Ledger opened');
+      console.log('📊 COMPONENT: PartyLedger component unmounted');
+    };
+  }, []);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -74,8 +90,11 @@ const PartyLedger = () => {
 
   const refreshParties = useRefreshParties();
 
-  // Function to check Monday Final status dynamically
+  // OPTIMIZED: Function to check Monday Final status dynamically
   const checkMondayFinalStatus = async (partyName: string): Promise<'Yes' | 'No'> => {
+    const startTime = performance.now();
+    console.log(`🚀 FUNCTION: checkMondayFinalStatus started for ${partyName}...`);
+    
     try {
       const response = await partyLedgerAPI.getPartyLedger(partyName);
       
@@ -84,19 +103,32 @@ const PartyLedger = () => {
         const ledgerEntries = response.data.ledgerEntries || [];
         const oldRecords = response.data.oldRecords || [];
         
+        // OPTIMIZED: Check only first 50 entries for performance
+        const limitedEntries = [...ledgerEntries.slice(0, 25), ...oldRecords.slice(0, 25)];
+        
         // Check both arrays for Monday Final Settlement
-        const hasMondayFinal = [...ledgerEntries, ...oldRecords].some((entry: any) => {
+        const hasMondayFinal = limitedEntries.some((entry: any) => {
           const hasSettlement = entry.remarks?.includes('Monday Final Settlement');
           const partyMatch = entry.partyName === partyName || entry.party_name === partyName;
           
           return hasSettlement && partyMatch;
         });
         
-        return hasMondayFinal ? 'Yes' : 'No';
+        const endTime = performance.now();
+        const duration = endTime - startTime;
+        const status = hasMondayFinal ? 'Yes' : 'No';
+        console.log(`✅ FUNCTION: checkMondayFinalStatus completed for ${partyName} in ${duration.toFixed(2)}ms - Status: ${status}`);
+        return status;
       }
       
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      console.log(`✅ FUNCTION: checkMondayFinalStatus completed for ${partyName} in ${duration.toFixed(2)}ms - Status: No`);
       return 'No';
     } catch (error) {
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      console.log(`❌ FUNCTION: checkMondayFinalStatus failed for ${partyName} in ${duration.toFixed(2)}ms`);
       console.error(`Error checking Monday Final status for ${partyName}:`, error);
       return 'No';
     }
@@ -333,12 +365,19 @@ const PartyLedger = () => {
 
   // Handle Monday Final action
   const handleMondayFinalAction = async () => {
+    const startTime = performance.now();
+    console.log('🚀 ACTION: handleMondayFinalAction started...');
+    console.log('📊 MONDAY FINAL: Starting Monday Final action...');
+    
     if (selectedParties.length === 0) {
       toast({
         title: "No Selection",
         description: "Please select at least one party",
         variant: "destructive"
       });
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      console.log(`❌ ACTION: handleMondayFinalAction failed in ${duration.toFixed(2)}ms - No parties selected`);
       return;
     }
     
@@ -386,6 +425,10 @@ const PartyLedger = () => {
       });
     } finally {
       setActionLoading(false);
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      console.log(`✅ ACTION: handleMondayFinalAction completed in ${duration.toFixed(2)}ms`);
+      console.log('📊 MONDAY FINAL: Monday Final action finished');
     }
   };
 

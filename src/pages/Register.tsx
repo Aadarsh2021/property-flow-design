@@ -27,6 +27,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Eye, EyeOff, Lock, User, Building2, Mail, Phone, Home } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { startJourneyStep, completeJourneyStep, failJourneyStep } from '@/lib/journeyTracker';
 import { authAPI } from '@/lib/api';
 import { signUpWithEmail, signInWithGoogle, sendEmailVerificationToUser } from '@/lib/firebase';
 
@@ -322,6 +323,14 @@ const Register = () => {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
+    const startTime = performance.now();
+    console.log('🚀 ACTION: handleSubmit started...');
+    console.log('📊 JOURNEY: Step 1 - User Registration Form Submission');
+    console.log('📊 REGISTER: Starting registration form submission...');
+    
+    // Start journey step
+    startJourneyStep(1);
+    
     e.preventDefault();
     
     if (!validateForm()) {
@@ -426,6 +435,13 @@ const Register = () => {
       }
     } finally {
       setLoading(false);
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      console.log(`✅ ACTION: handleSubmit completed in ${duration.toFixed(2)}ms`);
+      console.log('📊 REGISTER: Registration form submission finished');
+      
+      // Complete journey step
+      completeJourneyStep(1);
     }
   };
 

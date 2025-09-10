@@ -6,6 +6,7 @@
  */
 
 import { ApiResponse, NewPartyData, NewParty, Party, LedgerEntry, LedgerEntryInput, UserSettings, TrialBalanceEntry, GoogleUserData, GoogleAuthResponse } from '../types';
+import { apiCall, cachedApiCall } from './apiCache';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software.vercel.app/api';
 
@@ -86,8 +87,24 @@ export const newPartyAPI = {
 };
 
 export const partyLedgerAPI = {
-  getAllParties: () => apiCall<Party[]>('/parties'),
-  getPartyLedger: (partyName: string) => apiCall<LedgerEntry[]>(`/party-ledger/${encodeURIComponent(partyName)}`),
+  getAllParties: () => {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = user.id || 'anonymous';
+    return cachedApiCall(
+      `all-parties-${userId}`,
+      () => apiCall<Party[]>('/parties'),
+      10 * 60 * 1000 // 10 minutes cache
+    );
+  },
+  getPartyLedger: (partyName: string) => {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = user.id || 'anonymous';
+    return cachedApiCall(
+      `party-ledger-${userId}-${partyName}`,
+      () => apiCall<LedgerEntry[]>(`/party-ledger/${encodeURIComponent(partyName)}`),
+      5 * 60 * 1000 // 5 minutes cache
+    );
+  },
   addEntry: (entryData: LedgerEntryInput) => apiCall<LedgerEntry>('/party-ledger/entry', {
     method: 'POST',
     body: JSON.stringify(entryData),
@@ -218,8 +235,24 @@ export const authAPI = {
 };
 
 export const dashboardAPI = {
-  getStats: () => apiCall<any>('/dashboard/stats'),
-  getSummary: () => apiCall<any>('/dashboard/summary'),
+  getStats: () => {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = user.id || 'anonymous';
+    return cachedApiCall(
+      `dashboard-stats-${userId}`,
+      () => apiCall<any>('/dashboard/stats'),
+      2 * 60 * 1000 // 2 minutes cache
+    );
+  },
+  getSummary: () => {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = user.id || 'anonymous';
+    return cachedApiCall(
+      `dashboard-summary-${userId}`,
+      () => apiCall<any>('/dashboard/summary'),
+      2 * 60 * 1000 // 2 minutes cache
+    );
+  },
 };
 
 export const commissionTransactionAPI = {

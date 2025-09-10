@@ -356,6 +356,11 @@ const Login = () => {
 
 
   const handleSubmit = async (e: React.FormEvent) => {
+    const startTime = performance.now();
+    console.log('🚀 ACTION: handleSubmit started...');
+    console.log('📊 JOURNEY: Step 2 - User Login Form Submission');
+    console.log('📊 LOGIN: Starting login form submission...');
+    
     e.preventDefault();
     
     if (!validateForm()) {
@@ -492,6 +497,10 @@ const Login = () => {
     } finally {
       setLoading(false);
       setLoadingMessage('Signing In...');
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      console.log(`✅ ACTION: handleSubmit completed in ${duration.toFixed(2)}ms`);
+      console.log('📊 LOGIN: Login form submission finished');
     }
   };
 

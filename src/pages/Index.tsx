@@ -25,6 +25,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { dashboardAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { useCompanyName } from '@/hooks/useCompanyName';
+import { startPerfLog, logPageLoad } from '@/lib/performanceLogger';
 
 interface DashboardStats {
   overview: {
@@ -64,11 +65,33 @@ const Index = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   // Recent activity state removed
   const [loading, setLoading] = useState(false);
+
+  // Performance monitoring
+  useEffect(() => {
+    console.log('🔥 CONSOLE LOG TEST - Index page loaded!');
+    console.log('📊 COMPONENT: Index component mounted');
+    const endPerfLog = startPerfLog('Index Page', 'page');
+    
+    return () => {
+      console.log('📊 COMPONENT: Index component unmounted');
+      endPerfLog();
+    };
+  }, []);
   // Pagination removed - recent activity feature removed
   const { companyName } = useCompanyName();
 
   // Fetch dashboard statistics
   const fetchDashboardStats = async () => {
+    // Prevent multiple simultaneous calls
+    if (loading) {
+      console.log('⏳ Dashboard stats already loading, skipping...');
+      return;
+    }
+    
+    console.log('🚀 FUNCTION: fetchDashboardStats started...');
+    console.log('📊 DASHBOARD: Starting stats load...');
+    const endPerfLog = startPerfLog('Dashboard Stats API', 'api');
+    
     if (!isAuthenticated) {
       // Don't make API calls if user is not authenticated
       setStats(null);
@@ -82,6 +105,7 @@ const Index = () => {
       if (statsResponse.success) {
         // Dashboard data received successfully
         setStats(statsResponse.data);
+        endPerfLog();
       } else {
         console.error('❌ Dashboard API Error:', statsResponse);
         toast({
@@ -101,6 +125,8 @@ const Index = () => {
       });
     } finally {
       setLoading(false);
+      console.log('✅ FUNCTION: fetchDashboardStats completed');
+      console.log('📊 DASHBOARD: Stats load finished');
     }
   };
 

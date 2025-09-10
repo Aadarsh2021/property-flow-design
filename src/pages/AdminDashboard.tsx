@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { adminApi, type DashboardStats, type User, type SystemHealth } from '@/lib/adminApi';
+import { clearCacheByPattern } from '@/lib/apiCache';
 
 const AdminDashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats>({
@@ -63,8 +64,15 @@ const AdminDashboard: React.FC = () => {
   const [disapprovingUser, setDisapprovingUser] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [autoRefreshInterval, setAutoRefreshInterval] = useState<NodeJS.Timeout | null>(null);
+  const [activeTab, setActiveTab] = useState('overview');
   const navigate = useNavigate();
   const { isLoggedIn, logout, checkSession } = useAdminAuth();
+
+  // Handle tab change with better UX
+  const handleTabChange = (newTab: string) => {
+    console.log(`📊 ADMIN: Tab changed from ${activeTab} to ${newTab}`);
+    setActiveTab(newTab);
+  };
 
   useEffect(() => {
     // Check if admin is logged in
@@ -105,6 +113,9 @@ const AdminDashboard: React.FC = () => {
 
   const loadDashboardData = async (showLoading = true) => {
     const startTime = performance.now();
+    console.log('🚀 FUNCTION: loadDashboardData started...');
+    console.log('📊 JOURNEY: Step 8 - Admin Panel Access');
+    console.log('📊 ADMIN: Starting admin dashboard load...');
     
     try {
       if (showLoading) {
@@ -142,20 +153,30 @@ const AdminDashboard: React.FC = () => {
 
         console.log(`⚡ All dashboard data loaded in ${(performance.now() - startTime).toFixed(2)}ms`);
       } catch (err) {
-        console.error('Batch API failed, falling back to individual requests:', err);
+        console.log('⚠️ Batch API not available, using individual requests (this is normal)');
+        console.log('📊 ADMIN: Batch API error:', err.message);
         
         // Fallback to individual API calls if batch fails
+        console.log('📊 ADMIN: Starting individual API calls...');
+        const individualStartTime = performance.now();
+        
         const [statsResult, healthResult, usersResult, pendingUsersResult] = await Promise.allSettled([
           adminApi.getDashboardStats(),
           adminApi.getSystemHealth(),
           adminApi.getAllUsers(1, 10),
           adminApi.getPendingUsers()
         ]);
+        
+        const individualEndTime = performance.now();
+        console.log(`⚡ Individual API calls completed in ${(individualEndTime - individualStartTime).toFixed(2)}ms`);
 
-        // Process results
+        // Process results with timing
         if (statsResult.status === 'fulfilled') {
           setStats(statsResult.value);
           setLoadingStates(prev => ({ ...prev, stats: false }));
+          console.log('✅ ADMIN: Stats loaded successfully');
+        } else {
+          console.error('❌ ADMIN: Failed to load stats:', statsResult.reason);
         }
 
         // Recent activity feature removed
@@ -163,16 +184,25 @@ const AdminDashboard: React.FC = () => {
         if (healthResult.status === 'fulfilled') {
           setSystemHealth(healthResult.value);
           setLoadingStates(prev => ({ ...prev, health: false }));
+          console.log('✅ ADMIN: Health check completed');
+        } else {
+          console.error('❌ ADMIN: Failed to load health:', healthResult.reason);
         }
 
         if (usersResult.status === 'fulfilled') {
           setUsers(usersResult.value.users);
           setLoadingStates(prev => ({ ...prev, users: false }));
+          console.log(`✅ ADMIN: Users loaded (${usersResult.value.users.length} users)`);
+        } else {
+          console.error('❌ ADMIN: Failed to load users:', usersResult.reason);
         }
 
         if (pendingUsersResult.status === 'fulfilled') {
           setPendingUsers(pendingUsersResult.value);
           setLoadingStates(prev => ({ ...prev, pendingUsers: false }));
+          console.log(`✅ ADMIN: Pending users loaded (${pendingUsersResult.value.length} pending)`);
+        } else {
+          console.error('❌ ADMIN: Failed to load pending users:', pendingUsersResult.reason);
         }
 
         console.log(`⚡ Fallback data loaded in ${(performance.now() - startTime).toFixed(2)}ms`);
@@ -196,10 +226,23 @@ const AdminDashboard: React.FC = () => {
   };
 
   const handleRefresh = async () => {
+    const startTime = performance.now();
+    console.log('🚀 ACTION: handleRefresh started...');
+    console.log('🔄 REFRESH: Starting admin dashboard refresh...');
+    
+    // Clear all cache before refresh
+    console.log('💾 CACHE: Clearing all cache for manual refresh');
+    clearCacheByPattern('.*admin.*');
+    
     setRefreshing(true);
     await loadDashboardData(false); // Silent refresh
     setLastRefresh(new Date());
     setRefreshing(false);
+    
+    const endTime = performance.now();
+    const duration = endTime - startTime;
+    console.log(`✅ ACTION: handleRefresh completed in ${duration.toFixed(2)}ms`);
+    console.log('🔄 REFRESH: Admin dashboard refresh finished');
   };
 
   const handleLogout = () => {
@@ -216,8 +259,16 @@ const AdminDashboard: React.FC = () => {
       setDeletingUser(userId);
       await adminApi.deleteUser(userId);
       
-      // Refresh the users list
+      // Clear cache for users data to ensure fresh data
+      console.log('💾 CACHE: Clearing users cache after deletion');
+      clearCacheByPattern('.*admin.*');
+      adminApi.clearCache(); // Also clear admin API internal cache
+      
+      // Refresh the users list but maintain current tab
       await loadDashboardData();
+      
+      // Keep the user on the users tab after deletion
+      setActiveTab('users');
       
       alert('User deleted successfully');
     } catch (err) {
@@ -273,9 +324,17 @@ const AdminDashboard: React.FC = () => {
       setApprovingUser(userId);
       await adminApi.approveUser(userId);
       
-      // Refresh the data immediately
+      // Clear cache for users data to ensure fresh data
+      console.log('💾 CACHE: Clearing users cache after approval');
+      clearCacheByPattern('.*admin.*');
+      adminApi.clearCache(); // Also clear admin API internal cache
+      
+      // Refresh the data immediately but maintain current tab
       await loadDashboardData(false);
       setLastRefresh(new Date());
+      
+      // Keep the user on the pending tab after approval
+      setActiveTab('pending');
       
       alert('User approved successfully');
     } catch (err) {
@@ -295,9 +354,17 @@ const AdminDashboard: React.FC = () => {
       setDisapprovingUser(userId);
       await adminApi.disapproveUser(userId);
       
-      // Refresh the data immediately
+      // Clear cache for users data to ensure fresh data
+      console.log('💾 CACHE: Clearing users cache after disapproval');
+      clearCacheByPattern('.*admin.*');
+      adminApi.clearCache(); // Also clear admin API internal cache
+      
+      // Refresh the data immediately but maintain current tab
       await loadDashboardData(false);
       setLastRefresh(new Date());
+      
+      // Keep the user on the pending tab after disapproval
+      setActiveTab('pending');
       
       alert('User disapproved and deleted successfully');
     } catch (err) {
@@ -526,7 +593,7 @@ const AdminDashboard: React.FC = () => {
         </div>
 
         {/* Main Content Tabs */}
-        <Tabs defaultValue="overview" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="pending">Pending Approval ({pendingUsers.length})</TabsTrigger>

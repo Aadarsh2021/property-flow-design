@@ -77,6 +77,11 @@ const UserSettings = () => {
   };
 
   const handleFinalSave = async () => {
+    const startTime = performance.now();
+    console.log('🚀 ACTION: handleFinalSave started...');
+    console.log('📊 JOURNEY: Step 3 - Company Setup in User Settings');
+    console.log('📊 SETTINGS: Starting user settings save...');
+    
     // Validate password confirmation
     if (settings.password !== confirmPassword) {
       toast({
@@ -84,6 +89,9 @@ const UserSettings = () => {
         description: "Passwords do not match. Please try again.",
         variant: "destructive"
       });
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      console.log(`❌ ACTION: handleFinalSave failed in ${duration.toFixed(2)}ms - Password mismatch`);
       return;
     }
 
@@ -145,6 +153,10 @@ const UserSettings = () => {
       });
     } finally {
       setLoading(false);
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      console.log(`✅ ACTION: handleFinalSave completed in ${duration.toFixed(2)}ms`);
+      console.log('📊 SETTINGS: User settings save finished');
     }
   };
 
