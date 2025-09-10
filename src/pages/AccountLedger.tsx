@@ -1355,6 +1355,11 @@ const AccountLedger = () => {
             description: successMessage
           });
           
+          // Clear cache to ensure fresh data after adding entry
+          console.log('💾 CACHE: Clearing cache after adding entry');
+          clearCacheByPattern(`.*party-ledger.*${selectedPartyName}.*`);
+          clearCacheByPattern(`.*all-parties.*`);
+          
           // Refresh ledger data to show new entries
           await loadLedgerData(false);
           
@@ -1622,6 +1627,11 @@ const AccountLedger = () => {
         setShowModifyModal(false);
         setSelectedEntries([]); // Clear selection
         
+        // Clear cache to ensure fresh data after modifying entry
+        console.log('💾 CACHE: Clearing cache after modifying entry');
+        clearCacheByPattern(`.*party-ledger.*${selectedPartyName}.*`);
+        clearCacheByPattern(`.*all-parties.*`);
+        
         // Force table refresh with small delay to ensure state updates
         // Removed setTableRefreshKey and setForceUpdate to prevent unnecessary re-renders
         
@@ -1757,6 +1767,11 @@ const AccountLedger = () => {
       
       // Clear selected entries after deletion attempt
       setSelectedEntries([]);
+      
+      // Clear cache to ensure fresh data after deletion
+      console.log('💾 CACHE: Clearing cache after entry deletion');
+      clearCacheByPattern(`.*party-ledger.*${selectedPartyName}.*`);
+      clearCacheByPattern(`.*all-parties.*`);
       
       // Show appropriate success/error message
       if (successCount > 0 && errorCount === 0) {
@@ -1906,6 +1921,11 @@ const AccountLedger = () => {
     
     setActionLoading(true);
     try {
+      // Clear cache to ensure fresh data on refresh
+      console.log('💾 CACHE: Clearing cache on manual refresh');
+      clearCacheByPattern(`.*party-ledger.*${selectedPartyName}.*`);
+      clearCacheByPattern(`.*all-parties.*`);
+      
       await loadLedgerData(false);
       toast({
         title: "Success",
