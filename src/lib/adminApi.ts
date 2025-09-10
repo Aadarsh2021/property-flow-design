@@ -64,10 +64,14 @@ class AdminApiService {
     const regex = new RegExp(pattern);
     let clearedCount = 0;
     
+    console.log(`💾 ADMIN API: Looking for pattern ${pattern}`);
+    console.log(`💾 ADMIN API: Current cache keys:`, Array.from(this.cache.keys()));
+    
     for (const key of this.cache.keys()) {
       if (regex.test(key)) {
         this.cache.delete(key);
         clearedCount++;
+        console.log(`💾 ADMIN API: Cleared ${key} (pattern: ${pattern})`);
       }
     }
     
@@ -141,7 +145,8 @@ class AdminApiService {
   private getCacheTTL(url: string): number {
     if (url.includes('/stats')) return 300000; // 5 minutes
     if (url.includes('/activity')) return 180000; // 3 minutes
-    if (url.includes('/users')) return 600000; // 10 minutes
+    if (url.includes('/users')) return 30000; // 30 seconds - reduced for better real-time updates
+    if (url.includes('/pending-users')) return 10000; // 10 seconds - very short for pending users
     if (url.includes('/health')) return 120000; // 2 minutes
     return 60000; // 1 minute default
   }

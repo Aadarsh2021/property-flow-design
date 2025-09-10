@@ -117,6 +117,9 @@ const AdminDashboard: React.FC = () => {
     console.log('📊 JOURNEY: Step 8 - Admin Panel Access');
     console.log('📊 ADMIN: Starting admin dashboard load...');
     
+    // Clear any expired cache entries before loading
+    adminApi.clearCacheByPattern('.*expired.*');
+    
     try {
       if (showLoading) {
         setIsLoading(true);
@@ -328,6 +331,7 @@ const AdminDashboard: React.FC = () => {
       console.log('💾 CACHE: Clearing users cache after approval');
       clearCacheByPattern('.*admin.*');
       adminApi.clearCache(); // Also clear admin API internal cache
+      adminApi.clearCacheByPattern('.*pending.*'); // Specifically clear pending users cache
       
       // Refresh the data immediately but maintain current tab
       await loadDashboardData(false);
@@ -358,6 +362,7 @@ const AdminDashboard: React.FC = () => {
       console.log('💾 CACHE: Clearing users cache after disapproval');
       clearCacheByPattern('.*admin.*');
       adminApi.clearCache(); // Also clear admin API internal cache
+      adminApi.clearCacheByPattern('.*pending.*'); // Specifically clear pending users cache
       
       // Refresh the data immediately but maintain current tab
       await loadDashboardData(false);
