@@ -817,7 +817,7 @@ const AccountLedger = () => {
         const endTime = performance.now();
         const duration = endTime - startTime;
         console.log(`✅ FUNCTION: loadLedgerData completed for ${selectedPartyName} in ${duration.toFixed(2)}ms`);
-        console.log(`📊 LEDGER: Loaded ${ledgerEntries.length} entries`);
+        console.log(`📊 LEDGER: Loaded ${transformedData.ledgerEntries.length} entries`);
         
         // Auto-enable old records view if all transactions are settled
         if (transformedData.ledgerEntries.length === 0 && transformedData.oldRecords.length > 0) {
