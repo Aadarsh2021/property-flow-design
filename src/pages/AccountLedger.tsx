@@ -1329,7 +1329,9 @@ const AccountLedger = () => {
           }
 
           // Now add the AQC/Company party entry to the database if it's involved
-          if (otherPartyName === companyName || otherPartyName.toLowerCase().includes('aqc')) {
+          // Create company entry for Take system (company receives money) or when other party is company
+          if (otherPartyName === companyName || otherPartyName.toLowerCase().includes('aqc') || 
+              (selectedParty && selectedParty.commiSystem === 'Take')) {
             const aqcEntry = {
               partyName: companyName,
               amount: Math.abs(amount),
@@ -1468,8 +1470,32 @@ const AccountLedger = () => {
             commissionTnsType = tnsType === 'CR' ? 'DR' : 'CR';
           }
 
-          // DISABLED: Automatic commission creation to prevent unwanted transactions
-          // Commission entries will be created manually when needed
+          // Initialize success message for commission entries
+          let successMessage = `Transaction of ₹${Math.abs(amount).toLocaleString()} added successfully for ${selectedPartyName}`;
+
+          // Create Commission party entry
+          const commissionEntry = {
+            partyName: 'Commission',
+            amount: commissionAmount,
+            remarks: `Commission ${commissionType} (${commissionAmount.toLocaleString()})`,
+            tnsType: commissionTnsType,
+            credit: commissionTnsType === 'CR' ? commissionAmount : 0,
+            debit: commissionTnsType === 'DR' ? commissionAmount : 0,
+            date: new Date().toISOString().split('T')[0],
+            ti: `${Date.now() + 1}::`
+          };
+
+          try {
+            const commissionResponse = await partyLedgerAPI.addEntry(commissionEntry);
+            if (commissionResponse.success) {
+              console.log('✅ Commission entry created successfully');
+              successMessage += `\n💰 Commission entry saved`;
+            } else {
+              console.error('❌ Failed to create commission entry:', commissionResponse.message);
+            }
+          } catch (error) {
+            console.error('❌ Error creating commission entry:', error);
+          }
           
           toast({
             title: "Success",
