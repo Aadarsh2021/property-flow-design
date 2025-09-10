@@ -286,8 +286,18 @@ const AccountLedger = () => {
       // Add virtual parties (Commission and Company) for transaction creation
       const virtualParties = createVirtualParties();
       
+      // Remove duplicates - check if Commission already exists in mappedParties
+      const commissionExists = mappedParties.some(party => 
+        party.name === 'Commission' || party.party_name === 'Commission'
+      );
+      
+      // Filter out Commission from virtual parties if it already exists
+      const filteredVirtualParties = virtualParties.filter(party => 
+        !(party.name === 'Commission' && commissionExists)
+      );
+      
         // Combined parties for different purposes
-        const allPartiesWithVirtual = [...mappedParties, ...virtualParties];
+        const allPartiesWithVirtual = [...mappedParties, ...filteredVirtualParties];
         
         setAvailableParties(mappedParties); // Only real parties for top selection
         setAllPartiesForTransaction(allPartiesWithVirtual); // Store all parties for transaction dropdown
@@ -1329,9 +1339,7 @@ const AccountLedger = () => {
           }
 
           // Now add the AQC/Company party entry to the database if it's involved
-          // Create company entry for Take system (company receives money) or when other party is company
-          if (otherPartyName === companyName || otherPartyName.toLowerCase().includes('aqc') || 
-              (selectedParty && selectedParty.commiSystem === 'Take')) {
+          if (otherPartyName === companyName || otherPartyName.toLowerCase().includes('aqc')) {
             const aqcEntry = {
               partyName: companyName,
               amount: Math.abs(amount),
@@ -1470,32 +1478,8 @@ const AccountLedger = () => {
             commissionTnsType = tnsType === 'CR' ? 'DR' : 'CR';
           }
 
-          // Initialize success message for commission entries
-          let successMessage = `Transaction of ₹${Math.abs(amount).toLocaleString()} added successfully for ${selectedPartyName}`;
-
-          // Create Commission party entry
-          const commissionEntry = {
-            partyName: 'Commission',
-            amount: commissionAmount,
-            remarks: `Commission ${commissionType} (${commissionAmount.toLocaleString()})`,
-            tnsType: commissionTnsType,
-            credit: commissionTnsType === 'CR' ? commissionAmount : 0,
-            debit: commissionTnsType === 'DR' ? commissionAmount : 0,
-            date: new Date().toISOString().split('T')[0],
-            ti: `${Date.now() + 1}::`
-          };
-
-          try {
-            const commissionResponse = await partyLedgerAPI.addEntry(commissionEntry);
-            if (commissionResponse.success) {
-              console.log('✅ Commission entry created successfully');
-              successMessage += `\n💰 Commission entry saved`;
-            } else {
-              console.error('❌ Failed to create commission entry:', commissionResponse.message);
-            }
-          } catch (error) {
-            console.error('❌ Error creating commission entry:', error);
-          }
+          // DISABLED: Automatic commission creation to prevent unwanted transactions
+          // Commission entries will be created manually when needed
           
           toast({
             title: "Success",
@@ -1604,108 +1588,6 @@ const AccountLedger = () => {
       // Removed setForceUpdate to prevent unnecessary re-renders
     } catch (error) {
       console.error('❌ Balance refresh error:', error);
-    }
-  };
-
-  // Function to create missing commission and company entries for existing transactions
-  const createMissingEntries = async () => {
-    if (!selectedPartyName || !ledgerData?.ledgerEntries) return;
-    
-    console.log('🔧 Creating missing commission and company entries...');
-    
-    try {
-      const selectedParty = allPartiesForTransaction.find(party => 
-        party.name === selectedPartyName || party.party_name === selectedPartyName
-      );
-      
-      if (!selectedParty || selectedParty.mCommission !== 'With Commission') {
-        console.log('ℹ️ No commission system or party not found, skipping...');
-        return;
-      }
-      
-      const rate = parseFloat(selectedParty.rate) || 0;
-      if (rate <= 0) {
-        console.log('ℹ️ No commission rate, skipping...');
-        return;
-      }
-      
-      // Find transactions that need commission/company entries
-      const transactionsNeedingEntries = ledgerData.ledgerEntries.filter(entry => {
-        const remarks = entry.remarks || '';
-        // Skip if already has commission or company entries
-        if (remarks.includes('Commission') || remarks.includes(companyName)) {
-          return false;
-        }
-        // Skip Monday Final settlements
-        if (remarks.includes('Monday Final Settlement') || remarks.includes('Monday Settlement')) {
-          return false;
-        }
-        // Include base transactions
-        return true;
-      });
-      
-      console.log(`🔧 Found ${transactionsNeedingEntries.length} transactions needing entries`);
-      
-      for (const transaction of transactionsNeedingEntries) {
-        const amount = transaction.tnsType === 'CR' ? transaction.credit : transaction.debit;
-        const commissionAmount = (amount * rate) / 100;
-        
-        // Create Commission entry
-        const commissionEntry = {
-          partyName: 'Commission',
-          amount: commissionAmount,
-          remarks: `Commission Auto-calculated (${rate})`,
-          tnsType: selectedParty.commiSystem === 'Take' ? 'CR' : 'DR',
-          credit: selectedParty.commiSystem === 'Take' ? commissionAmount : 0,
-          debit: selectedParty.commiSystem === 'Take' ? 0 : commissionAmount,
-          date: transaction.date,
-          ti: `${Date.now() + Math.random()}::`
-        };
-        
-        // Create Company entry
-        const companyEntry = {
-          partyName: companyName,
-          amount: amount,
-          remarks: `Transaction with ${selectedPartyName}`,
-          tnsType: transaction.tnsType === 'CR' ? 'DR' : 'CR',
-          credit: transaction.tnsType === 'CR' ? 0 : amount,
-          debit: transaction.tnsType === 'CR' ? amount : 0,
-          date: transaction.date,
-          ti: `${Date.now() + Math.random() + 1}::`
-        };
-        
-        try {
-          // Add Commission entry
-          const commissionResponse = await partyLedgerAPI.addEntry(commissionEntry);
-          if (commissionResponse.success) {
-            console.log(`✅ Created commission entry for transaction ${transaction.id}`);
-          }
-          
-          // Add Company entry
-          const companyResponse = await partyLedgerAPI.addEntry(companyEntry);
-          if (companyResponse.success) {
-            console.log(`✅ Created company entry for transaction ${transaction.id}`);
-          }
-        } catch (error) {
-          console.error(`❌ Error creating entries for transaction ${transaction.id}:`, error);
-        }
-      }
-      
-      // Refresh data after creating entries
-      await loadLedgerData(false, true);
-      
-      toast({
-        title: "Success",
-        description: `Created missing entries for ${transactionsNeedingEntries.length} transactions`
-      });
-      
-    } catch (error) {
-      console.error('❌ Error creating missing entries:', error);
-      toast({
-        title: "Error",
-        description: "Failed to create missing entries",
-        variant: "destructive"
-      });
     }
   };
 
@@ -2378,12 +2260,10 @@ const AccountLedger = () => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <TopNavigation />
       
-      {/* Main Content Area - Two Column Layout */}
-      <div className="flex">
-        {/* Left Side - Top Section + Main Content */}
-        <div className="flex-1 pr-4">
-          {/* Top Section - Party Information */}
-          <div className="bg-white shadow-lg border-b border-gray-200 px-6 py-4 rounded-lg">
+      {/* Main Content Area */}
+      <div className="flex flex-col h-screen">
+        {/* Top Section - Party Information */}
+        <div className="bg-white shadow-lg border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-8">
               <div className="flex items-center space-x-3">
@@ -2844,56 +2724,10 @@ const AccountLedger = () => {
               </div>
             </div>
           </div>
-          
-          {/* Main Content - Ledger Tables */}
-          <div className="p-6 pt-0">
-            {/* Ledger Table */}
-            <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-800">Account Ledger Entries</h2>
-              </div>
-              
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        <input
-                          type="checkbox"
-                          checked={selectedEntries.length === displayEntries.length && displayEntries.length > 0}
-                          onChange={handleCheckAll}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Party Name</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Credit</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Debit</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Balance</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Select</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {displayEntries.map((entry, index) => (
-                      <TableRow
-                        key={entry.id || entry._id || entry.ti || index}
-                        entry={entry}
-                        index={index}
-                        isSelected={selectedEntries.includes((entry.id || entry._id || entry.ti || '').toString())}
-                        onCheckboxChange={handleCheckboxChange}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
         </div>
 
-        {/* Right Side Action Buttons */}
-        <div className="w-64 bg-white shadow-lg border-l border-gray-200 p-6 rounded-l-lg">
+          {/* Right Side Action Buttons */}
+          <div className="w-64 bg-white shadow-lg border-l border-gray-200 p-6">
             <div className="mb-6">
               <h3 className="text-lg font-semibold text-gray-800 mb-4">Actions</h3>
               <div className="text-sm text-gray-600 mb-4">
@@ -2911,17 +2745,6 @@ const AccountLedger = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
                 <span>Refresh All</span>
-              </button>
-              
-              <button
-                onClick={createMissingEntries}
-                disabled={actionLoading}
-                className="w-full px-4 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
-                </svg>
-                <span>Create Missing Entries</span>
               </button>
               
               <button
@@ -3045,9 +2868,17 @@ const AccountLedger = () => {
                 }
                 setShowDeleteModal(true);
               }}
-              disabled={selectedEntries.length === 0 || isCompanyParty(selectedPartyName, companyName) || isCommissionParty(selectedPartyName)}
+              disabled={selectedEntries.length === 0 || selectedEntries.some(entryId => {
+                const displayEntries = showOldRecords ? ledgerData?.oldRecords : ledgerData?.ledgerEntries;
+                const entry = displayEntries?.find(e => (e.id || e._id || e.ti || '').toString() === entryId);
+                return entry?.is_old_record === true;
+              }) || isCompanyParty(selectedPartyName, companyName) || isCommissionParty(selectedPartyName)}
                 className="w-full px-4 py-3 bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
-                title="Delete selected entries"
+                title={selectedEntries.some(entryId => {
+                  const displayEntries = showOldRecords ? ledgerData?.oldRecords : ledgerData?.ledgerEntries;
+                  const entry = displayEntries?.find(e => (e.id || e._id || e.ti || '').toString() === entryId);
+                  return entry?.is_old_record === true;
+                }) ? "Cannot delete old records. Delete Monday Final entry first to unsettle transactions." : ""}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -3241,7 +3072,7 @@ const AccountLedger = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      </div>
+      
     </div>
   );
 };
