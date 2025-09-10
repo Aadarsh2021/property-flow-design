@@ -131,6 +131,7 @@ const AccountLedger = () => {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [partiesLoading, setPartiesLoading] = useState(false);
+  const [forceUpdate, setForceUpdate] = useState(0);
   
   // Party selection state
   const [selectedPartyName, setSelectedPartyName] = useState(initialPartyName || 'Test Company 1');
@@ -763,7 +764,7 @@ const AccountLedger = () => {
     const startTime = performance.now();
     console.log(`🚀 FUNCTION: loadLedgerData started for ${selectedPartyName}... (forceRefresh: ${forceRefresh})`);
     
-    if (showLoading) {
+    if (showLoading || forceRefresh) {
       setLoading(true);
     }
     
@@ -820,6 +821,9 @@ const AccountLedger = () => {
         console.log(`✅ FUNCTION: loadLedgerData completed for ${selectedPartyName} in ${duration.toFixed(2)}ms`);
         console.log(`📊 LEDGER: Loaded ${transformedData.ledgerEntries.length} entries`);
         
+        // Force UI update by triggering a re-render
+        setForceUpdate(prev => prev + 1);
+        
         // Auto-enable old records view if all transactions are settled
         if (transformedData.ledgerEntries.length === 0 && transformedData.oldRecords.length > 0) {
           setShowOldRecords(true);
@@ -855,7 +859,8 @@ const AccountLedger = () => {
         variant: "destructive"
       });
     } finally {
-      if (showLoading) {
+      // Always reset loading state when forceRefresh is true
+      if (showLoading || forceRefresh) {
         setLoading(false);
       }
     }
@@ -1360,6 +1365,9 @@ const AccountLedger = () => {
           console.log('💾 CACHE: Clearing cache after adding entry');
           clearCacheByPattern(`.*party-ledger.*${selectedPartyName}.*`);
           clearCacheByPattern(`.*all-parties.*`);
+          
+          // Wait a bit for backend processing to complete
+          await new Promise(resolve => setTimeout(resolve, 500));
           
           // Refresh ledger data to show new entries
           await loadLedgerData(false, true); // Force refresh to bypass loading check
