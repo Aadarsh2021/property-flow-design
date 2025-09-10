@@ -2378,10 +2378,12 @@ const AccountLedger = () => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <TopNavigation />
       
-      {/* Main Content Area */}
-      <div className="flex flex-col h-screen">
-        {/* Top Section - Party Information */}
-        <div className="bg-white shadow-lg border-b border-gray-200 px-6 py-4">
+      {/* Main Content Area - Two Column Layout */}
+      <div className="flex">
+        {/* Left Side - Top Section + Main Content */}
+        <div className="flex-1">
+          {/* Top Section - Party Information */}
+          <div className="bg-white shadow-lg border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-8">
               <div className="flex items-center space-x-3">
@@ -2842,10 +2844,56 @@ const AccountLedger = () => {
               </div>
             </div>
           </div>
+          
+          {/* Main Content - Ledger Tables */}
+          <div className="p-6">
+            {/* Ledger Table */}
+            <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h2 className="text-lg font-semibold text-gray-800">Account Ledger Entries</h2>
+              </div>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <input
+                          type="checkbox"
+                          checked={selectedEntries.length === displayEntries.length && displayEntries.length > 0}
+                          onChange={handleCheckAll}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Party Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Credit</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Debit</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Balance</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Select</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {displayEntries.map((entry, index) => (
+                      <TableRow
+                        key={entry.id || entry._id || entry.ti || index}
+                        entry={entry}
+                        index={index}
+                        isSelected={selectedEntries.includes((entry.id || entry._id || entry.ti || '').toString())}
+                        onCheckboxChange={handleCheckboxChange}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </div>
 
-          {/* Right Side Action Buttons */}
-          <div className="w-64 bg-white shadow-lg border-l border-gray-200 p-6">
+        {/* Right Side Action Buttons */}
+        <div className="w-64 bg-white shadow-lg border-l border-gray-200 p-6">
             <div className="mb-6">
               <h3 className="text-lg font-semibold text-gray-800 mb-4">Actions</h3>
               <div className="text-sm text-gray-600 mb-4">
@@ -3193,7 +3241,7 @@ const AccountLedger = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      
+      </div>
     </div>
   );
 };
