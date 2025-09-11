@@ -162,9 +162,7 @@ const FinalTrialBalance = () => {
   // Load trial balance data using Account Ledger API for each party
   const loadTrialBalance = useCallback(async (forceRefresh = false) => {
     setLoading(true);
-    console.log('🚀 FUNCTION: loadTrialBalance started...');
-    console.log('📊 JOURNEY: Step 7 - Viewing Final Trial Balance');
-    console.log('📊 TRIAL BALANCE: Starting data load...');
+    // Loading trial balance
     const startTime = performance.now();
     try {
       // Get all parties first
@@ -175,12 +173,12 @@ const FinalTrialBalance = () => {
       }
       
       const allParties = partiesResponse.data || [];
-      console.log('📊 Loading trial balance for', allParties.length, 'parties');
+      // Loading trial balance for parties
       
       // OPTIMIZED: Get closing balance for each party using Account Ledger API
       // Limit to first 20 parties for better performance
       const limitedParties = allParties.slice(0, 20);
-      console.log('📊 Processing only first 20 parties for performance');
+      // Processing limited parties for performance
       
       const partyBalances = await Promise.all(
         limitedParties.map(async (party) => {
@@ -195,7 +193,7 @@ const FinalTrialBalance = () => {
             }
             return null;
           } catch (error) {
-            console.warn(`Failed to load ledger for ${party.partyName}:`, error);
+            // Failed to load ledger for party
             return null;
           }
         })
@@ -209,7 +207,7 @@ const FinalTrialBalance = () => {
         balance && balance.closingBalance !== 0
       );
       
-      console.log('📊 Valid party balances:', validBalances);
+      // Valid party balances processed
       
       // Separate credit and debit entries
       const creditEntries: TrialBalanceEntry[] = [];
@@ -256,10 +254,10 @@ const FinalTrialBalance = () => {
       
       setTrialBalanceData(transformedData);
       const endTime = performance.now();
-      console.log(`✅ Trial balance loaded successfully in ${(endTime - startTime).toFixed(2)}ms:`, transformedData);
+      // Trial balance loaded successfully
       
     } catch (error) {
-      console.error('❌ Error loading trial balance:', error);
+      // Error loading trial balance
       toast({
         title: "Error",
         description: "Failed to load trial balance data",
@@ -279,7 +277,7 @@ const FinalTrialBalance = () => {
   useEffect(() => {
     if (import.meta.env.DEV) {
       const autoRefreshInterval = setInterval(() => {
-        console.log('🔄 Auto-refreshing trial balance for real-time updates...');
+        // Auto-refreshing trial balance
         loadTrialBalance(true); // Force refresh
       }, 30000); // 30 seconds
 
@@ -359,8 +357,7 @@ const FinalTrialBalance = () => {
 
   const handleRefresh = async () => {
     const startTime = performance.now();
-    console.log('🚀 ACTION: handleRefresh started...');
-    console.log('🔄 REFRESH: Starting trial balance refresh...');
+    // Starting trial balance refresh
     
     setPartyName('');
     setSelectedEntries([]);
@@ -372,8 +369,7 @@ const FinalTrialBalance = () => {
     
     const endTime = performance.now();
     const duration = endTime - startTime;
-    console.log(`✅ ACTION: handleRefresh completed in ${duration.toFixed(2)}ms`);
-    console.log('🔄 REFRESH: Trial balance refresh finished');
+    // Trial balance refresh completed
   };
 
   const handleForceRefresh = async () => {

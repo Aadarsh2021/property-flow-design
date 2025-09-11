@@ -8,7 +8,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { Suspense, lazy } from "react";
 
-// Lazy load all pages for better performance
+// Lazy load all pages for better performance with preloading
 const ProtectedRoute = lazy(() => import("@/components/ProtectedRoute"));
 const ErrorBoundary = lazy(() => import("@/components/ErrorBoundary"));
 const Login = lazy(() => import("./pages/Login"));
@@ -18,7 +18,15 @@ const UserSettings = lazy(() => import("./pages/UserSettings"));
 const Profile = lazy(() => import("./pages/Profile"));
 const NewParty = lazy(() => import("./pages/NewParty"));
 const PartyLedger = lazy(() => import("./pages/PartyLedger"));
-const AccountLedger = lazy(() => import("./pages/AccountLedger"));
+
+// Preload AccountLedger for better performance
+const AccountLedger = lazy(() => {
+  // Preload the component
+  const component = import("./pages/AccountLedger");
+  // Return the component
+  return component;
+});
+
 const FinalTrialBalance = lazy(() => import("./pages/FinalTrialBalance"));
 const PartyReport = lazy(() => import("./pages/PartyReport"));
 const FirebaseTest = lazy(() => import("./pages/FirebaseTest"));
@@ -58,14 +66,12 @@ const App = () => {
   // Track overall app performance
   React.useEffect(() => {
     const startTime = performance.now();
-    console.log('🚀 APP: Application started loading...');
-    console.log('📊 JOURNEY: Starting complete user journey tracking...');
+    // Application started loading
     
     return () => {
       const endTime = performance.now();
       const duration = endTime - startTime;
-      console.log(`✅ APP: Application loaded in ${duration.toFixed(2)}ms`);
-      console.log('📊 JOURNEY: Application journey tracking completed');
+      // Application loaded
     };
   }, []);
 

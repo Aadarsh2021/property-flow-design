@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import TopNavigation from '@/components/TopNavigation';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,7 +17,18 @@ import {
 import { newPartyAPI, partyLedgerAPI, userSettingsAPI } from '@/lib/api';
 import { Party, LedgerEntry, LedgerData } from '@/types';
 import { debounce } from 'lodash'; // Add lodash for debouncing
+import { clearCacheByPattern } from '@/lib/apiCache';
 import { useCompanyName } from '@/hooks/useCompanyName';
+import { 
+  isCompanyParty, 
+  isCommissionParty,
+  isMondayFinalAllowed, 
+  isPartyEditingAllowed, 
+  isPartyDeletionAllowed, 
+  isTransactionAdditionAllowed,
+  getCompanyPartyRestrictionMessage,
+  getCommissionPartyRestrictionMessage
+} from '@/lib/companyPartyUtils';
 
 // Memoized table row component for performance
 const TableRow = memo(({ 
@@ -97,18 +109,10 @@ const TableRow = memo(({
 TableRow.displayName = 'TableRow';
 
 const AccountLedger = () => {
-  // Performance monitoring - only in development
+  // Performance monitoring
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      const startTime = performance.now();
-      requestAnimationFrame(() => {
-        const endTime = performance.now();
-        if (endTime - startTime > 10) { // Only log if render takes > 10ms
-          console.log(`🚀 AccountLedger rendered in ${(endTime - startTime).toFixed(2)}ms`);
-        }
-      });
-    }
-  }, []); // Empty dependency array to run only once
+    // Component mounted
+  }, []);
   // Router hooks for navigation and URL parameters
   const { partyName: initialPartyName } = useParams<{ partyName: string }>();
   const navigate = useNavigate();
@@ -120,6 +124,7 @@ const AccountLedger = () => {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [partiesLoading, setPartiesLoading] = useState(false);
+  const [forceUpdate, setForceUpdate] = useState(0);
   
   // Party selection state
   const [selectedPartyName, setSelectedPartyName] = useState(initialPartyName || 'Test Company 1');
@@ -200,60 +205,39 @@ const AccountLedger = () => {
 
   // Load available parties for dropdown
   const loadAvailableParties = useCallback(async () => {
+    // Prevent multiple simultaneous calls
+    if (partiesLoading) {
+      return;
+    }
+    
     setPartiesLoading(true);
     try {
       const response = await partyLedgerAPI.getAllParties();
       if (response.success) {
-        setAvailableParties(response.data);
+        
+        // Map backend party data to frontend Party type
+        const mappedParties = (response.data || []).map((party: any) => ({
+          _id: party.id || party._id,
+          name: party.name || party.party_name || party.partyName, // Support multiple field names
+          party_name: party.party_name || party.partyName, // Keep original for compatibility
+          srNo: party.sr_no || party.srNo,
+          status: party.status || 'A',
+          mCommission: party.mCommission || party.m_commission || 'No Commission',
+          rate: party.rate || '0',
+          commiSystem: party.commiSystem || party.commi_system || 'Take',
+          mondayFinal: party.mondayFinal || party.monday_final || 'No',
+          companyName: party.companyName || party.company_name || party.party_name || party.partyName
+        }));
+      
+      // No virtual parties needed - use only real parties from database
+      // All parties (Commission, Company, etc.) are now created as real parties
+      const allPartiesWithVirtual = [...mappedParties];
+        
+        setAvailableParties(mappedParties); // Real parties for top selection
+        setAllPartiesForTransaction(allPartiesWithVirtual); // All real parties for transaction dropdown
+        setFilteredParties(allPartiesWithVirtual); // All real parties for bottom dropdown
+        setFilteredTopParties(mappedParties); // Real parties for top dropdown
       }
-      // Map backend party data to frontend Party type
-      const mappedParties = (response.data || []).map((party: any) => ({
-        _id: party.id || party._id,
-        name: party.name || party.party_name || party.partyName, // Support multiple field names
-        party_name: party.party_name || party.partyName, // Keep original for compatibility
-        srNo: party.sr_no || party.srNo,
-        status: party.status || 'A',
-        mCommission: party.mCommission || party.m_commission || 'No Commission',
-        rate: party.rate || '0',
-        commiSystem: party.commiSystem || party.commi_system || 'Take',
-        mondayFinal: party.mondayFinal || party.monday_final || 'No',
-        companyName: party.companyName || party.company_name || party.party_name || party.partyName
-      }));
-      
-      // Create virtual parties with current company account
-      const createVirtualParties = () => [
-        {
-          _id: 'virtual_commission',
-          name: 'Commission',
-          srNo: 999,
-          status: 'Active',
-          mCommission: 'With Commission',
-          rate: '3',
-          commiSystem: 'Take',
-          mondayFinal: 'No' as 'No'
-        },
-        {
-          _id: 'virtual_company',
-          name: companyName,
-          srNo: 998,
-          status: 'Active',
-          mCommission: 'With Commission',
-          rate: '1',
-          commiSystem: 'Give',
-          mondayFinal: 'No' as 'No'
-        }
-      ];
-      
-      // Add virtual parties (Commission and Company) for transaction creation
-      const virtualParties = createVirtualParties();
-      
-      // Combined parties for different purposes
-      const allPartiesWithVirtual = [...mappedParties, ...virtualParties];
-      
-      setAvailableParties(mappedParties); // Only real parties for top selection
-      setAllPartiesForTransaction(allPartiesWithVirtual); // Store all parties for transaction dropdown
-      setFilteredParties(allPartiesWithVirtual); // All parties (including virtual) for bottom dropdown
-      setFilteredTopParties(mappedParties); // Only real parties for top dropdown
     } catch (error: any) {
       console.error('❌ Load parties error:', error);
       toast({
@@ -266,117 +250,30 @@ const AccountLedger = () => {
     }
   }, [companyName]);
 
-  // State for storing all parties including virtual ones for bottom dropdown
+  // State for storing all parties for transaction dropdown
   const [allPartiesForTransaction, setAllPartiesForTransaction] = useState<Party[]>([]);
 
-  // Update virtual parties when company account changes
-  const updateVirtualParties = useCallback(() => {
-    if (allPartiesForTransaction.length > 0) {
-      // Find and update the virtual company party
-      const updatedParties = allPartiesForTransaction.map(party => {
-        if (party._id === 'virtual_company') {
-          return {
-            ...party,
-            name: companyName
-          };
-        }
-        return party;
-      });
-      
-      setAllPartiesForTransaction(updatedParties);
-      setFilteredParties(updatedParties);
-    }
-  }, [companyName]);
-
-  // Update virtual parties when company account changes
-  useEffect(() => {
-    if (companyName !== 'Company' && allPartiesForTransaction.length > 0) {
-      updateVirtualParties();
-    }
-  }, [companyName, updateVirtualParties]);
-
-  // Filter parties based on search input (bottom section) - Exclude current party
-  const filterParties = useCallback((searchTerm: string) => {
-    // Always exclude current party from bottom dropdown
-    const availablePartiesExcludingCurrent = allPartiesForTransaction.filter(party => 
+  // Generic filter function for parties
+  const filterPartiesGeneric = useCallback((searchTerm: string, parties: Party[], isTopSection: boolean = false) => {
+    // Always exclude current party from dropdown
+    const availablePartiesExcludingCurrent = parties.filter(party => 
       (party.party_name || party.name) !== selectedPartyName
     );
     
     if (!searchTerm.trim()) {
-      setFilteredParties(availablePartiesExcludingCurrent);
-      setHighlightedIndex(-1);
-      setAutoCompleteText('');
-      setShowInlineSuggestion(false);
-      return;
-    }
-    
-    const filtered = availablePartiesExcludingCurrent.filter(party => {
-      const partyName = (party.party_name || party.name || '').toLowerCase();
-      const searchLower = searchTerm.toLowerCase();
-      
-      // Better matching: starts with, then contains
-      return partyName.startsWith(searchLower) || partyName.includes(searchLower);
-    }).sort((a, b) => {
-      const aName = (a.party_name || a.name || '').toLowerCase();
-      const bName = (b.party_name || b.name || '').toLowerCase();
-      const searchLower = searchTerm.toLowerCase();
-      
-      // Sort by: starts with first, then alphabetically
-      const aStartsWith = aName.startsWith(searchLower);
-      const bStartsWith = bName.startsWith(searchLower);
-      
-      if (aStartsWith && !bStartsWith) return -1;
-      if (!aStartsWith && bStartsWith) return 1;
-      return aName.localeCompare(bName);
-    });
-    setFilteredParties(filtered);
-    setHighlightedIndex(0); // Highlight first suggestion
-    
-    // VS Code style auto-complete: Find best match for inline suggestion (case insensitive)
-    if (filtered.length > 0) {
-      const bestMatch = filtered[0];
-      const partyName = bestMatch.party_name || bestMatch.name || '';
-      const searchLower = searchTerm.toLowerCase();
-      const partyLower = partyName.toLowerCase();
-      
-      
-      if (partyLower.startsWith(searchLower) && partyLower !== searchLower) {
-        // Find the actual position where the match starts (case insensitive)
-        const matchIndex = partyName.toLowerCase().indexOf(searchLower);
-        if (matchIndex === 0) {
-          const autoCompleteText = partyName.substring(searchTerm.length);
-          setAutoCompleteText(autoCompleteText);
-          setShowInlineSuggestion(true);
-        } else {
-          setAutoCompleteText('');
-          setShowInlineSuggestion(false);
-        }
+      if (isTopSection) {
+        setFilteredTopParties(availablePartiesExcludingCurrent);
+        setTopAutoCompleteText('');
+        setShowTopInlineSuggestion(false);
       } else {
+        setFilteredParties(availablePartiesExcludingCurrent);
+        setHighlightedIndex(-1);
         setAutoCompleteText('');
         setShowInlineSuggestion(false);
       }
-    } else {
-      setAutoCompleteText('');
-      setShowInlineSuggestion(false);
-    }
-  }, [allPartiesForTransaction, selectedPartyName]);
-
-  // Filter parties for top section dropdown - Exclude current party
-  const filterTopParties = useCallback((searchTerm: string) => {
-    // Always exclude current party from top dropdown
-    const availablePartiesExcludingCurrent = availableParties.filter(party => 
-      (party.party_name || party.name) !== selectedPartyName
-    );
-    
-    if (!searchTerm.trim()) {
-      // Show available parties (excluding current) when no search term
-      setFilteredTopParties(availablePartiesExcludingCurrent);
-      setTopAutoCompleteText('');
-      setShowTopInlineSuggestion(false);
       return;
     }
     
-    // Filter parties based on search term (excluding current) - improved matching
     const filtered = availablePartiesExcludingCurrent.filter(party => {
       const partyName = (party.party_name || party.name || '').toLowerCase();
       const companyName = (party.companyName || '').toLowerCase();
@@ -384,7 +281,7 @@ const AccountLedger = () => {
       
       // Better matching: starts with, then contains
       return partyName.startsWith(searchLower) || partyName.includes(searchLower) ||
-             companyName.startsWith(searchLower) || companyName.includes(searchLower);
+             (isTopSection && (companyName.startsWith(searchLower) || companyName.includes(searchLower)));
     }).sort((a, b) => {
       const aName = (a.party_name || a.name || '').toLowerCase();
       const bName = (b.party_name || b.name || '').toLowerCase();
@@ -398,7 +295,13 @@ const AccountLedger = () => {
       if (!aStartsWith && bStartsWith) return 1;
       return aName.localeCompare(bName);
     });
-    setFilteredTopParties(filtered);
+    
+    if (isTopSection) {
+      setFilteredTopParties(filtered);
+    } else {
+      setFilteredParties(filtered);
+      setHighlightedIndex(0); // Highlight first suggestion
+    }
     
     // VS Code style auto-complete: Find best match for inline suggestion (case insensitive)
     if (filtered.length > 0) {
@@ -412,21 +315,51 @@ const AccountLedger = () => {
         const matchIndex = partyName.toLowerCase().indexOf(searchLower);
         if (matchIndex === 0) {
           const autoCompleteText = partyName.substring(searchTerm.length);
-          setTopAutoCompleteText(autoCompleteText);
-          setShowTopInlineSuggestion(true);
+          if (isTopSection) {
+            setTopAutoCompleteText(autoCompleteText);
+            setShowTopInlineSuggestion(true);
+          } else {
+            setAutoCompleteText(autoCompleteText);
+            setShowInlineSuggestion(true);
+          }
         } else {
-          setTopAutoCompleteText('');
-          setShowTopInlineSuggestion(false);
+          if (isTopSection) {
+            setTopAutoCompleteText('');
+            setShowTopInlineSuggestion(false);
+          } else {
+            setAutoCompleteText('');
+            setShowInlineSuggestion(false);
+          }
         }
       } else {
-        setTopAutoCompleteText('');
-        setShowTopInlineSuggestion(false);
+        if (isTopSection) {
+          setTopAutoCompleteText('');
+          setShowTopInlineSuggestion(false);
+        } else {
+          setAutoCompleteText('');
+          setShowInlineSuggestion(false);
+        }
       }
     } else {
-      setTopAutoCompleteText('');
-      setShowTopInlineSuggestion(false);
+      if (isTopSection) {
+        setTopAutoCompleteText('');
+        setShowTopInlineSuggestion(false);
+      } else {
+        setAutoCompleteText('');
+        setShowInlineSuggestion(false);
+      }
     }
-  }, [availableParties, selectedPartyName]);
+  }, [selectedPartyName]);
+
+  // Filter parties based on search input (bottom section) - Exclude current party
+  const filterParties = useCallback((searchTerm: string) => {
+    filterPartiesGeneric(searchTerm, allPartiesForTransaction, false);
+  }, [allPartiesForTransaction, filterPartiesGeneric]);
+
+  // Filter parties for top section dropdown - Exclude current party
+  const filterTopParties = useCallback((searchTerm: string) => {
+    filterPartiesGeneric(searchTerm, availableParties, true);
+  }, [availableParties, filterPartiesGeneric]);
 
   // Handle party selection from dropdown (bottom section)
   const handlePartySelect = (partyName: string) => {
@@ -610,63 +543,101 @@ const AccountLedger = () => {
     }
   };
 
+  // Generic auto-complete functionality
+  const handleAutoCompleteGeneric = (isTopSection: boolean = false) => {
+    if (isTopSection) {
+      if (filteredTopParties.length > 0) {
+        const selectedParty = filteredTopParties[0];
+        const partyName = selectedParty.party_name || selectedParty.name;
+        setTypingPartyName(partyName);
+        setShowTopPartyDropdown(false);
+        setTopAutoCompleteText('');
+        setShowTopInlineSuggestion(false);
+      }
+    } else {
+      if (filteredParties.length > 0 && highlightedIndex >= 0) {
+        const selectedParty = filteredParties[highlightedIndex];
+        const partyName = selectedParty.party_name || selectedParty.name;
+        setNewEntry(prev => ({ ...prev, partyName }));
+        setShowPartyDropdown(false);
+        setHighlightedIndex(-1);
+        setIsTyping(false);
+        setAutoCompleteText('');
+        setShowInlineSuggestion(false);
+        
+        // Auto-fill commission if commission is selected
+        if (partyName.toLowerCase().trim() === 'commission') {
+          handleCommissionAutoFill();
+        }
+      }
+    }
+  };
+
   // Auto-complete functionality
   const handleAutoComplete = () => {
-    if (filteredParties.length > 0 && highlightedIndex >= 0) {
-      const selectedParty = filteredParties[highlightedIndex];
-      const partyName = selectedParty.party_name || selectedParty.name;
-      setNewEntry(prev => ({ ...prev, partyName }));
-      setShowPartyDropdown(false);
-      setHighlightedIndex(-1);
-      setIsTyping(false);
-      setAutoCompleteText('');
-      setShowInlineSuggestion(false);
+    handleAutoCompleteGeneric(false);
+  };
+
+  // Generic Tab completion functionality
+  const handleTabCompleteGeneric = (isTopSection: boolean = false) => {
+    if (isTopSection) {
+      if (showTopInlineSuggestion && topAutoCompleteText) {
+        // Find the original party name from the filtered parties to preserve case
+        const originalParty = filteredTopParties[0];
+        const originalPartyName = originalParty?.party_name || originalParty?.name || '';
+        
+        // Use the original party name instead of concatenating user input + auto-complete
+        const completedValue = originalPartyName;
+        setTypingPartyName(completedValue);
+        setTopAutoCompleteText('');
+        setShowTopInlineSuggestion(false);
+        setShowTopPartyDropdown(false);
+      }
+    } else {
+      if (showInlineSuggestion && autoCompleteText) {
+        // Find the matching party from filteredParties to get original case
+        const matchingParty = filteredParties.find(party => {
+          const partyName = party.party_name || party.name;
+          return partyName.toLowerCase().startsWith(newEntry.partyName.toLowerCase());
+        });
+        
+        if (matchingParty) {
+          // Use original party name from database (proper case)
+          const originalPartyName = matchingParty.party_name || matchingParty.name;
+          setNewEntry(prev => ({ ...prev, partyName: originalPartyName }));
+        } else {
+          // Fallback to concatenation if no match found
+          const currentValue = newEntry.partyName;
+          const completedValue = currentValue + autoCompleteText;
+          setNewEntry(prev => ({ ...prev, partyName: completedValue }));
+        }
+        
+        setAutoCompleteText('');
+        setShowInlineSuggestion(false);
+        setShowPartyDropdown(false);
+        
+        // Auto-fill commission if commission is selected
+        const finalPartyName = matchingParty ? (matchingParty.party_name || matchingParty.name) : (newEntry.partyName + autoCompleteText);
+        if (finalPartyName.toLowerCase().trim() === 'commission') {
+          handleCommissionAutoFill();
+        }
+      }
     }
   };
 
   // VS Code style Tab completion
   const handleTabComplete = () => {
-    if (showInlineSuggestion && autoCompleteText) {
-      const currentValue = newEntry.partyName;
-      const completedValue = currentValue + autoCompleteText;
-      setNewEntry(prev => ({ ...prev, partyName: completedValue }));
-      setAutoCompleteText('');
-      setShowInlineSuggestion(false);
-      setShowPartyDropdown(false);
-      
-      // Auto-fill commission if commission is selected
-      if (completedValue.toLowerCase().trim() === 'commission') {
-        handleCommissionAutoFill();
-      }
-    }
+    handleTabCompleteGeneric(false);
   };
 
   // Top section auto-complete functionality
   const handleTopAutoComplete = () => {
-    if (filteredTopParties.length > 0) {
-      const selectedParty = filteredTopParties[0];
-      const partyName = selectedParty.party_name || selectedParty.name;
-      setTypingPartyName(partyName);
-      setShowTopPartyDropdown(false);
-      setTopAutoCompleteText('');
-      setShowTopInlineSuggestion(false);
-    }
+    handleAutoCompleteGeneric(true);
   };
 
   // Top section Tab completion
   const handleTopTabComplete = () => {
-    if (showTopInlineSuggestion && topAutoCompleteText) {
-      // Find the original party name from the filtered parties to preserve case
-      const originalParty = filteredTopParties[0];
-      const originalPartyName = originalParty?.party_name || originalParty?.name || '';
-      
-      // Use the original party name instead of concatenating user input + auto-complete
-      const completedValue = originalPartyName;
-      setTypingPartyName(completedValue);
-      setTopAutoCompleteText('');
-      setShowTopInlineSuggestion(false);
-      setShowTopPartyDropdown(false);
-    }
+    handleTabCompleteGeneric(true);
   };
 
   // Helper function to format party display name
@@ -685,10 +656,15 @@ const AccountLedger = () => {
   };
 
   // Load ledger data for selected party
-  const loadLedgerData = useCallback(async (showLoading = true) => {
+  const loadLedgerData = useCallback(async (showLoading = true, forceRefresh = false) => {
     if (!selectedPartyName) return;
     
-    if (showLoading) {
+    // Prevent multiple simultaneous calls only if not forcing refresh
+    if (loading && !forceRefresh) {
+      return;
+    }
+    
+    if (showLoading || forceRefresh) {
       setLoading(true);
     }
     
@@ -740,6 +716,10 @@ const AccountLedger = () => {
         
         setLedgerData(transformedData);
         
+        
+        // Force UI update by triggering a re-render
+        setForceUpdate(prev => prev + 1);
+        
         // Auto-enable old records view if all transactions are settled
         if (transformedData.ledgerEntries.length === 0 && transformedData.oldRecords.length > 0) {
           setShowOldRecords(true);
@@ -775,7 +755,8 @@ const AccountLedger = () => {
         variant: "destructive"
       });
     } finally {
-      if (showLoading) {
+      // Always reset loading state when forceRefresh is true
+      if (showLoading || forceRefresh) {
         setLoading(false);
       }
     }
@@ -839,7 +820,8 @@ const AccountLedger = () => {
             
             const partyEntries = ledgerData.ledgerEntries.filter(entry => 
               (entry.partyName || entry.party_name) === selectedPartyName && 
-              entry.tnsType !== 'Monday Settlement'
+              !entry.remarks?.includes('Monday Final Settlement') &&
+              !entry.remarks?.includes('Monday Settlement')
               // Include Commission transactions for calculation
             );
             
@@ -852,7 +834,7 @@ const AccountLedger = () => {
             const baseTransactions = partyEntries.filter(entry => {
               const tType = entry.tnsType;
               const r = entry.remarks || '';
-              if (tType === 'Monday Settlement') return false;
+              if (r.includes('Monday Final Settlement') || r.includes('Monday Settlement')) return false;
               if (r === companyName || r === 'Commission') return false;
               return isTakeSystem ? tType === 'CR' : tType === 'DR';
             });
@@ -1057,6 +1039,7 @@ const AccountLedger = () => {
 
   // Handle adding new ledger entry
   const handleAddEntry = async () => {
+    
     if (!selectedPartyName) {
       toast({
         title: "Error",
@@ -1162,9 +1145,11 @@ const AccountLedger = () => {
           allPartiesForTransaction.some(party => party.name === newEntry.partyName.trim()) &&
           selectedParty && selectedParty.mCommission === 'With Commission' && selectedParty.rate;
 
+      // Define otherPartyName outside the condition for broader scope
+      const otherPartyName = newEntry.partyName ? newEntry.partyName.trim() : '';
+      
       if (isPartyToParty) {
         // Dual-party transaction logic - Simple 2 entries only
-        const otherPartyName = newEntry.partyName.trim();
         const otherParty = allPartiesForTransaction.find(party => party.name === otherPartyName);
         
         if (!otherParty) {
@@ -1251,7 +1236,6 @@ const AccountLedger = () => {
               const aqcResponse = await partyLedgerAPI.addEntry(aqcEntry);
               if (aqcResponse.success) {
                 if (import.meta.env.DEV) {
-                  console.log('✅ AQC/Company party entry saved successfully');
                 }
                 successMessage += `\n💼 ${companyName} party entry saved`;
               } else {
@@ -1267,8 +1251,18 @@ const AccountLedger = () => {
             description: successMessage
           });
           
+          // Clear cache to ensure fresh data after adding entry
+          clearCacheByPattern(`.*party-ledger.*${selectedPartyName}.*`);
+          clearCacheByPattern(`.*all-parties.*`);
+          
+          // Wait a bit for backend processing to complete
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Force UI update
+          setForceUpdate(prev => prev + 1);
+          
           // Refresh ledger data to show new entries
-          await loadLedgerData(false);
+          await loadLedgerData(false, true); // Force refresh to bypass loading check
           
           // Clear form after successful transaction
           setNewEntry({
@@ -1300,7 +1294,7 @@ const AccountLedger = () => {
         }
 
         // Smart Commission Waterfall Calculation
-        let commissionAmount = Math.abs(amount);
+        let commissionAmount = 0;
         let commissionType = 'Manual';
         let waterfallDetails = '';
         
@@ -1322,52 +1316,133 @@ const AccountLedger = () => {
               waterfallDetails = `${companyName} pays ₹${commissionAmount.toLocaleString()} (${rate}%) incentive to vendor. Total transaction: ₹${Math.abs(amount).toLocaleString()}`;
             }
           }
+        } else {
+          // Default 3% commission if no commission structure
+          commissionAmount = (Math.abs(amount) * 3) / 100;
+          commissionType = 'Auto-calculated (3%)';
         }
 
-        // Add entry for selected party
-        // For Take system: Party should DEBIT (pay commission)
-        // For Give system: Party should CREDIT (receive commission)
-        let partyTnsType = tnsType;
-        if (selectedParty.commiSystem === 'Take') {
-          // Take System: Party pays commission → DR (Debit)
-          partyTnsType = 'DR';
-        } else if (selectedParty.commiSystem === 'Give') {
-          // Give System: Party receives commission → CR (Credit)
-          partyTnsType = 'CR';
-        }
+        // Create multiple entries for Take party
+        const entries = [];
         
-        const partyEntry = {
+        // 1. Give entry (opposite transaction)
+        entries.push({
           partyName: selectedPartyName,
           amount: Math.abs(amount),
-          remarks: `Commission ${commissionType} (${commissionAmount.toLocaleString()})`,
-          tnsType: partyTnsType,
-          credit: partyTnsType === 'CR' ? Math.abs(amount) : 0,
-          debit: partyTnsType === 'DR' ? Math.abs(amount) : 0,
+          remarks: 'Give',
+          tnsType: tnsType,
+          credit: tnsType === 'CR' ? Math.abs(amount) : 0,
+          debit: tnsType === 'DR' ? Math.abs(amount) : 0,
           date: new Date().toISOString().split('T')[0],
           ti: `${Date.now()}::`
-        };
-
-        const response = await partyLedgerAPI.addEntry(partyEntry);
+        });
         
-        if (response.success) {
-          // Determine Commission entry type based on selected party's commission system
-          let commissionTnsType = '';
+        // 2. Commission entry
+        entries.push({
+          partyName: selectedPartyName,
+          amount: commissionAmount,
+          remarks: 'Commission',
+          tnsType: 'DR',
+          credit: 0,
+          debit: commissionAmount,
+          date: new Date().toISOString().split('T')[0],
+          ti: `${Date.now() + 1}::`
+        });
+        
+        // 3. Company entry (remaining amount)
+        const companyAmount = Math.abs(amount) - commissionAmount;
+        entries.push({
+          partyName: selectedPartyName,
+          amount: companyAmount,
+          remarks: companyName,
+          tnsType: 'DR',
+          credit: 0,
+          debit: companyAmount,
+          date: new Date().toISOString().split('T')[0],
+          ti: `${Date.now() + 2}::`
+        });
+
+        // Add all entries for Take party
+        let successCount = 0;
+        for (const entryData of entries) {
+          try {
+            const response = await partyLedgerAPI.addEntry(entryData);
+            if (response.success) {
+              successCount++;
+            }
+          } catch (error) {
+            console.error('❌ Error adding entry:', error);
+          }
+        }
+        
+        if (successCount === entries.length) {
+          // Now create related party entries
           
-          if (selectedParty.commiSystem === 'Take') {
-            // Take System: Company takes commission from party
-            // Party DR (debit) → Commission CR (Company receives commission)
-            commissionTnsType = 'CR';
-          } else if (selectedParty.commiSystem === 'Give') {
-            // Give System: Company gives commission to party
-            // Company DR (debit) → Commission DR (debit from Company)
-            commissionTnsType = 'DR';
-          } else {
-            // Default: opposite logic (backward compatibility)
-            commissionTnsType = tnsType === 'CR' ? 'DR' : 'CR';
+          // 1. Give Party entry (opposite transaction)
+          const giveEntry = {
+            partyName: 'Give',
+            amount: Math.abs(amount),
+            remarks: selectedPartyName,
+            tnsType: tnsType === 'CR' ? 'DR' : 'CR', // Opposite transaction type
+            credit: tnsType === 'CR' ? 0 : Math.abs(amount),
+            debit: tnsType === 'CR' ? Math.abs(amount) : 0,
+            date: new Date().toISOString().split('T')[0],
+            ti: `${Date.now() + 3}::`
+          };
+
+          try {
+            const giveResponse = await partyLedgerAPI.addEntry(giveEntry);
+            if (giveResponse.success) {
+            } else {
+              console.error('❌ Failed to create give party entry:', giveResponse.message);
+            }
+          } catch (error) {
+            console.error('❌ Error creating give party entry:', error);
           }
 
-          // DISABLED: Automatic commission creation to prevent unwanted transactions
-          // Commission entries will be created manually when needed
+          // 2. Commission Party entry (same commission transaction)
+          const commissionEntry = {
+            partyName: 'Commission',
+            amount: commissionAmount,
+            remarks: 'Commission',
+            tnsType: 'DR', // Same as Take party commission
+            credit: 0,
+            debit: commissionAmount,
+            date: new Date().toISOString().split('T')[0],
+            ti: `${Date.now() + 4}::`
+          };
+
+          try {
+            const commissionResponse = await partyLedgerAPI.addEntry(commissionEntry);
+            if (commissionResponse.success) {
+            } else {
+              console.error('❌ Failed to create commission party entry:', commissionResponse.message);
+            }
+          } catch (error) {
+            console.error('❌ Error creating commission party entry:', error);
+          }
+
+          // 3. Company Party entry (same company transaction)
+          const companyEntry = {
+            partyName: companyName,
+            amount: companyAmount,
+            remarks: companyName,
+            tnsType: 'DR', // Same as Take party company
+            credit: 0,
+            debit: companyAmount,
+            date: new Date().toISOString().split('T')[0],
+            ti: `${Date.now() + 5}::`
+          };
+
+          try {
+            const companyResponse = await partyLedgerAPI.addEntry(companyEntry);
+            if (companyResponse.success) {
+            } else {
+              console.error('❌ Failed to create company party entry:', companyResponse.message);
+            }
+          } catch (error) {
+            console.error('❌ Error creating company party entry:', error);
+          }
           
           toast({
             title: "Success",
@@ -1419,11 +1494,50 @@ const AccountLedger = () => {
             });
           }
           
-          // 3. Success Message
+          // 3. Create Company party entry for regular transactions
+          if (newEntry.partyName && (newEntry.partyName.trim() === companyName || newEntry.partyName.toLowerCase().includes('aqc'))) {
+            // Calculate commission amount for this transaction
+            const calculatedCommissionAmount = (Math.abs(amount) * 3) / 100; // Default 3% commission
+            const aqcEntry = {
+              partyName: companyName,
+              amount: Math.abs(amount) - calculatedCommissionAmount, // Remaining amount after commission
+              remarks: `Transaction with ${selectedPartyName}`,
+              tnsType: tnsType, // Same transaction type as main transaction
+              credit: tnsType === 'CR' ? (Math.abs(amount) - calculatedCommissionAmount) : 0,
+              debit: tnsType === 'DR' ? (Math.abs(amount) - calculatedCommissionAmount) : 0,
+              date: new Date().toISOString().split('T')[0],
+              ti: `${Date.now() + 2}::`
+            };
+
+            try {
+              const aqcResponse = await partyLedgerAPI.addEntry(aqcEntry);
+              if (aqcResponse.success) {
+              } else {
+                console.error('❌ Failed to create company party entry:', aqcResponse.message);
+              }
+            } catch (error) {
+              console.error('❌ Error creating company party entry:', error);
+            }
+          }
+          
+          // 4. Success Message
           toast({
             title: "Success",
             description: `Transaction of ₹${transactionAmount.toLocaleString()} added successfully`
           });
+          
+          // Clear cache and refresh data
+          clearCacheByPattern(`.*party-ledger.*${selectedPartyName}.*`);
+          clearCacheByPattern(`.*all-parties.*`);
+          
+          // Wait for backend processing
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Force UI update
+          setForceUpdate(prev => prev + 1);
+          
+          // Refresh ledger data
+          await loadLedgerData(false, true);
         } else {
           toast({
             title: "Error",
@@ -1441,7 +1555,7 @@ const AccountLedger = () => {
       });
 
       // Reload ledger data and update balance
-      await loadLedgerData(false);
+      await loadLedgerData(false, true); // Force refresh to bypass loading check
       
       // Enhanced balance refresh with multiple attempts
       await refreshBalanceColumn();
@@ -1466,7 +1580,7 @@ const AccountLedger = () => {
   const refreshBalanceColumn = async () => {
     try {
       // Reload ledger data to get updated balances
-      await loadLedgerData(false);
+      await loadLedgerData(false, true); // Force refresh to bypass loading check
       
       // Force table re-render
       // Removed setForceUpdate to prevent unnecessary re-renders
@@ -1530,6 +1644,11 @@ const AccountLedger = () => {
         setShowModifyModal(false);
         setSelectedEntries([]); // Clear selection
         
+        // Clear cache to ensure fresh data after modifying entry
+        console.log('💾 CACHE: Clearing cache after modifying entry');
+        clearCacheByPattern(`.*party-ledger.*${selectedPartyName}.*`);
+        clearCacheByPattern(`.*all-parties.*`);
+        
         // Force table refresh with small delay to ensure state updates
         // Removed setTableRefreshKey and setForceUpdate to prevent unnecessary re-renders
         
@@ -1563,6 +1682,78 @@ const AccountLedger = () => {
     } finally {
       setActionLoading(false);
     }
+  };
+
+  // Helper function to find related transactions
+  const findRelatedTransactions = async (mainEntry: any) => {
+    const relatedTransactions = [];
+    
+    try {
+      // Get all parties for the user
+      const partiesResponse = await partyLedgerAPI.getAllParties();
+      if (!partiesResponse.success) return relatedTransactions;
+      
+      const allParties = partiesResponse.data;
+      const currentCompanyName = companyName || 'AQC';
+      const mainAmount = Math.abs((mainEntry.credit || 0) - (mainEntry.debit || 0));
+      const commissionAmount = Math.round(mainAmount * 0.03);
+      const companyAmount = mainAmount - commissionAmount;
+      
+      console.log(`🔍 Looking for related transactions for amount: ${mainAmount}, commission: ${commissionAmount}, company: ${companyAmount}`);
+      
+      // Find related transactions based on date and amount
+      for (const party of allParties) {
+        try {
+          const partyLedgerResponse = await partyLedgerAPI.getPartyLedger(party.name);
+          if (partyLedgerResponse.success) {
+            const partyEntries = partyLedgerResponse.data || [];
+            
+            // Find entries with same date and related amounts
+            const relatedEntries = partyEntries.filter(entry => {
+              // Same date
+              if (entry.date !== mainEntry.date) return false;
+              
+              const entryAmount = Math.abs((entry.credit || 0) - (entry.debit || 0));
+              
+              // Commission entries
+              if (entry.party_name === 'Commission' && 
+                  entry.remarks?.includes('Commission') &&
+                  entryAmount === commissionAmount) {
+                console.log(`✅ Found Commission entry: ${entryAmount}`);
+                return true;
+              }
+              
+              // Company entries
+              if (entry.party_name === currentCompanyName && 
+                  entry.remarks?.includes('Transaction with') &&
+                  entryAmount === companyAmount) {
+                console.log(`✅ Found Company entry: ${entryAmount}`);
+                return true;
+              }
+              
+              // Opposite party entries (same amount, different party)
+              if (entry.remarks === mainEntry.party_name &&
+                  entryAmount === mainAmount) {
+                console.log(`✅ Found Opposite party entry: ${entryAmount}`);
+                return true;
+              }
+              
+              return false;
+            });
+            
+            relatedTransactions.push(...relatedEntries);
+          }
+        } catch (error) {
+          console.error(`❌ Error checking party ${party.name} for related transactions:`, error);
+        }
+      }
+      
+      console.log(`🔍 Found ${relatedTransactions.length} related transactions`);
+    } catch (error) {
+      console.error('❌ Error finding related transactions:', error);
+    }
+    
+    return relatedTransactions;
   };
 
   // Handle deleting multiple ledger entries
@@ -1643,10 +1834,33 @@ const AccountLedger = () => {
               continue;
             }
             
+            // Delete the main entry
             const response = await partyLedgerAPI.deleteEntry(entryId);
             
             if (response.success) {
               successCount++;
+              
+              // Find and delete related transactions
+              const relatedTransactions = await findRelatedTransactions(entry);
+              let relatedDeletedCount = 0;
+              
+              for (const relatedEntry of relatedTransactions) {
+                try {
+                  const relatedEntryId = relatedEntry.id || relatedEntry._id || relatedEntry.ti;
+                  if (relatedEntryId) {
+                    const relatedResponse = await partyLedgerAPI.deleteEntry(relatedEntryId);
+                    if (relatedResponse.success) {
+                      relatedDeletedCount++;
+                    }
+                  }
+                } catch (error) {
+                  console.error('❌ Error deleting related entry:', error);
+                }
+              }
+              
+              if (relatedDeletedCount > 0) {
+                console.log(`✅ Deleted ${relatedDeletedCount} related transactions`);
+              }
             } else {
               errorCount++;
               // Handle specific error codes
@@ -1666,6 +1880,11 @@ const AccountLedger = () => {
       // Clear selected entries after deletion attempt
       setSelectedEntries([]);
       
+      // Clear cache to ensure fresh data after deletion
+      console.log('💾 CACHE: Clearing cache after entry deletion');
+      clearCacheByPattern(`.*party-ledger.*${selectedPartyName}.*`);
+      clearCacheByPattern(`.*all-parties.*`);
+      
       // Show appropriate success/error message
       if (successCount > 0 && errorCount === 0) {
         if (mondayFinalEntries.length > 0) {
@@ -1674,10 +1893,21 @@ const AccountLedger = () => {
             description: `Monday Final deleted and ${successCount} transactions unsettled`
           });
         } else {
-        toast({
-          title: "Success",
-          description: `Successfully deleted ${successCount} entr${successCount === 1 ? 'y' : 'ies'}`
-        });
+          // Check if any related transactions were deleted
+          const hasRelatedTransactions = successCount > regularEntries.length;
+          const relatedCount = successCount - regularEntries.length;
+          
+          if (hasRelatedTransactions) {
+            toast({
+              title: "Success",
+              description: `Successfully deleted ${successCount} transactions (including ${relatedCount} related company/commission transactions)`
+            });
+          } else {
+            toast({
+              title: "Success",
+              description: `Successfully deleted ${successCount} entr${successCount === 1 ? 'y' : 'ies'}`
+            });
+          }
         }
       } else if (successCount > 0 && errorCount > 0) {
         toast({
@@ -1701,7 +1931,7 @@ const AccountLedger = () => {
         await new Promise(resolve => setTimeout(resolve, 1000));
         
         // Force reload data with loading spinner for better UX
-        await loadLedgerData(true);
+        await loadLedgerData(true, true); // Force refresh to bypass loading check
         
                  // Force table refresh
          // Removed setTableRefreshKey to prevent unnecessary re-renders
@@ -1710,7 +1940,7 @@ const AccountLedger = () => {
         setShowOldRecords(false);
       } else {
         // Regular deletion - standard refresh
-        await loadLedgerData(false);
+        await loadLedgerData(false, true); // Force refresh to bypass loading check
       }
       
       setEntryToDelete(null);
@@ -1806,17 +2036,33 @@ const AccountLedger = () => {
 
   // Handle refresh functionality
   const handleRefresh = useCallback(async () => {
+    const startTime = performance.now();
+    console.log('🚀 ACTION: handleRefresh started...');
+    console.log('🔄 REFRESH: Starting data refresh...');
+    
     if (!selectedPartyName) return;
     
     setActionLoading(true);
     try {
-      await loadLedgerData(false);
+      // Clear cache to ensure fresh data on refresh
+      console.log('💾 CACHE: Clearing cache on manual refresh');
+      clearCacheByPattern(`.*party-ledger.*${selectedPartyName}.*`);
+      clearCacheByPattern(`.*all-parties.*`);
+      
+      await loadLedgerData(false, true); // Force refresh to bypass loading check
       toast({
         title: "Success",
         description: "Ledger data refreshed successfully"
       });
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      console.log(`✅ ACTION: handleRefresh completed in ${duration.toFixed(2)}ms`);
+      console.log('🔄 REFRESH: Data refresh finished');
     } catch (error) {
       console.error('Refresh error:', error);
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      console.log(`❌ ACTION: handleRefresh failed in ${duration.toFixed(2)}ms`);
     } finally {
       setActionLoading(false);
     }
@@ -1824,12 +2070,24 @@ const AccountLedger = () => {
 
   // Handle exit functionality
   const handleExit = () => {
+    const startTime = performance.now();
+    console.log('🚀 ACTION: handleExit started...');
+    console.log('🚪 NAVIGATION: Navigating to Party Ledger...');
+    
     navigate('/party-ledger');
+    
+    const endTime = performance.now();
+    const duration = endTime - startTime;
+    console.log(`✅ ACTION: handleExit completed in ${duration.toFixed(2)}ms`);
+    console.log('🚪 NAVIGATION: Navigation completed');
   };
 
   // Load data on component mount - OPTIMIZED
   useEffect(() => {
     const initializeData = async () => {
+      const startTime = performance.now();
+      console.log('🚀 FUNCTION: initializeData started...');
+      
       try {
         // Load parties and ledger data
         await loadAvailableParties();
@@ -1838,6 +2096,10 @@ const AccountLedger = () => {
         if (selectedPartyName) {
           await loadLedgerData(true);
         }
+        
+        const endTime = performance.now();
+        const duration = endTime - startTime;
+        console.log(`✅ FUNCTION: initializeData completed in ${duration.toFixed(2)}ms`);
       } catch (error) {
         console.error('Initialization error:', error);
       }
@@ -1851,7 +2113,21 @@ const AccountLedger = () => {
     if (companyName !== 'Company') {
       loadAvailableParties();
     }
-  }, [companyName]); // Removed function dependency
+  }, [companyName, loadAvailableParties]); // Added function dependency back
+
+  // Listen for parties refresh events (e.g., when company party is created)
+  useEffect(() => {
+    const handlePartiesRefresh = (event: CustomEvent) => {
+      console.log('🔄 Parties refresh event received:', event.detail);
+      loadAvailableParties();
+    };
+
+    window.addEventListener('partiesRefreshed', handlePartiesRefresh as EventListener);
+    
+    return () => {
+      window.removeEventListener('partiesRefreshed', handlePartiesRefresh as EventListener);
+    };
+  }, [loadAvailableParties]);
 
   // Handle click outside to close dropdown
   useEffect(() => {
@@ -2218,8 +2494,14 @@ const AccountLedger = () => {
               </div>
               <div className="flex items-center space-x-3">
                 <label className="text-sm font-semibold text-gray-700">Closing Balance:</label>
-                <span className="text-lg font-bold text-green-600 bg-green-50 px-3 py-1 rounded-lg">
-                  ₹{ledgerData?.closingBalance || 0}
+                <span className={`text-lg font-bold px-3 py-1 rounded-lg ${
+                  (ledgerData?.closingBalance || 0) > 0 
+                    ? 'text-green-600 bg-green-50' 
+                    : (ledgerData?.closingBalance || 0) < 0 
+                      ? 'text-red-600 bg-red-50'
+                      : 'text-gray-600 bg-gray-50'
+                }`}>
+                  ₹{(ledgerData?.closingBalance || 0).toLocaleString()}
                 </span>
                 </div>
               </div>
@@ -2495,9 +2777,32 @@ const AccountLedger = () => {
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700">&nbsp;</label>
                     <button
-                  onClick={handleAddEntry}
-                      disabled={actionLoading}
-                      className="w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105"
+                  onClick={() => {
+                    if (isCompanyParty(selectedPartyName, companyName)) {
+                      toast({
+                        title: "Company Party Restriction",
+                        description: getCompanyPartyRestrictionMessage(),
+                        variant: "destructive"
+                      });
+                      return;
+                    }
+                    if (isCommissionParty(selectedPartyName)) {
+                      toast({
+                        title: "Commission Party Restriction",
+                        description: getCommissionPartyRestrictionMessage(),
+                        variant: "destructive"
+                      });
+                      return;
+                    }
+                    handleAddEntry();
+                  }}
+                      disabled={actionLoading || !isTransactionAdditionAllowed(selectedPartyName, companyName)}
+                      className={`w-full px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 ${
+                        isCompanyParty(selectedPartyName, companyName) || isCommissionParty(selectedPartyName)
+                          ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white'
+                      }`}
+                      title={isCompanyParty(selectedPartyName, companyName) ? getCompanyPartyRestrictionMessage() : isCommissionParty(selectedPartyName) ? getCommissionPartyRestrictionMessage() : ''}
                     >
                       {actionLoading ? (
                         <div className="flex items-center justify-center space-x-2">
@@ -2547,10 +2852,31 @@ const AccountLedger = () => {
               
                           <button
               onClick={() => {
+                if (isCompanyParty(selectedPartyName, companyName)) {
+                  toast({
+                    title: "Company Party Restriction",
+                    description: getCompanyPartyRestrictionMessage(),
+                    variant: "destructive"
+                  });
+                  return;
+                }
+                if (isCommissionParty(selectedPartyName)) {
+                  toast({
+                    title: "Commission Party Restriction",
+                    description: getCommissionPartyRestrictionMessage(),
+                    variant: "destructive"
+                  });
+                  return;
+                }
                 setShowMondayFinalModal(true);
               }}
-              disabled={actionLoading}
-              className="w-full px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
+              disabled={actionLoading || !isMondayFinalAllowed(selectedPartyName, companyName)}
+              className={`w-full px-4 py-3 rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2 ${
+                isCompanyParty(selectedPartyName, companyName) || isCommissionParty(selectedPartyName)
+                  ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white'
+              }`}
+              title={isCompanyParty(selectedPartyName, companyName) ? getCompanyPartyRestrictionMessage() : isCommissionParty(selectedPartyName) ? getCommissionPartyRestrictionMessage() : ''}
             >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -2570,6 +2896,22 @@ const AccountLedger = () => {
               
               <button
               onClick={() => {
+                if (isCompanyParty(selectedPartyName, companyName)) {
+                  toast({
+                    title: "Company Party Restriction",
+                    description: getCompanyPartyRestrictionMessage(),
+                    variant: "destructive"
+                  });
+                  return;
+                }
+                if (isCommissionParty(selectedPartyName)) {
+                  toast({
+                    title: "Commission Party Restriction",
+                    description: getCommissionPartyRestrictionMessage(),
+                    variant: "destructive"
+                  });
+                  return;
+                }
                 if (selectedEntries.length === 1) {
                   const displayEntries = showOldRecords ? ledgerData.oldRecords : ledgerData.ledgerEntries;
                   const selectedEntry = displayEntries.find(entry => 
@@ -2585,7 +2927,7 @@ const AccountLedger = () => {
                 const displayEntries = showOldRecords ? ledgerData?.oldRecords : ledgerData?.ledgerEntries;
                 const entry = displayEntries?.find(e => (e.id || e._id || e.ti || '').toString() === entryId);
                 return entry?.is_old_record === true;
-              })}
+              }) || isCompanyParty(selectedPartyName, companyName) || isCommissionParty(selectedPartyName)}
                 className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
                 title={selectedEntries.some(entryId => {
                   const displayEntries = showOldRecords ? ledgerData?.oldRecords : ledgerData?.ledgerEntries;
@@ -2600,12 +2942,30 @@ const AccountLedger = () => {
               </button>
               
               <button
-              onClick={() => setShowDeleteModal(true)}
+              onClick={() => {
+                if (isCompanyParty(selectedPartyName, companyName)) {
+                  toast({
+                    title: "Company Party Restriction",
+                    description: getCompanyPartyRestrictionMessage(),
+                    variant: "destructive"
+                  });
+                  return;
+                }
+                if (isCommissionParty(selectedPartyName)) {
+                  toast({
+                    title: "Commission Party Restriction",
+                    description: getCommissionPartyRestrictionMessage(),
+                    variant: "destructive"
+                  });
+                  return;
+                }
+                setShowDeleteModal(true);
+              }}
               disabled={selectedEntries.length === 0 || selectedEntries.some(entryId => {
                 const displayEntries = showOldRecords ? ledgerData?.oldRecords : ledgerData?.ledgerEntries;
                 const entry = displayEntries?.find(e => (e.id || e._id || e.ti || '').toString() === entryId);
                 return entry?.is_old_record === true;
-              })}
+              }) || isCompanyParty(selectedPartyName, companyName) || isCommissionParty(selectedPartyName)}
                 className="w-full px-4 py-3 bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
                 title={selectedEntries.some(entryId => {
                   const displayEntries = showOldRecords ? ledgerData?.oldRecords : ledgerData?.ledgerEntries;
@@ -2810,4 +3170,4 @@ const AccountLedger = () => {
   );
 };
 
-export default AccountLedger; 
+export default AccountLedger;

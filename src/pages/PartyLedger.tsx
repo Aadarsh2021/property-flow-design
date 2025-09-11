@@ -55,16 +55,12 @@ const PartyLedger = () => {
   // Performance monitoring
   useEffect(() => {
     const startTime = performance.now();
-    console.log('🚀 PAGE: PartyLedger started loading...');
-    console.log('📊 JOURNEY: Step 5 - Opening Party Ledger');
-    console.log('📊 COMPONENT: PartyLedger component mounted');
+    // PartyLedger page loading
     
     return () => {
       const endTime = performance.now();
       const duration = endTime - startTime;
-      console.log(`✅ PAGE: PartyLedger loaded in ${duration.toFixed(2)}ms`);
-      console.log('📊 JOURNEY: Step 5 - Party Ledger opened');
-      console.log('📊 COMPONENT: PartyLedger component unmounted');
+      // PartyLedger page loaded
     };
   }, []);
   
@@ -93,7 +89,7 @@ const PartyLedger = () => {
   // OPTIMIZED: Function to check Monday Final status dynamically
   const checkMondayFinalStatus = async (partyName: string): Promise<'Yes' | 'No'> => {
     const startTime = performance.now();
-    console.log(`🚀 FUNCTION: checkMondayFinalStatus started for ${partyName}...`);
+    // Checking Monday Final status
     
     try {
       const response = await partyLedgerAPI.getPartyLedger(partyName);
@@ -117,19 +113,18 @@ const PartyLedger = () => {
         const endTime = performance.now();
         const duration = endTime - startTime;
         const status = hasMondayFinal ? 'Yes' : 'No';
-        console.log(`✅ FUNCTION: checkMondayFinalStatus completed for ${partyName} in ${duration.toFixed(2)}ms - Status: ${status}`);
+        // Monday Final status checked
         return status;
       }
       
       const endTime = performance.now();
       const duration = endTime - startTime;
-      console.log(`✅ FUNCTION: checkMondayFinalStatus completed for ${partyName} in ${duration.toFixed(2)}ms - Status: No`);
+      // Monday Final status completed
       return 'No';
     } catch (error) {
       const endTime = performance.now();
       const duration = endTime - startTime;
-      console.log(`❌ FUNCTION: checkMondayFinalStatus failed for ${partyName} in ${duration.toFixed(2)}ms`);
-      console.error(`Error checking Monday Final status for ${partyName}:`, error);
+      // Monday Final status check failed
       return 'No';
     }
   };
@@ -189,7 +184,7 @@ const PartyLedger = () => {
         // Update parties state with Monday Final status
         // This will trigger a re-render with updated status
       } catch (error) {
-        console.error('Error loading Monday Final status:', error);
+        // Error loading Monday Final status
       }
     };
 
@@ -366,8 +361,7 @@ const PartyLedger = () => {
   // Handle Monday Final action
   const handleMondayFinalAction = async () => {
     const startTime = performance.now();
-    console.log('🚀 ACTION: handleMondayFinalAction started...');
-    console.log('📊 MONDAY FINAL: Starting Monday Final action...');
+    // Starting Monday Final action
     
     if (selectedParties.length === 0) {
       toast({

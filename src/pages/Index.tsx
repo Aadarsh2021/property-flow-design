@@ -68,12 +68,11 @@ const Index = () => {
 
   // Performance monitoring
   useEffect(() => {
-    console.log('🔥 CONSOLE LOG TEST - Index page loaded!');
-    console.log('📊 COMPONENT: Index component mounted');
+    // Index page loaded
     const endPerfLog = startPerfLog('Index Page', 'page');
     
     return () => {
-      console.log('📊 COMPONENT: Index component unmounted');
+      // Index component unmounted
       endPerfLog();
     };
   }, []);
@@ -84,12 +83,11 @@ const Index = () => {
   const fetchDashboardStats = async () => {
     // Prevent multiple simultaneous calls
     if (loading) {
-      console.log('⏳ Dashboard stats already loading, skipping...');
+      // Dashboard stats already loading
       return;
     }
     
-    console.log('🚀 FUNCTION: fetchDashboardStats started...');
-    console.log('📊 DASHBOARD: Starting stats load...');
+    // Fetching dashboard stats
     const endPerfLog = startPerfLog('Dashboard Stats API', 'api');
     
     if (!isAuthenticated) {
@@ -107,7 +105,7 @@ const Index = () => {
         setStats(statsResponse.data);
         endPerfLog();
       } else {
-        console.error('❌ Dashboard API Error:', statsResponse);
+        // Dashboard API error
         toast({
           title: "Error",
           description: "Failed to load dashboard statistics",
@@ -117,7 +115,7 @@ const Index = () => {
       
       // Recent activity processing removed
     } catch (error) {
-      console.error('Dashboard data error:', error);
+      // Dashboard data error
       toast({
         title: "Error",
         description: "Failed to load dashboard data",
@@ -125,8 +123,8 @@ const Index = () => {
       });
     } finally {
       setLoading(false);
-      console.log('✅ FUNCTION: fetchDashboardStats completed');
-      console.log('📊 DASHBOARD: Stats load finished');
+      // Dashboard stats fetch completed
+      // Dashboard stats load finished
     }
   };
 

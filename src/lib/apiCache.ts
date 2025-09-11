@@ -23,24 +23,24 @@ class ApiCache {
       timestamp: Date.now(),
       ttl
     });
-    console.log(`💾 CACHE: Stored ${key} with TTL ${ttl}ms`);
+    // Cache stored
   }
 
   get<T>(key: string): T | null {
     const entry = this.cache.get(key);
     if (!entry) {
-      console.log(`💾 CACHE: Miss - ${key}`);
+      // Cache miss
       return null;
     }
 
     const now = Date.now();
     if (now - entry.timestamp > entry.ttl) {
       this.cache.delete(key);
-      console.log(`💾 CACHE: Expired - ${key}`);
+      // Cache expired
       return null;
     }
 
-    console.log(`💾 CACHE: Hit - ${key}`);
+    // Cache hit
     return entry.data;
   }
 
@@ -73,25 +73,24 @@ class ApiCache {
   // Clear specific cache entry
   clearKey(key: string): void {
     this.cache.delete(key);
-    console.log(`💾 CACHE: Cleared ${key}`);
+    // Cache cleared
   }
 
   // Clear all cache entries
   clearAll(): void {
     this.cache.clear();
-    console.log(`💾 CACHE: Cleared all entries`);
+    // All cache cleared
   }
 
   // Clear cache entries by pattern
   clearByPattern(pattern: string): void {
     const regex = new RegExp(pattern);
-    console.log(`💾 CACHE: Looking for pattern ${pattern}`);
-    console.log(`💾 CACHE: Current cache keys:`, Array.from(this.cache.keys()));
+    // Looking for cache pattern
     
     for (const key of this.cache.keys()) {
       if (regex.test(key)) {
         this.cache.delete(key);
-        console.log(`💾 CACHE: Cleared ${key} (pattern: ${pattern})`);
+        // Pattern cleared
       }
     }
   }
@@ -115,19 +114,19 @@ export const cachedApiCall = async <T>(
   // Check cache first
   const cached = apiCache.get<T>(key);
   if (cached) {
-    console.log(`✅ Cache hit: ${key}`);
+    // Cache hit
     return cached;
   }
 
   // Check if request is already pending
   const pending = apiCache.getPending<T>(key);
   if (pending) {
-    console.log(`⏳ Pending request: ${key}`);
+    // Pending request
     return pending;
   }
 
   // Make new request
-  console.log(`🔄 New request: ${key}`);
+  // New request
   const promise = apiCall().then(data => {
     apiCache.set(key, data, ttl);
     apiCache.clearPending(key);

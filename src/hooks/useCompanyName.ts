@@ -14,30 +14,27 @@ export const useCompanyName = () => {
       if (user.id) {
         // Check if user has changed
         if (lastUserIdRef.current !== user.id) {
-          console.log('🔄 User changed, reloading company name...', {
-            previousUserId: lastUserIdRef.current,
-            currentUserId: user.id
-          });
+          // User changed, reloading company name
           lastUserIdRef.current = user.id;
         }
         
         const settingsResponse = await userSettingsAPI.getSettings(user.id);
         if (settingsResponse.success && settingsResponse.data?.company_account) {
           setCompanyName(settingsResponse.data.company_account);
-          console.log('✅ Company name loaded:', settingsResponse.data.company_account);
+          // Company name loaded
         } else {
           // If no settings found, use default
           setCompanyName('Company');
-          console.log('⚠️ No company settings found, using default');
+          // No company settings found, using default
         }
       } else {
         // No user logged in, reset to default
         setCompanyName('Company');
         lastUserIdRef.current = null;
-        console.log('👤 No user logged in, using default company name');
+        // No user logged in, using default company name
       }
     } catch (error) {
-      console.error('Error loading company name:', error);
+      // Error loading company name
       // Keep default company name
       setCompanyName('Company');
     } finally {
@@ -56,7 +53,7 @@ export const useCompanyName = () => {
     // Listen for storage changes (user login/logout)
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'user') {
-        console.log('🔄 User storage changed, reloading company name...');
+        // User storage changed, reloading company name
         loadCompanyName();
       }
     };
@@ -65,7 +62,7 @@ export const useCompanyName = () => {
     
     // Also listen for custom events (same tab user changes)
     const handleUserChange = () => {
-      console.log('🔄 User changed event received, reloading company name...');
+      // User changed event received, reloading company name
       loadCompanyName();
     };
     

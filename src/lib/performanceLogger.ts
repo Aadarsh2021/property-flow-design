@@ -30,7 +30,7 @@ class PerformanceLogger {
     const startTime = performance.now();
     const timestamp = Date.now();
     
-    console.log(`🚀 ${type.toUpperCase()}: ${name} started...`);
+    // Performance tracking started
     
     // Create start mark for performance API
     if (typeof performance !== 'undefined' && performance.mark) {
@@ -50,7 +50,7 @@ class PerformanceLogger {
       
       this.logs.push(log);
       
-      console.log(`✅ ${type.toUpperCase()}: ${name} completed in ${duration.toFixed(2)}ms`);
+      // Performance tracking completed
       
       // Log to browser performance API if available
       if (typeof performance !== 'undefined' && performance.mark) {
@@ -69,20 +69,20 @@ class PerformanceLogger {
     if (!this.isEnabled) return;
     
     const status = success ? '✅' : '❌';
-    console.log(`${status} API: ${apiName} - ${duration.toFixed(2)}ms`);
+    // API performance logged
   }
 
   logPageLoad(pageName: string, duration: number) {
     if (!this.isEnabled) return;
     
-    console.log(`📄 PAGE: ${pageName} loaded in ${duration.toFixed(2)}ms`);
+    // Page load logged
   }
 
   logDataProcessing(dataType: string, duration: number, recordCount?: number) {
     if (!this.isEnabled) return;
     
     const recordInfo = recordCount ? ` (${recordCount} records)` : '';
-    console.log(`📊 DATA: ${dataType} processed in ${duration.toFixed(2)}ms${recordInfo}`);
+    // Data processing logged
   }
 
   getLogs(): PerformanceLog[] {
@@ -104,7 +104,7 @@ class PerformanceLogger {
       return acc;
     }, {} as Record<string, { count: number; totalDuration: number; averageDuration: number }>);
 
-    console.log('📈 Performance Summary:', summary);
+    // Performance summary logged
     return summary;
   }
 }

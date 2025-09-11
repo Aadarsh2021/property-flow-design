@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User, createUserWithEmailAndPassword, signInWithEmailAndPassword, updatePassword, updateProfile, sendEmailVerification } from 'firebase/auth';
+import { getAuth } from 'firebase/auth';
 
 // Firebase configuration
 const firebaseConfig = {
@@ -18,12 +18,16 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firebase Authentication and get a reference to the service
 export const auth = getAuth(app);
 
-// Google Auth Provider
-export const googleProvider = new GoogleAuthProvider();
+// Google Auth Provider (lazy loaded)
+export const getGoogleProvider = async () => {
+  const { GoogleAuthProvider } = await import('firebase/auth');
+  return new GoogleAuthProvider();
+};
 
 // Email/Password Authentication functions
 export const signUpWithEmail = async (email: string, password: string) => {
   try {
+    const { createUserWithEmailAndPassword } = await import('firebase/auth');
     const result = await createUserWithEmailAndPassword(auth, email, password);
     return { success: true, user: result.user };
   } catch (error: any) {
@@ -34,6 +38,7 @@ export const signUpWithEmail = async (email: string, password: string) => {
 
 export const signInWithEmail = async (email: string, password: string) => {
   try {
+    const { signInWithEmailAndPassword } = await import('firebase/auth');
     const result = await signInWithEmailAndPassword(auth, email, password);
     return { success: true, user: result.user };
   } catch (error: any) {
@@ -45,6 +50,8 @@ export const signInWithEmail = async (email: string, password: string) => {
 // Google Authentication functions
 export const signInWithGoogle = async () => {
   try {
+    const { signInWithPopup } = await import('firebase/auth');
+    const googleProvider = await getGoogleProvider();
     const result = await signInWithPopup(auth, googleProvider);
     return { success: true, user: result.user };
   } catch (error: any) {
@@ -55,6 +62,7 @@ export const signInWithGoogle = async () => {
 
 export const signOutUser = async () => {
   try {
+    const { signOut } = await import('firebase/auth');
     await signOut(auth);
     return { success: true };
   } catch (error: any) {
@@ -67,6 +75,7 @@ export const signOutUser = async () => {
 // Update Password function
 export const updateUserPassword = async (newPassword: string) => {
   try {
+    const { updatePassword } = await import('firebase/auth');
     const user = auth.currentUser;
     if (!user) {
       return { success: false, error: 'No user logged in' };
@@ -85,6 +94,7 @@ export const updateUserPassword = async (newPassword: string) => {
 // Update User Profile function
 export const updateUserProfile = async (profileData: { displayName?: string; photoURL?: string }) => {
   try {
+    const { updateProfile } = await import('firebase/auth');
     const user = auth.currentUser;
     if (!user) {
       return { success: false, error: 'No user logged in' };
@@ -102,6 +112,7 @@ export const updateUserProfile = async (profileData: { displayName?: string; pho
 // Send Email Verification function
 export const sendEmailVerificationToUser = async () => {
   try {
+    const { sendEmailVerification } = await import('firebase/auth');
     const user = auth.currentUser;
     if (!user) {
       return { success: false, error: 'No user logged in' };
@@ -120,12 +131,13 @@ export const sendEmailVerificationToUser = async () => {
 };
 
 // Auth state listener
-export const onAuthStateChange = (callback: (user: User | null) => void) => {
+export const onAuthStateChange = async (callback: (user: any) => void) => {
+  const { onAuthStateChanged } = await import('firebase/auth');
   return onAuthStateChanged(auth, callback);
 };
 
 // Get current user
-export const getCurrentUser = (): User | null => {
+export const getCurrentUser = (): any => {
   return auth.currentUser;
 };
 
