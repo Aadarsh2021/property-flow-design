@@ -3,7 +3,7 @@ import { partyLedgerAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { Party } from '@/types';
 
-export const usePartyManagement = () => {
+export const usePartyManagement = (currentPartyName?: string) => {
   const { toast } = useToast();
   const [availableParties, setAvailableParties] = useState<Party[]>([]);
   const [allPartiesForTransaction, setAllPartiesForTransaction] = useState<Party[]>([]);
@@ -31,7 +31,14 @@ export const usePartyManagement = () => {
         }));
       
         setAvailableParties(mappedParties);
-        setAllPartiesForTransaction(mappedParties);
+        
+        // Filter out current party from transaction parties
+        const filteredParties = currentPartyName 
+          ? mappedParties.filter(party => 
+              (party.party_name || party.name) !== currentPartyName
+            )
+          : mappedParties;
+        setAllPartiesForTransaction(filteredParties);
       }
     } catch (error: any) {
       console.error('❌ Load parties error:', error);
@@ -74,6 +81,18 @@ export const usePartyManagement = () => {
       (party.party_name || party.name) === partyName
     );
   }, [availableParties, extractPartyNameFromDisplay]);
+
+  // Update filtered parties when currentPartyName changes
+  useEffect(() => {
+    if (availableParties.length > 0) {
+      const filteredParties = currentPartyName 
+        ? availableParties.filter(party => 
+            (party.party_name || party.name) !== currentPartyName
+          )
+        : availableParties;
+      setAllPartiesForTransaction(filteredParties);
+    }
+  }, [currentPartyName, availableParties]);
 
   // Load parties on mount
   useEffect(() => {

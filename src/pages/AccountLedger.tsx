@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, memo, Profiler } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import TopNavigation from '@/components/TopNavigation';
@@ -25,6 +25,7 @@ import { usePartyManagement } from '@/hooks/usePartyManagement';
 import { useTransactionForm } from '@/hooks/useTransactionForm';
 import { useAutoComplete } from '@/hooks/useAutoComplete';
 import { useActionButtons } from '@/hooks/useActionButtons';
+import { usePerformance } from '@/hooks/usePerformance';
 import { PartySelector } from '@/components/PartySelector';
 import { LedgerTable } from '@/components/LedgerTable';
 import { TransactionForm } from '@/components/TransactionForm';
@@ -42,7 +43,18 @@ import {
   Search
 } from 'lucide-react';
 
-const AccountLedger = () => {
+const AccountLedgerComponent = () => {
+  // Performance monitoring - only log significant renders
+  const { measureRender } = usePerformance('AccountLedger');
+  
+  // React Profiler callback for performance tracking
+  const onRenderCallback = useCallback((id: string, phase: string, actualDuration: number, baseDuration: number, startTime: number, commitTime: number) => {
+    // Only log significant renders (> 5ms)
+    if (actualDuration > 5) {
+      console.log(`🔍 Profiler [${id}]: ${phase} phase took ${actualDuration.toFixed(2)}ms (base: ${baseDuration.toFixed(2)}ms)`);
+    }
+  }, []);
+  
   // Router hooks
   const { partyName: initialPartyName } = useParams<{ partyName: string }>();
   const navigate = useNavigate();
@@ -55,61 +67,100 @@ const AccountLedger = () => {
   const [showOldRecords, setShowOldRecords] = useState(false);
   const [selectedEntries, setSelectedEntries] = useState<string[]>([]);
   const [showMondayFinalModal, setShowMondayFinalModal] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
   const [editingEntry, setEditingEntry] = useState<LedgerEntry | null>(null);
   const [entryToDelete, setEntryToDelete] = useState<LedgerEntry | null>(null);
   const [deletedEntryIds, setDeletedEntryIds] = useState<Set<string>>(new Set());
-  const [newEntryIds, setNewEntryIds] = useState<Set<string>>(new Set());
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
   // Custom hooks
-  const { availableParties, allPartiesForTransaction, partiesLoading } = usePartyManagement();
+  const { availableParties, allPartiesForTransaction, partiesLoading } = usePartyManagement(selectedPartyName);
   
-  const { ledgerData, loading, loadLedgerData, refreshBalanceColumn } = useLedgerData({
+  const { ledgerData, loading, loadLedgerData, refreshBalanceColumn, recalculateBalances, forceUpdate } = useLedgerData({
     selectedPartyName,
     showOldRecords,
     setShowOldRecords
   });
 
+  // INSTANT refresh - no debounce for immediate updates
+  const instantRefresh = useMemo(() => {
+    return () => {
+      loadLedgerData(false, true);
+    };
+  }, [loadLedgerData]);
+
   const {
     newEntry,
     loading: formLoading,
+    validationErrors,
+    validationWarnings,
     handlePartyNameChange,
+    handlePartyNameChangeEnhanced,
     handleAmountChange,
     handleRemarksChange,
     handleAddEntry,
-    resetForm
+    resetForm,
+    validateTransaction,
+    effectiveBusinessRules,
+    calculateCommissionAmount
   } = useTransactionForm({
     selectedPartyName,
     allPartiesForTransaction,
-    onTransactionAdded: () => {
-      // Only refresh balance column for immediate UI update
-      refreshBalanceColumn();
-    },
-    setNewEntryIds
+    ledgerData,
+    onTransactionAdded: useCallback(async () => {
+      console.log('🔄 TRANSACTION ADDED: Refreshing data...');
+      // Force refresh data from backend immediately
+      try {
+        await loadLedgerData(true, true); // Show loading and force refresh
+        console.log('✅ TRANSACTION ADDED: Data refreshed successfully');
+      } catch (error) {
+        console.error('❌ TRANSACTION ADDED: Error refreshing data:', error);
+      }
+    }, [loadLedgerData]),
+    businessRules: {
+      maxTransactionAmount: 10000000,
+      minTransactionAmount: 1,
+      maxDailyTransactions: 50,
+      requireRemarksForHighValue: true,
+      highValueThreshold: 50000
+    }
   });
 
-  // Handle party change - delegate to hook
+  // Handle party change - optimized like old system
   const handlePartyChange = useCallback(async (newPartyName: string) => {
     const actualPartyName = extractPartyNameFromDisplay(newPartyName.trim());
+    
+    // Immediate UI updates - no waiting
     setSelectedPartyName(actualPartyName);
     setTypingPartyName(newPartyName.trim());
     resetForm();
     setSelectedEntries([]);
-    setDeletedEntryIds(new Set()); // Clear deleted entries on party change
+    setDeletedEntryIds(new Set());
     navigate(`/account-ledger/${encodeURIComponent(actualPartyName)}`);
     
-    // Load ledger data in background without blocking UI
-    loadLedgerData(true, true);
+    // Load data immediately - like old system
+    try {
+      await loadLedgerData(true, true);
+    } catch (error) {
+      console.error('Error loading party data:', error);
+    }
   }, [navigate, resetForm, loadLedgerData]);
 
-  // Top party selector auto-complete
+  // Top party selector auto-complete - Enhanced like old version
   const topPartyAutoComplete = useAutoComplete({
     parties: availableParties,
     onPartySelect: handlePartyChange,
     excludeCurrentParty: true,
     currentPartyName: selectedPartyName
   });
+
+  // Party selection handlers - Like old version
+  const handlePartySelect = useCallback((partyName: string) => {
+    handlePartyChange(partyName);
+  }, [handlePartyChange]);
+
+  const handleTopPartySelect = useCallback((partyName: string) => {
+    handlePartyChange(partyName);
+  }, [handlePartyChange]);
 
   // Handle URL parameter changes and initial load
   useEffect(() => {
@@ -128,10 +179,24 @@ const AccountLedger = () => {
     }
   }, [initialPartyName, selectedPartyName, initialLoadComplete]);
 
-  // Get current entries for display
-  const currentEntries = ledgerData 
-    ? (showOldRecords ? ledgerData.oldRecords : ledgerData.ledgerEntries)
-    : [];
+  // Get current entries for display - simplified version
+  const currentEntries = useMemo(() => {
+    if (!ledgerData) return [];
+    
+    const entries = showOldRecords 
+      ? [...(ledgerData.oldRecords || []), ...(ledgerData.ledgerEntries?.filter(entry => entry.remarks?.includes('Monday Final Settlement')) || [])]
+      : ledgerData.ledgerEntries || [];
+    
+    // Filter out deleted entries
+    const filteredEntries = entries.filter(entry => {
+      const entryId = (entry.id || entry._id || entry.ti || '').toString();
+      const entryPartyName = entry.partyName || entry.party_name || '';
+      const compositeKey = `${entryPartyName}:${entryId}`;
+      return !deletedEntryIds.has(compositeKey);
+    });
+    
+    return filteredEntries;
+  }, [ledgerData, showOldRecords, deletedEntryIds, forceUpdate]);
 
   // Action buttons hook
   const {
@@ -139,12 +204,14 @@ const AccountLedger = () => {
     handleCheckAll: hookHandleCheckAll,
     handleModifyEntry: hookHandleModifyEntry,
     handleDeleteEntry: hookHandleDeleteEntry,
+    handleBulkDelete: hookHandleBulkDelete,
     handleMondayFinal: hookHandleMondayFinal,
     handleRefresh: hookHandleRefresh,
     handlePrint: hookHandlePrint,
     handleExit: hookHandleExit,
     handleDCReport: hookHandleDCReport,
-    handleCommissionAutoFill: hookHandleCommissionAutoFill
+    handleCommissionAutoFill: hookHandleCommissionAutoFill,
+    actionLoading: hookActionLoading
   } = useActionButtons({
     selectedEntries,
     currentEntries,
@@ -155,7 +222,6 @@ const AccountLedger = () => {
     setShowMondayFinalModal,
     setEditingEntry,
     setEntryToDelete,
-    setActionLoading,
     loadLedgerData,
     refreshBalanceColumn,
     setDeletedEntryIds
@@ -206,7 +272,7 @@ const AccountLedger = () => {
   // Handle parties refresh event
   useEffect(() => {
     const handlePartiesRefresh = (event: CustomEvent) => {
-      console.log('🔄 Parties refresh event received:', event.detail);
+      // console.log('🔄 Parties refresh event received:', event.detail);
       // Refresh parties data
     };
 
@@ -217,41 +283,10 @@ const AccountLedger = () => {
     };
   }, []);
 
-  // Performance optimization: Memoized calculations with pagination
-  const memoizedDisplayEntries = useMemo(() => {
-    if (!ledgerData) return [];
-    
-    const entries = showOldRecords 
-      ? [...(ledgerData.oldRecords || []), ...(ledgerData.ledgerEntries?.filter(entry => entry.remarks?.includes('Monday Final Settlement')) || [])]
-      : ledgerData.ledgerEntries || [];
-    
-    // Filter out deleted entries and add new entries for immediate UI update
-    const filteredEntries = entries.filter(entry => {
-      const entryId = (entry.id || entry._id || entry.ti || '').toString();
-      return !deletedEntryIds.has(entryId);
-    });
-    
-    // Add new entries at the top for immediate visibility
-    const newEntries = Array.from(newEntryIds).map(id => ({
-      id,
-      _id: id,
-      ti: id,
-      partyName: 'New Entry',
-      remarks: 'Loading...',
-      tnsType: 'CR',
-      credit: 0,
-      debit: 0,
-      balance: 0,
-      date: new Date().toISOString().split('T')[0],
-      is_old_record: false
-    }));
-    
-    // Combine new entries with filtered entries
-    const combinedEntries = [...newEntries, ...filteredEntries];
-    
-    // Limit entries for better performance (show only first 100)
-    return combinedEntries.slice(0, 100);
-  }, [ledgerData, showOldRecords, deletedEntryIds, newEntryIds]);
+  // Calculate closing balance - use real data only
+  const closingBalance = useMemo(() => {
+    return ledgerData?.closingBalance || 0;
+  }, [ledgerData?.closingBalance, forceUpdate]);
 
   // Performance optimization: Memoized party filtering
   const availablePartiesExcludingCurrent = useMemo(() => {
@@ -325,8 +360,9 @@ const AccountLedger = () => {
   }
 
   return (
-    <div className="h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col">
-      <TopNavigation />
+    <Profiler id="AccountLedger" onRender={onRenderCallback}>
+      <div className="h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col">
+        <TopNavigation />
       
       {/* Main Layout - Split from top navigation */}
       <div className="flex flex-1 overflow-hidden">
@@ -337,7 +373,7 @@ const AccountLedger = () => {
             <div className="flex items-center space-x-8">
               <div className="flex items-center space-x-3">
                 <label className="text-sm font-semibold text-gray-700">Party Name:</label>
-                <div className="relative">
+                <div className="relative top-party-dropdown-container">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                     <Input
@@ -354,10 +390,13 @@ const AccountLedger = () => {
                     {/* Auto-complete hint */}
                     {topPartyAutoComplete.searchTerm && topPartyAutoComplete.showInlineSuggestion && topPartyAutoComplete.autoCompleteText && (
                       <div 
-                        className="absolute top-1/2 transform -translate-y-1/2 pointer-events-none text-gray-400 text-sm"
+                        className="absolute top-1/2 transform -translate-y-1/2 pointer-events-none text-gray-400 text-sm opacity-60"
                         style={{ 
-                          left: `${topPartyAutoComplete.textWidth + 40}px`,
-                          zIndex: 1
+                          left: `${Math.max(topPartyAutoComplete.textWidth + 40, 40)}px`,
+                          zIndex: 1,
+                          maxWidth: '200px',
+                          overflow: 'hidden',
+                          whiteSpace: 'nowrap'
                         }}
                       >
                         {topPartyAutoComplete.autoCompleteText}
@@ -366,7 +405,7 @@ const AccountLedger = () => {
                     
                     {/* Tab hint */}
                     {topPartyAutoComplete.searchTerm && topPartyAutoComplete.showInlineSuggestion && topPartyAutoComplete.autoCompleteText && (
-                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs">
+                      <div className="absolute right-8 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs bg-white px-1">
                         Tab
                       </div>
                     )}
@@ -374,7 +413,7 @@ const AccountLedger = () => {
                   
                   {/* Auto-suggestion dropdown */}
                   {topPartyAutoComplete.showSuggestions && topPartyAutoComplete.filteredParties.length > 0 && (
-                    <div className="absolute z-10 w-64 bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
+                    <div className="absolute z-50 w-64 bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto top-party-dropdown-container">
                       {topPartyAutoComplete.filteredParties.slice(0, 10).map((party, index) => (
                         <div
                           key={party._id}
@@ -402,13 +441,13 @@ const AccountLedger = () => {
               <div className="flex items-center space-x-3">
                 <label className="text-sm font-semibold text-gray-700">Closing Balance:</label>
                 <span className={`text-lg font-bold px-3 py-1 rounded-lg ${
-                  (ledgerData?.closingBalance || 0) > 0 
+                  closingBalance > 0 
                     ? 'text-green-600 bg-green-50' 
-                    : (ledgerData?.closingBalance || 0) < 0 
+                    : closingBalance < 0 
                       ? 'text-red-600 bg-red-50'
                       : 'text-gray-600 bg-gray-50'
                 }`}>
-                  {formatCurrency(ledgerData?.closingBalance || 0)}
+                  {formatCurrency(closingBalance)}
                 </span>
               </div>
             </div>
@@ -421,17 +460,6 @@ const AccountLedger = () => {
                 <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-3">
                   <div className="flex items-center justify-between">
                     <h2 className="text-white font-semibold text-lg">Account Ledger Entries</h2>
-                    <div className="flex items-center space-x-4">
-                      <label className="flex items-center space-x-2 text-white">
-                        <input
-                          type="checkbox"
-                          checked={showOldRecords}
-                          onChange={() => setShowOldRecords(!showOldRecords)}
-                          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-                        />
-                        <span className="text-sm">Show Old Records</span>
-                      </label>
-                    </div>
                   </div>
                 </div>
                 <div className="overflow-auto" style={{ height: '400px' }}>
@@ -442,7 +470,7 @@ const AccountLedger = () => {
                     </div>
                   ) : (
                     <LedgerTable
-                      entries={memoizedDisplayEntries}
+                      entries={currentEntries}
                       showOldRecords={showOldRecords}
                       onToggleOldRecords={() => setShowOldRecords(!showOldRecords)}
                       onEntrySelect={handleEntrySelect}
@@ -458,20 +486,25 @@ const AccountLedger = () => {
               {/* Form Section - Below table */}
               <div className="bg-white shadow-lg border border-gray-200 rounded-xl px-6 py-4">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-800">Add New Entry</h3>
+                  <h3 className="text-lg font-semibold text-gray-800">
+                    Add New Entry for <span className="text-blue-600">{selectedPartyName}</span>
+                  </h3>
                   <div className="text-xs text-gray-500">
-                    <strong>Format:</strong> Party Name(Remarks) | <strong>Type:</strong> + for Credit, - for Debit | <strong>Commission:</strong> Type "commission" in party name for last transaction
+                    <strong>Format:</strong> Party Name or Party Name(Remarks) | <strong>Amount:</strong> + for Credit, - for Debit | <strong>Commission:</strong> Type "commission" in party name
                   </div>
                 </div>
                 <TransactionForm
                   newEntry={newEntry}
                   loading={formLoading}
                   allPartiesForTransaction={allPartiesForTransaction}
+                  selectedPartyName={selectedPartyName}
                   onPartyNameChange={handlePartyNameChange}
                   onAmountChange={handleAmountChange}
                   onRemarksChange={handleRemarksChange}
                   onAddEntry={handleAddEntry}
                   onReset={resetForm}
+                  validationErrors={validationErrors}
+                  validationWarnings={validationWarnings}
                 />
               </div>
             </div>
@@ -490,7 +523,7 @@ const AccountLedger = () => {
           <div className="space-y-3">
             <button
               onClick={hookHandleRefresh}
-              disabled={actionLoading}
+              disabled={hookActionLoading}
               className="w-full px-4 py-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -521,7 +554,13 @@ const AccountLedger = () => {
             </button>
             
             <button
-              onClick={() => setShowOldRecords(!showOldRecords)}
+              onClick={async () => {
+                const newShowOldRecords = !showOldRecords;
+                setShowOldRecords(newShowOldRecords);
+                console.log('🔄 OLD RECORDS: Toggling to:', newShowOldRecords);
+                // Refresh data after toggle
+                await loadLedgerData(false, true);
+              }}
               className="w-full px-4 py-3 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white rounded-lg text-sm font-medium transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -553,11 +592,22 @@ const AccountLedger = () => {
             <button
               onClick={() => {
                 if (selectedEntries.length > 0) {
-                  const selectedEntry = currentEntries.find(entry => 
-                    (entry.id || entry._id || entry.ti || '').toString() === selectedEntries[0]
-                  );
-                  if (selectedEntry) {
-                    hookHandleDeleteEntry(selectedEntry);
+                  if (selectedEntries.length === 1) {
+                    // Single entry delete
+                    const selectedEntry = currentEntries.find(entry => 
+                      (entry.id || entry._id || entry.ti || '').toString() === selectedEntries[0]
+                    );
+                    if (selectedEntry) {
+                      hookHandleDeleteEntry(selectedEntry);
+                    }
+                  } else {
+                    // Bulk delete
+                    const selectedEntriesData = currentEntries.filter(entry => 
+                      selectedEntries.includes((entry.id || entry._id || entry.ti || '').toString())
+                    );
+                    if (selectedEntriesData.length > 0) {
+                      hookHandleBulkDelete(selectedEntriesData);
+                    }
                   }
                 }
               }}
@@ -567,7 +617,7 @@ const AccountLedger = () => {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
-              <span>Delete</span>
+              <span>{selectedEntries.length === 1 ? 'Delete' : `Delete ${selectedEntries.length}`}</span>
             </button>
             
             <button
@@ -609,10 +659,14 @@ const AccountLedger = () => {
         onClose={() => setShowMondayFinalModal(false)}
         onConfirm={hookHandleMondayFinal}
         selectedCount={selectedEntries.length}
-        loading={actionLoading}
+        loading={hookActionLoading}
       />
-    </div>
+      </div>
+    </Profiler>
   );
 };
+
+// Memoize the component to prevent unnecessary re-renders
+const AccountLedger = memo(AccountLedgerComponent);
 
 export default AccountLedger;

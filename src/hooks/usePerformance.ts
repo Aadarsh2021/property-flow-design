@@ -7,6 +7,7 @@ import { useEffect, useRef } from 'react';
 export const usePerformance = (componentName: string) => {
   const renderStartTime = useRef<number>(0);
   const renderCount = useRef<number>(0);
+  const lastLogTime = useRef<number>(0);
 
   useEffect(() => {
     renderStartTime.current = performance.now();
@@ -15,13 +16,15 @@ export const usePerformance = (componentName: string) => {
     // Use requestAnimationFrame to measure after render
     requestAnimationFrame(() => {
       const renderTime = performance.now() - renderStartTime.current;
+      const now = Date.now();
       
-      // Only log if render time is significant (> 5ms)
-      if (renderTime > 5) {
+      // Only log if render time is significant (> 5ms) and not too frequent (max once per 100ms)
+      if (renderTime > 5 && (now - lastLogTime.current) > 100) {
         console.log(`⚡ ${componentName} rendered in ${renderTime.toFixed(2)}ms (render #${renderCount.current})`);
+        lastLogTime.current = now;
       }
     });
-  });
+  }, []); // Empty dependency array - only run on mount
 
   return {
     renderCount: renderCount.current,
@@ -29,7 +32,10 @@ export const usePerformance = (componentName: string) => {
       const start = performance.now();
       return () => {
         const end = performance.now();
-        console.log(`⏱️ ${name} took ${(end - start).toFixed(2)}ms`);
+        // Only log if measurement is significant (> 1ms)
+        if (end - start > 1) {
+          console.log(`⏱️ ${name} took ${(end - start).toFixed(2)}ms`);
+        }
       };
     }
   };

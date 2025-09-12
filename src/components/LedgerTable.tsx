@@ -1,4 +1,4 @@
-import React, { memo, useState } from 'react';
+import React, { memo, useState, useCallback, Profiler } from 'react';
 import { LedgerEntry } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -45,7 +45,7 @@ const TableRow = memo(({
       </td>
       <td className="px-4 py-3 text-gray-800 font-medium">
         <div className="flex items-center space-x-2">
-          <span>{entry.partyName || entry.party_name || ''}</span>
+          <span>{entry.remarks || entry.partyName || entry.party_name || ''}</span>
           {entry.is_old_record && (
             <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full font-medium">
               Old Record
@@ -54,12 +54,12 @@ const TableRow = memo(({
         </div>
       </td>
       <td className="px-4 py-3 text-center">
-        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+        <span className={`px-3 py-1 rounded-full text-sm font-bold ${
           entry.tnsType === 'CR' 
-            ? 'bg-green-100 text-green-800' 
-            : 'bg-red-100 text-red-800'
+            ? 'bg-green-100 text-green-800 border border-green-200' 
+            : 'bg-red-100 text-red-800 border border-red-200'
         }`}>
-          {entry.tnsType}
+          {entry.tnsType === 'CR' ? 'CR' : 'DR'}
         </span>
       </td>
       <td className="px-4 py-3 text-center font-medium text-green-600">
@@ -109,6 +109,14 @@ export const LedgerTable: React.FC<LedgerTableProps> = ({
 }) => {
   const [selectAll, setSelectAll] = useState(false);
 
+  // React Profiler callback for performance tracking
+  const onRenderCallback = useCallback((id: string, phase: string, actualDuration: number, baseDuration: number, startTime: number, commitTime: number) => {
+    // Only log significant renders (> 2ms for table)
+    if (actualDuration > 2) {
+      console.log(`🔍 Profiler [${id}]: ${phase} phase took ${actualDuration.toFixed(2)}ms (base: ${baseDuration.toFixed(2)}ms)`);
+    }
+  }, []);
+
   const handleSelectAll = (checked: boolean) => {
     setSelectAll(checked);
     onSelectAll(checked);
@@ -120,7 +128,8 @@ export const LedgerTable: React.FC<LedgerTableProps> = ({
   );
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+    <Profiler id="LedgerTable" onRender={onRenderCallback}>
+      <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
       {/* Header */}
       <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
         <div className="flex items-center justify-between">
@@ -178,6 +187,7 @@ export const LedgerTable: React.FC<LedgerTableProps> = ({
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </Profiler>
   );
 };

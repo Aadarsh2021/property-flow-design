@@ -42,7 +42,7 @@ interface TrialBalanceData {
 
 interface Party {
   _id: string;
-  partyName: string;
+  party_name: string;
   email?: string;
   phone?: string;
 }
@@ -96,7 +96,7 @@ const FinalTrialBalance = () => {
     // Convert to party objects
     const extractedParties = Array.from(partyNames).map(name => ({
       _id: name.toLowerCase().replace(/\s+/g, '-'),
-      partyName: name,
+      party_name: name,
       email: '',
       phone: ''
     }));
@@ -116,11 +116,11 @@ const FinalTrialBalance = () => {
     } else {
       const searchLower = partyName.toLowerCase();
       const filtered = parties.filter(party => {
-        const partyLower = party.partyName.toLowerCase();
+        const partyLower = party.party_name.toLowerCase();
         return partyLower.startsWith(searchLower) || partyLower.includes(searchLower);
       }).sort((a, b) => {
-        const aName = a.partyName.toLowerCase();
-        const bName = b.partyName.toLowerCase();
+        const aName = a.party_name.toLowerCase();
+        const bName = b.party_name.toLowerCase();
         
         // Sort by: starts with first, then alphabetically
         const aStartsWith = aName.startsWith(searchLower);
@@ -136,13 +136,13 @@ const FinalTrialBalance = () => {
       // VS Code style auto-complete: Find best match for inline suggestion (case insensitive)
       if (filtered.length > 0) {
         const bestMatch = filtered[0];
-        const partyNameLower = bestMatch.partyName.toLowerCase();
+        const partyNameLower = bestMatch.party_name.toLowerCase();
         
         if (partyNameLower.startsWith(searchLower) && partyNameLower !== searchLower) {
           // Find the actual position where the match starts (case insensitive)
-          const matchIndex = bestMatch.partyName.toLowerCase().indexOf(searchLower);
+          const matchIndex = bestMatch.party_name.toLowerCase().indexOf(searchLower);
           if (matchIndex === 0) {
-            setAutoCompleteText(bestMatch.partyName.substring(partyName.length));
+            setAutoCompleteText(bestMatch.party_name.substring(partyName.length));
             setShowInlineSuggestion(true);
           } else {
             setAutoCompleteText('');
@@ -183,11 +183,12 @@ const FinalTrialBalance = () => {
       const partyBalances = await Promise.all(
         limitedParties.map(async (party) => {
           try {
-            const ledgerResponse = await partyLedgerAPI.getPartyLedger(party.partyName);
-            if (ledgerResponse.success && ledgerResponse.data) {
-              const closingBalance = ledgerResponse.data.closingBalance || 0;
+            const ledgerResponse = await partyLedgerAPI.getPartyLedger(party.party_name);
+            if (ledgerResponse.success && ledgerResponse.data && Array.isArray(ledgerResponse.data)) {
+              const entries = ledgerResponse.data;
+              const closingBalance = entries.length > 0 ? entries[entries.length - 1].balance || 0 : 0;
               return {
-                name: party.partyName,
+                name: party.party_name,
                 closingBalance: closingBalance
               };
             }
@@ -445,7 +446,7 @@ const FinalTrialBalance = () => {
                               const completedValue = partyName + autoCompleteText;
                               handlePartySelect(completedValue);
                             } else if (filteredParties.length > 0) {
-                              handlePartySelect(filteredParties[0].partyName);
+                              handlePartySelect(filteredParties[0].party_name);
                             } else {
                               setShowDropdown(false);
                             }
@@ -501,9 +502,9 @@ const FinalTrialBalance = () => {
                             <div
                               key={party._id}
                               className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
-                              onClick={() => handlePartySelect(party.partyName)}
+                              onClick={() => handlePartySelect(party.party_name)}
                             >
-                              {party.partyName}
+                              {party.party_name}
                             </div>
                           ))
                         ) : (

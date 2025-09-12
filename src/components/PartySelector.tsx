@@ -12,6 +12,8 @@ interface PartySelectorProps {
   className?: string;
   showSuggestions?: boolean;
   onKeyDown?: (e: React.KeyboardEvent) => void;
+  excludeCurrentParty?: boolean;
+  currentPartyName?: string;
 }
 
 export const PartySelector: React.FC<PartySelectorProps> = ({
@@ -21,7 +23,9 @@ export const PartySelector: React.FC<PartySelectorProps> = ({
   placeholder = "Search parties...",
   className = "",
   showSuggestions = true,
-  onKeyDown
+  onKeyDown,
+  excludeCurrentParty = false,
+  currentPartyName = ""
 }) => {
   const {
     searchTerm,
@@ -41,8 +45,8 @@ export const PartySelector: React.FC<PartySelectorProps> = ({
   } = useAutoComplete({
     parties,
     onPartySelect,
-    excludeCurrentParty: true,
-    currentPartyName: selectedPartyName
+    excludeCurrentParty,
+    currentPartyName
   });
 
   return (
@@ -68,10 +72,13 @@ export const PartySelector: React.FC<PartySelectorProps> = ({
         {/* Auto-complete hint */}
         {searchTerm && showInlineSuggestion && autoCompleteText && (
           <div 
-            className="absolute top-1/2 transform -translate-y-1/2 pointer-events-none text-gray-400 text-sm"
+            className="absolute top-1/2 transform -translate-y-1/2 pointer-events-none text-gray-400 text-sm opacity-60"
             style={{ 
-              left: `${textWidth + 40}px`,
-              zIndex: 1
+              left: `${Math.max(textWidth + 40, 40)}px`,
+              zIndex: 1,
+              maxWidth: '200px',
+              overflow: 'hidden',
+              whiteSpace: 'nowrap'
             }}
           >
             {autoCompleteText}
@@ -80,7 +87,7 @@ export const PartySelector: React.FC<PartySelectorProps> = ({
         
         {/* Tab hint */}
         {searchTerm && showInlineSuggestion && autoCompleteText && (
-          <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs">
+          <div className="absolute right-8 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs bg-white px-1">
             Tab
           </div>
         )}
@@ -88,7 +95,7 @@ export const PartySelector: React.FC<PartySelectorProps> = ({
       
       {/* Auto-suggestion dropdown */}
       {showSuggestions && showSuggestionsState && filteredParties.length > 0 && (
-        <div className="absolute z-10 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
+        <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-md shadow-lg mb-1 max-h-60 overflow-y-auto party-dropdown-container" style={{ bottom: '100%' }}>
           {filteredParties.slice(0, 10).map((party, index) => (
             <div
               key={party._id}

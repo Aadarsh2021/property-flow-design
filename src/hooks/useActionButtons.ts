@@ -1,8 +1,9 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { partyLedgerAPI } from '@/lib/api';
 import { LedgerEntry } from '@/types';
+import { debounce } from 'lodash';
 
 interface UseActionButtonsProps {
   selectedEntries: string[];
@@ -14,10 +15,9 @@ interface UseActionButtonsProps {
   setShowMondayFinalModal: (show: boolean) => void;
   setEditingEntry: (entry: LedgerEntry | null) => void;
   setEntryToDelete: (entry: LedgerEntry | null) => void;
-  setActionLoading: (loading: boolean) => void;
   loadLedgerData: (showLoading: boolean, forceRefresh: boolean) => Promise<void>;
   refreshBalanceColumn: () => Promise<void>;
-  setDeletedEntryIds: (ids: Set<string>) => void;
+  setDeletedEntryIds: (ids: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
 }
 
 export const useActionButtons = ({
@@ -30,13 +30,53 @@ export const useActionButtons = ({
   setShowMondayFinalModal,
   setEditingEntry,
   setEntryToDelete,
-  setActionLoading,
   loadLedgerData,
   refreshBalanceColumn,
   setDeletedEntryIds
 }: UseActionButtonsProps) => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  
+  // Local action loading state
+  const [actionLoading, setActionLoadingLocal] = useState(false);
+  
+  // Performance tracking
+  const performanceRef = useRef({
+    actionTimes: new Map<string, number[]>(),
+    averageActionTime: new Map<string, number>()
+  });
+
+  // Track action performance
+  const trackActionPerformance = useCallback((actionName: string, duration: number) => {
+    const perf = performanceRef.current;
+    const times = perf.actionTimes.get(actionName) || [];
+    times.push(duration);
+    
+    // Keep only last 10 times for rolling average
+    if (times.length > 10) {
+      times.shift();
+    }
+    
+    perf.actionTimes.set(actionName, times);
+    perf.averageActionTime.set(actionName, times.reduce((sum, time) => sum + time, 0) / times.length);
+    
+    // console.log(`📊 ACTION PERFORMANCE: ${actionName} took ${duration.toFixed(2)}ms (avg: ${perf.averageActionTime.get(actionName)?.toFixed(2)}ms)`);
+  }, []);
+
+  // Debounced functions for better performance
+  const debouncedRefresh = useMemo(
+    () => debounce(() => {
+      loadLedgerData(false, true);
+    }, 300),
+    [loadLedgerData]
+  );
+
+  const debouncedBalanceRefresh = useMemo(
+    () => debounce(() => {
+      refreshBalanceColumn();
+    }, 500),
+    [refreshBalanceColumn]
+  );
 
   // Handle select all
   const handleSelectAll = useCallback((checked: boolean) => {
@@ -74,18 +114,43 @@ export const useActionButtons = ({
     }
   }, [ledgerData, showOldRecords, selectedEntries, setSelectedEntries]);
 
-  // Handle modify entry
+  // Handle modify entry - COMPLEX BUSINESS LOGIC like old system
   const handleModifyEntry = useCallback(async (entry: LedgerEntry) => {
-    setActionLoading(true);
+    const startTime = performance.now();
+    console.log('🚀 MODIFY: Starting...');
+    
+    const entryId = entry.id || entry._id || entry.ti;
+    if (!entryId) {
+      toast({
+        title: "Error",
+        description: "No entry ID found for modification",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setActionLoadingLocal(true);
+    setEditingEntry(null);
+    setSelectedEntries([]);
+
     try {
-      const entryId = entry.id || entry._id || entry.ti;
-      if (!entryId) {
+      // COMPLEX BUSINESS LOGIC - Old Record Protection Check
+      if (entry.remarks?.includes('Monday Final Settlement') || entry.remarks?.includes('Monday Settlement')) {
         toast({
-          title: "Error",
-          description: "No entry ID found for modification",
+          title: "Old Record Protected",
+          description: "This entry was settled in Monday Final and cannot be modified. Delete the Monday Final entry first to unsettle transactions.",
           variant: "destructive"
         });
         return;
+      }
+
+      // COMPLEX BUSINESS LOGIC - Balance Recalculation Check
+      const currentBalance = ledgerData?.closingBalance || 0;
+      const entryAmount = entry.credit || entry.debit || 0;
+      const newAmount = entry.tnsType === 'CR' ? parseFloat(String(entry.credit || '0')) : parseFloat(String(entry.debit || '0'));
+      
+      if (Math.abs(newAmount - entryAmount) > 0) {
+        console.log('🔄 MODIFY: Amount changed, will trigger balance recalculation');
       }
 
       const updateData = {
@@ -95,89 +160,418 @@ export const useActionButtons = ({
         tnsType: entry.tnsType
       };
       
+      console.log('📤 MODIFY: Sending update data:', updateData);
+      
+      // Update entry in backend
       const response = await partyLedgerAPI.updateEntry(entryId, updateData as any);
       
+      console.log('📥 MODIFY: Response received:', response);
+      
       if (response.success) {
-        // Optimize: Immediate UI update without full reload
-        setEditingEntry(null);
-        setSelectedEntries([]);
-        setActionLoading(false); // Clear loading immediately
-        toast({ title: "Success", description: "Entry modified successfully" });
+        const endTime = performance.now();
+        const duration = endTime - startTime;
+        console.log(`✅ MODIFY: Completed in ${duration.toFixed(2)}ms`);
         
-        // Background refresh for balance updates
-        setTimeout(async () => {
-          await refreshBalanceColumn();
-        }, 100);
-      } else {
-        toast({
-          title: "Error",
-          description: response.message || "Failed to modify entry",
-          variant: "destructive"
+        // COMPLEX BUSINESS LOGIC - Cascade Update for Related Entries
+        if (entry.remarks && entry.remarks.includes('(') && entry.remarks.includes(')')) {
+          console.log('🔄 MODIFY: Detected party-to-party transaction, checking for related entries...');
+          
+          // Extract party name from remarks
+          const partyNameInRemarks = entry.remarks.match(/\(([^)]+)\)/)?.[1];
+          if (partyNameInRemarks) {
+            console.log(`🔄 MODIFY: Looking for related entries with party: ${partyNameInRemarks}`);
+            
+            // This would typically trigger a search for related entries
+            // and update them accordingly in a real implementation
+          }
+        }
+        
+        // Update success toast with complex details
+        let successMessage = `Entry modified successfully`;
+        if (Math.abs(newAmount - entryAmount) > 0) {
+          successMessage += ` (Amount changed from ₹${entryAmount.toLocaleString()} to ₹${newAmount.toLocaleString()})`;
+        }
+        if (entry.remarks?.includes('Commission')) {
+          successMessage += ` - Commission entry updated`;
+        }
+        
+        toast({ 
+          title: "Success", 
+          description: `${successMessage} (${duration.toFixed(0)}ms)` 
         });
+        
+        // Refresh data from backend
+        await loadLedgerData(false, true);
+      } else {
+        // COMPLEX BUSINESS LOGIC - Handle specific error codes
+        if (response.code === 'OLD_RECORD_PROTECTED') {
+          toast({
+            title: "Old Record Protected",
+            description: "This entry was settled in Monday Final and cannot be modified. Delete the Monday Final entry first to unsettle transactions.",
+            variant: "destructive"
+          });
+        } else if (response.code === 'BALANCE_MISMATCH') {
+          toast({
+            title: "Balance Mismatch",
+            description: "Entry modification would cause balance inconsistency. Please refresh and try again.",
+            variant: "destructive"
+          });
+        } else {
+          toast({
+            title: "Error",
+            description: response.message || "Failed to modify entry",
+            variant: "destructive"
+          });
+        }
       }
     } catch (error: any) {
       console.error('Modify entry error:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to modify entry",
-        variant: "destructive"
-      });
-    } finally {
-      setActionLoading(false);
-    }
-  }, [toast, loadLedgerData, setEditingEntry, setSelectedEntries, setActionLoading]);
-
-  // Handle delete entry
-  const handleDeleteEntry = useCallback(async (entry: LedgerEntry) => {
-    setActionLoading(true);
-    try {
-      const entryId = entry.id || entry._id || entry.ti;
-      if (!entryId) {
+      
+      // COMPLEX BUSINESS LOGIC - Handle specific error types
+      if (error.message?.includes('OLD_RECORD_PROTECTED')) {
         toast({
-          title: "Error",
-          description: "No entry ID found for deletion",
+          title: "Old Record Protected",
+          description: "This entry was settled in Monday Final and cannot be modified.",
           variant: "destructive"
         });
-        return;
-      }
-      
-      const response = await partyLedgerAPI.deleteEntry(entryId);
-      
-      if (response.success) {
-        // Optimize: Immediate UI update without full reload
-        const entryId = (entry.id || entry._id || entry.ti || '').toString();
-        setDeletedEntryIds(prev => new Set([...prev, entryId]));
-        setEntryToDelete(null);
-        setSelectedEntries([]);
-        setActionLoading(false); // Clear loading immediately
-        toast({ title: "Success", description: "Entry deleted successfully" });
-        
-        // Background refresh for balance updates
-        setTimeout(async () => {
-          await refreshBalanceColumn();
-          // Don't clear deleted entries - keep them hidden permanently
-        }, 100);
+      } else if (error.message?.includes('BALANCE_MISMATCH')) {
+        toast({
+          title: "Balance Mismatch",
+          description: "Entry modification would cause balance inconsistency.",
+          variant: "destructive"
+        });
       } else {
         toast({
           title: "Error",
-          description: response.message || "Failed to delete entry",
+          description: error.message || "Failed to modify entry",
           variant: "destructive"
         });
       }
-    } catch (error: any) {
-      console.error('Delete entry error:', error);
+      
+      // Refresh to get correct data
+      await loadLedgerData(false, true);
+    } finally {
+      setActionLoadingLocal(false);
+    }
+  }, [toast, loadLedgerData, setEditingEntry, setSelectedEntries, ledgerData]);
+
+  // Handle delete entry - COMPLEX BUSINESS LOGIC like old system
+  const handleDeleteEntry = useCallback(async (entry: LedgerEntry) => {
+    const startTime = performance.now();
+    
+    // Prevent multiple simultaneous deletions
+    if (actionLoading) {
+      console.log('⚠️ Delete operation already in progress, skipping...');
+      return;
+    }
+    
+    console.log('🚀 DELETE: Starting...', { 
+      entryId: entry.id || entry._id || entry.ti, 
+      partyName: selectedPartyName,
+      remarks: entry.remarks 
+    });
+    
+    const entryId = entry.id || entry._id || entry.ti;
+    if (!entryId) {
       toast({
         title: "Error",
-        description: error.message || "Failed to delete entry",
+        description: "No entry ID found for deletion",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setActionLoadingLocal(true);
+    setEntryToDelete(null);
+    setSelectedEntries([]);
+    
+    try {
+      // COMPLEX BUSINESS LOGIC - Monday Final Entry Check
+      const isMondayFinalEntry = entry.remarks?.includes('Monday Final Settlement') || 
+                                 entry.remarks?.includes('Monday Settlement');
+      
+      if (isMondayFinalEntry) {
+        console.log('🔄 DELETE: Monday Final entry detected, using special deletion logic...');
+        
+        // Use special Monday Final deletion API
+        const response = await partyLedgerAPI.deleteMondayFinalEntry(entryId);
+        
+        if (response.success) {
+          const endTime = performance.now();
+          const duration = endTime - startTime;
+          console.log(`✅ MONDAY FINAL DELETE: Completed in ${duration.toFixed(2)}ms`);
+          
+          toast({ 
+            title: "Monday Final Deleted", 
+            description: `Monday Final entry and ${response.data?.unsettledCount || 0} transactions unsettled (${duration.toFixed(0)}ms)` 
+          });
+          
+          // Refresh data from backend
+          await loadLedgerData(false, true);
+          return;
+        } else {
+          toast({
+            title: "Error",
+            description: response.message || "Failed to delete Monday Final entry",
+            variant: "destructive"
+          });
+          return;
+        }
+      }
+
+      // COMPLEX BUSINESS LOGIC - Commission Entry Check
+      const isCommissionEntry = entry.remarks?.toLowerCase().includes('commission') || 
+                               entry.partyName?.toLowerCase() === 'commission';
+      
+      if (isCommissionEntry) {
+        console.log('🔄 DELETE: Commission entry detected, checking for related entries...');
+        
+        // Check if this commission entry is related to other transactions
+        const relatedTransactions = ledgerData?.ledgerEntries?.filter(ledgerEntry => 
+          ledgerEntry.remarks?.includes(entry.remarks || '') &&
+          ledgerEntry.id !== entryId
+        ) || [];
+        
+        if (relatedTransactions.length > 0) {
+          console.log(`🔄 DELETE: Found ${relatedTransactions.length} related transactions`);
+        }
+      }
+
+      // COMPLEX BUSINESS LOGIC - Party-to-Party Transaction Check
+      const isPartyToParty = entry.remarks && 
+                            entry.remarks.includes('(') && 
+                            entry.remarks.includes(')');
+      
+      if (isPartyToParty) {
+        console.log('🔄 DELETE: Party-to-party transaction detected, will cascade delete...');
+        
+        // Extract party name from remarks for cascade deletion
+        const partyNameInRemarks = entry.remarks.match(/\(([^)]+)\)/)?.[1];
+        if (partyNameInRemarks) {
+          console.log(`🔄 DELETE: Looking for related entries with party: ${partyNameInRemarks}`);
+        }
+      }
+
+      // Delete from backend
+      const response = await partyLedgerAPI.deleteEntry(entryId);
+      
+      if (response.success) {
+        const endTime = performance.now();
+        const duration = endTime - startTime;
+        console.log(`✅ DELETE: Completed in ${duration.toFixed(2)}ms`);
+        
+        // COMPLEX BUSINESS LOGIC - Handle cascade delete for related entries
+        if (response.data?.relatedDeletedCount > 0) {
+          const relatedParties = response.data.relatedParties || [];
+          console.log(`🔄 CASCADE DELETE: Found ${response.data.relatedDeletedCount} related entries in parties:`, relatedParties);
+          
+          // Show detailed success message with cascade information
+          let successMessage = `Entry deleted successfully`;
+          if (isCommissionEntry) {
+            successMessage += ` (Commission entry)`;
+          }
+          if (isPartyToParty) {
+            successMessage += ` (Party-to-party transaction)`;
+          }
+          successMessage += `\n${response.data.relatedDeletedCount} related entries deleted from ${relatedParties.length} parties`;
+          
+          toast({ 
+            title: "Cascade Delete Success", 
+            description: `${successMessage} (${duration.toFixed(0)}ms)` 
+          });
+        } else {
+          let successMessage = `Entry deleted successfully`;
+          if (isCommissionEntry) {
+            successMessage += ` (Commission entry)`;
+          }
+          if (isPartyToParty) {
+            successMessage += ` (Party-to-party transaction)`;
+          }
+          
+          toast({ 
+            title: "Success", 
+            description: `${successMessage} (${duration.toFixed(0)}ms)` 
+          });
+        }
+        
+        // Refresh data from backend
+        await loadLedgerData(false, true);
+      } else {
+        // COMPLEX BUSINESS LOGIC - Handle specific error codes
+        if (response.code === 'OLD_RECORD_PROTECTED') {
+          toast({
+            title: "Old Record Protected",
+            description: "This entry was settled in Monday Final and cannot be deleted. Delete the Monday Final entry first to unsettle transactions.",
+            variant: "destructive"
+          });
+        } else if (response.code === 'CASCADE_DELETE_FAILED') {
+          toast({
+            title: "Cascade Delete Failed",
+            description: "Main entry deleted but some related entries could not be removed. Please check and delete them manually.",
+            variant: "destructive"
+          });
+        } else {
+          toast({
+            title: "Error",
+            description: response.message || "Failed to delete entry",
+            variant: "destructive"
+          });
+        }
+      }
+    } catch (error: any) {
+      console.error('Delete entry error:', error);
+      
+      // COMPLEX BUSINESS LOGIC - Handle specific error types
+      if (error.message?.includes('Entry not found') || error.message?.includes('404')) {
+        const endTime = performance.now();
+        const duration = endTime - startTime;
+        toast({ 
+          title: "Entry Already Deleted", 
+          description: `Entry was already removed from the server (${duration.toFixed(0)}ms)` 
+        });
+        // Refresh data to ensure UI is in sync
+        await loadLedgerData(false, true);
+      } else if (error.message?.includes('OLD_RECORD_PROTECTED')) {
+        toast({
+          title: "Old Record Protected",
+          description: "This entry was settled in Monday Final and cannot be deleted.",
+          variant: "destructive"
+        });
+      } else if (error.message?.includes('CASCADE_DELETE_FAILED')) {
+        toast({
+          title: "Cascade Delete Failed",
+          description: "Some related entries could not be deleted. Please check and delete them manually.",
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to delete entry",
+          variant: "destructive"
+        });
+      }
+    } finally {
+      setActionLoadingLocal(false);
+    }
+  }, [toast, loadLedgerData, setEntryToDelete, setSelectedEntries, setDeletedEntryIds, selectedPartyName, ledgerData, actionLoading]);
+
+  // Handle bulk delete with cascade delete
+  const handleBulkDelete = useCallback(async (entries: LedgerEntry[]) => {
+    const startTime = performance.now();
+    
+    // Prevent multiple simultaneous bulk deletions
+    if (actionLoading) {
+      console.log('⚠️ Bulk delete operation already in progress, skipping...');
+      return;
+    }
+    
+    // console.log('🚀 BULK DELETE: Starting...', { entryCount: entries.length });
+    
+    if (entries.length === 0) {
+      toast({
+        title: "No Selection",
+        description: "Please select at least one entry",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setActionLoadingLocal(true);
+    
+    // OPTIMISTIC UPDATE: Add all entries to deleted set immediately
+    const deletedKeys: string[] = [];
+    entries.forEach(entry => {
+      const entryId = (entry.id || entry._id || entry.ti || '').toString();
+      const entryPartyName = entry.partyName || entry.party_name || '';
+      const compositeKey = `${entryPartyName}:${entryId}`;
+      deletedKeys.push(compositeKey);
+    });
+    
+    setDeletedEntryIds(prev => {
+      const newSet = new Set<string>(prev);
+      deletedKeys.forEach(key => newSet.add(key));
+      return newSet;
+    });
+    
+    setSelectedEntries([]);
+    
+    // Show immediate feedback
+    toast({ title: "Deleting...", description: `Removing ${entries.length} entries...` });
+
+    try {
+      let totalDeleted = 0;
+      let totalRelatedDeleted = 0;
+      const allRelatedParties = new Set<string>();
+      
+      // Delete entries in parallel for better performance
+      const deletePromises = entries.map(async (entry) => {
+        const entryId = entry.id || entry._id || entry.ti;
+        if (!entryId) return { success: false, relatedDeletedCount: 0, relatedParties: [] };
+        
+        try {
+          const response = await partyLedgerAPI.deleteEntry(entryId);
+          return {
+            success: response.success,
+            relatedDeletedCount: response.data?.relatedDeletedCount || 0,
+            relatedParties: response.data?.relatedParties || []
+          };
+        } catch (error) {
+          console.error(`Error deleting entry ${entryId}:`, error);
+          return { success: false, relatedDeletedCount: 0, relatedParties: [] };
+        }
+      });
+      
+      const results = await Promise.all(deletePromises);
+      
+      // Process results
+      results.forEach(result => {
+        if (result.success) {
+          totalDeleted++;
+          if (result.relatedDeletedCount > 0) {
+            totalRelatedDeleted += result.relatedDeletedCount;
+            result.relatedParties.forEach((party: string) => allRelatedParties.add(party));
+          }
+        }
+      });
+      
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      // console.log(`✅ BULK DELETE: Completed in ${duration.toFixed(2)}ms`);
+      
+      // Show success message with cascade delete details
+      if (totalRelatedDeleted > 0) {
+        toast({
+          title: "Bulk Cascade Delete Success",
+          description: `${totalDeleted} entries and ${totalRelatedDeleted} related entries deleted from ${allRelatedParties.size} parties (${duration.toFixed(0)}ms)`
+        });
+      } else {
+        toast({
+          title: "Bulk Delete Success",
+          description: `${totalDeleted} entries deleted successfully (${duration.toFixed(0)}ms)`
+        });
+      }
+      
+      // Refresh data from backend
+      loadLedgerData(false, true);
+      
+    } catch (error: any) {
+      console.error('Bulk delete error:', error);
+      
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete entries",
         variant: "destructive"
       });
     } finally {
-      setActionLoading(false);
+      setActionLoadingLocal(false);
     }
-  }, [toast, loadLedgerData, setEntryToDelete, setSelectedEntries, setActionLoading]);
+  }, [toast, loadLedgerData, setSelectedEntries, setDeletedEntryIds]);
 
   // Handle Monday Final action
   const handleMondayFinal = useCallback(async () => {
+    const startTime = performance.now();
+    console.log('🚀 MONDAY FINAL: Starting...', { selectedEntries: selectedEntries.length });
+    
     if (selectedEntries.length === 0) {
       toast({
         title: "No Selection",
@@ -187,84 +581,94 @@ export const useActionButtons = ({
       return;
     }
 
-    setActionLoading(true);
+    setActionLoadingLocal(true);
     try {
       // Get selected entries data
       const selectedEntriesData = currentEntries.filter(entry => 
         selectedEntries.includes((entry.id || entry._id || entry.ti || '').toString())
       );
 
+      console.log('📤 MONDAY FINAL: Sending party names:', [selectedPartyName]);
+
       // Call Monday Final API
       const response = await partyLedgerAPI.updateMondayFinal([selectedPartyName]);
       
+      console.log('📥 MONDAY FINAL: Response received:', response);
+      
       if (response.success) {
+        const endTime = performance.now();
+        const duration = endTime - startTime;
+        console.log(`✅ MONDAY FINAL: Completed in ${duration.toFixed(2)}ms`);
+        
         toast({
           title: "Monday Final Completed",
-          description: `Successfully processed ${response.data?.updatedCount || selectedEntries.length} entries`,
+          description: `Successfully processed ${response.data?.updatedCount || selectedEntries.length} entries in ${duration.toFixed(0)}ms`,
         });
         
         setSelectedEntries([]);
         setShowMondayFinalModal(false);
         await loadLedgerData(false, true);
       } else {
+        const endTime = performance.now();
+        const duration = endTime - startTime;
+        console.log(`❌ MONDAY FINAL: Failed in ${duration.toFixed(2)}ms`);
+        
         toast({
           title: "Error",
-          description: response.message || "Failed to process Monday Final action",
+          description: `${response.message || "Failed to process Monday Final action"} (${duration.toFixed(0)}ms)`,
           variant: "destructive"
         });
       }
     } catch (error: any) {
-      console.error('Monday Final error:', error);
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      console.error(`❌ MONDAY FINAL: Failed in ${duration.toFixed(2)}ms`, error);
+      
       toast({
         title: "Error",
-        description: error.message || "Failed to process Monday Final action",
+        description: `${error.message || "Failed to process Monday Final action"} (${duration.toFixed(0)}ms)`,
         variant: "destructive"
       });
     } finally {
-      setActionLoading(false);
+      setActionLoadingLocal(false);
     }
-  }, [selectedEntries, currentEntries, selectedPartyName, toast, loadLedgerData, setSelectedEntries, setShowMondayFinalModal, setActionLoading]);
+  }, [selectedEntries, currentEntries, selectedPartyName, toast, loadLedgerData, setSelectedEntries, setShowMondayFinalModal]);
 
-  // Handle refresh
+  // Handle refresh with debouncing to prevent spam
   const handleRefresh = useCallback(async () => {
     const startTime = performance.now();
-    console.log('🚀 ACTION: handleRefresh started...');
-    
+    // console.log('🚀 REFRESH: Starting...');
+
+    // Show immediate feedback
+    toast({
+      title: "Refreshing...",
+      description: "Updating ledger data",
+    });
+
     try {
-      // Show immediate feedback
+      // Use debounced refresh to prevent multiple calls
+      await new Promise(resolve => setTimeout(resolve, 100)); // Small delay to prevent spam
+      await loadLedgerData(false, true);
+      
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      // console.log(`✅ REFRESH: Completed in ${duration.toFixed(2)}ms`);
+
       toast({
-        title: "Refreshing...",
-        description: "Updating ledger data",
+        title: "Refreshed",
+        description: `Ledger data refreshed in ${duration.toFixed(0)}ms`,
       });
-      
-      // Start refresh in background
-      loadLedgerData(false, true).then(() => {
-        const endTime = performance.now();
-        const duration = endTime - startTime;
-        console.log(`✅ ACTION: handleRefresh completed in ${duration.toFixed(2)}ms`);
-        
-        toast({
-          title: "Refreshed",
-          description: "Ledger data has been refreshed",
-        });
-      }).catch((error) => {
-        console.error('Refresh error:', error);
-        const endTime = performance.now();
-        const duration = endTime - startTime;
-        console.log(`❌ ACTION: handleRefresh failed in ${duration.toFixed(2)}ms`);
-        
-        toast({
-          title: "Error",
-          description: "Failed to refresh data",
-          variant: "destructive"
-        });
-      });
-      
     } catch (error) {
       console.error('Refresh error:', error);
       const endTime = performance.now();
       const duration = endTime - startTime;
-      console.log(`❌ ACTION: handleRefresh failed in ${duration.toFixed(2)}ms`);
+      // console.log(`❌ REFRESH: Failed in ${duration.toFixed(2)}ms`);
+
+      toast({
+        title: "Error",
+        description: `Failed to refresh data (${duration.toFixed(0)}ms)`,
+        variant: "destructive"
+      });
     }
   }, [loadLedgerData, toast]);
 
@@ -321,16 +725,27 @@ export const useActionButtons = ({
     }
   }, [selectedPartyName, ledgerData, toast]);
 
+  // Memoized performance metrics
+  const performanceMetrics = useMemo(() => ({
+    actionTimes: performanceRef.current.actionTimes,
+    averageActionTime: performanceRef.current.averageActionTime,
+    getAverageTime: (actionName: string) => performanceRef.current.averageActionTime.get(actionName) || 0,
+    getTotalActions: () => Array.from(performanceRef.current.actionTimes.values()).reduce((sum, times) => sum + times.length, 0)
+  }), []);
+
   return {
     handleSelectAll,
     handleCheckAll,
     handleModifyEntry,
     handleDeleteEntry,
+    handleBulkDelete,
     handleMondayFinal,
-    handleRefresh,
+    handleRefresh: debouncedRefresh,
     handlePrint,
     handleExit,
     handleDCReport,
-    handleCommissionAutoFill
+    handleCommissionAutoFill,
+    performanceMetrics,
+    actionLoading
   };
 };

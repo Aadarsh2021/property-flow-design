@@ -18,40 +18,40 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
   const url = `${API_BASE_URL}${endpoint}`;
   const token = getAuthToken();
   
+  // Add timeout for better performance
+  const timeoutMs = 15000; // 15 seconds timeout for better UX
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+  
   const config: RequestInit = {
     headers: {
       'Content-Type': 'application/json',
       ...(token && { 'Authorization': `Bearer ${token}` }),
       ...options.headers,
     },
+    signal: controller.signal,
     ...options,
   };
   
   try {
     const response = await fetch(url, config);
+    clearTimeout(timeoutId);
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('❌ HTTP Error:', {
-        status: response.status,
-        statusText: response.statusText,
-        endpoint,
-        url,
-        errorData
-      });
       throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
     }
     
     const responseData = await response.json();
     return responseData;
   } catch (error: any) {
-    console.error('💥 API Call Error:', {
-      name: error.name,
-      message: error.message,
-      endpoint,
-      url,
-      stack: error.stack
-    });
+    clearTimeout(timeoutId);
+    
+    if (error.name === 'AbortError') {
+      throw new Error(`Request timed out after ${timeoutMs/1000} seconds`);
+    }
     
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
       throw new Error('Network error. Please check your connection.');
@@ -99,11 +99,22 @@ export const partyLedgerAPI = {
   getPartyLedger: (partyName: string) => {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     const userId = user.id || 'anonymous';
-    return cachedApiCall(
-      `party-ledger-${userId}-${partyName}`,
-      () => apiCall<LedgerEntry[]>(`/party-ledger/${encodeURIComponent(partyName)}`),
-      5 * 60 * 1000 // 5 minutes cache
-    );
+    
+    // Check if partyName contains cache busting parameter
+    const isForceRefresh = partyName.includes('&_t=');
+    const cleanPartyName = partyName.split('&_t=')[0];
+    
+    if (isForceRefresh) {
+      // Force refresh - bypass cache completely
+      return apiCall<LedgerEntry[]>(`/party-ledger/${encodeURIComponent(cleanPartyName)}`);
+    } else {
+      // Use very short cache for normal requests
+      return cachedApiCall(
+        `party-ledger-${userId}-${cleanPartyName}`,
+        () => apiCall<LedgerEntry[]>(`/party-ledger/${encodeURIComponent(cleanPartyName)}`),
+        5 * 1000 // 5 seconds cache for faster updates
+      );
+    }
   },
   addEntry: (entryData: LedgerEntryInput) => apiCall<LedgerEntry>('/party-ledger/entry', {
     method: 'POST',
@@ -113,7 +124,13 @@ export const partyLedgerAPI = {
     method: 'PUT',
     body: JSON.stringify(entryData),
   }),
-  deleteEntry: (id: string) => apiCall<{ message: string }>(`/party-ledger/entry/${id}`, {
+  deleteEntry: (id: string) => apiCall<{ 
+    message: string;
+    deleted: boolean;
+    deletedCount: number;
+    relatedDeletedCount: number;
+    relatedParties: string[];
+  }>(`/party-ledger/entry/${id}`, {
     method: 'DELETE',
   }),
   deleteParties: (partyNames: string[]) => apiCall<{ deleted: number }>('/parties', {

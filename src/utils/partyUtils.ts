@@ -80,11 +80,18 @@ export const getCommissionRate = (party: Party): number => {
   return parseFloat(party.rate || '0');
 };
 
-// Calculate commission amount
+// Calculate commission amount - Enhanced like old version
 export const calculateCommissionAmount = (amount: number, party: Party): number => {
   const rate = getCommissionRate(party);
   if (rate === 0) return 0;
   return (amount * rate) / 100;
+};
+
+// Calculate commission amount by party name - Like old version
+export const calculateCommissionAmountByName = (amount: number, partyName: string, parties: Party[]): number => {
+  const party = parties.find(p => (p.party_name || p.name) === partyName);
+  if (!party) return 0;
+  return calculateCommissionAmount(amount, party);
 };
 
 // Check if party is active

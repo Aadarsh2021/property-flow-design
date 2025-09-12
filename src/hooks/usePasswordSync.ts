@@ -45,7 +45,7 @@ export const usePasswordSync = () => {
         // In a real scenario, you might want to store the password hash
         // and compare it to detect changes
         
-        console.log('🔄 Firebase auth state changed, checking for password sync...');
+        // console.log('🔄 Firebase auth state changed, checking for password sync...');
         
       } catch (error) {
         console.error('Password sync error:', error);

@@ -30,7 +30,7 @@ const ApprovalPending: React.FC = () => {
       // Check if checkAuthStatus function exists
       if (!checkAuthStatus || typeof checkAuthStatus !== 'function') {
         console.error('checkAuthStatus function not available in auth context');
-        console.log('Available auth context methods:', Object.keys(authContext));
+        // console.log('Available auth context methods:', Object.keys(authContext));
         setIsChecking(false);
         return;
       }
