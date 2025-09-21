@@ -817,7 +817,7 @@ const AdminDashboard: React.FC = () => {
           </TabsContent>
 
           <TabsContent value="users">
-            <UserManagement onRefresh={handleRefreshData} />
+            <UserManagement onRefresh={handleRefresh} />
           </TabsContent>
 
           {/* Transaction Management tab removed - not implemented */}

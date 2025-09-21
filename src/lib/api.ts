@@ -8,7 +8,7 @@
 import { ApiResponse, NewPartyData, NewParty, Party, LedgerEntry, LedgerEntryInput, UserSettings, TrialBalanceEntry, GoogleUserData, GoogleAuthResponse } from '../types';
 import { apiCall, cachedApiCall } from './apiCache';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software.vercel.app/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software-quag8azl0-aadarsh2021s-projects.vercel.app/api';
 
 // Request queue to prevent concurrent API calls
 const requestQueue = new Map<string, Promise<any>>();
