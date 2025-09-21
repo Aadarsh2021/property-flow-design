@@ -434,7 +434,6 @@ export const useTransactionForm = ({
       return;
     }
 
-    console.log('🔄 Adding transaction:', { selectedPartyName, amount, newEntry });
     setLoading(true);
 
     try {
@@ -451,12 +450,11 @@ export const useTransactionForm = ({
         (party.party_name || party.name) === selectedPartyName
       );
       
-      if (currentParty && currentParty.mCommission === 'With Commission' && currentParty.rate) {
-        commissionRate = parseFloat(currentParty.rate) || 0;
-        if (commissionRate > 0) {
-          // Calculate commission based on transaction amount
-          commissionAmount = (absoluteAmount * commissionRate) / 100;
-        }
+      // Calculate commission if party name is "commission"
+      if (newEntry.partyName && newEntry.partyName.toLowerCase().trim() === 'commission') {
+        // Use the transaction amount as commission amount (same amount)
+        commissionAmount = absoluteAmount;
+        commissionRate = 100; // 100% of transaction amount
       }
 
       // COMPLEX BUSINESS LOGIC - Party-to-Party Transaction Detection
@@ -486,8 +484,6 @@ export const useTransactionForm = ({
           ti: `${Date.now()}::`
       };
 
-      console.log('📤 Sending entry data:', entryData);
-      
       // Add main entry
       const response = await partyLedgerAPI.addEntry(entryData);
       
@@ -496,10 +492,8 @@ export const useTransactionForm = ({
         let successCount = 1;
 
         // COMPLEX BUSINESS LOGIC - Always create related entries
-        // 1. Party-to-Party Transaction (if party name provided)
-        if (newEntry.partyName && newEntry.partyName.trim() !== '') {
-          console.log('🔄 PARTY-TO-PARTY: Creating related entries...');
-          
+        // 1. Party-to-Party Transaction (if party name provided and not company/commission)
+        if (newEntry.partyName && newEntry.partyName.trim() !== '' && newEntry.partyName.trim() !== companyName && newEntry.partyName.trim().toLowerCase() !== 'commission') {
           // Create entry for the other party
           const otherPartyEntry = {
             partyName: newEntry.partyName.trim(),
@@ -511,8 +505,6 @@ export const useTransactionForm = ({
             date: new Date().toISOString().split('T')[0],
             ti: `${Date.now() + 1}::`
           };
-          
-          console.log('🔄 Other party entry:', otherPartyEntry);
 
           try {
             const otherPartyResponse = await partyLedgerAPI.addEntry(otherPartyEntry);
@@ -528,15 +520,13 @@ export const useTransactionForm = ({
 
         // COMPLEX BUSINESS LOGIC - Commission Entry
         if (commissionAmount > 0) {
-          console.log('🔄 COMMISSION: Creating commission entry...');
-          
           const commissionEntry = {
             partyName: 'Commission',
             amount: commissionAmount,
             remarks: `Commission for ${selectedPartyName} (${commissionRate}%)`,
-            tnsType: 'CR',
-            credit: commissionAmount,
-            debit: 0,
+            tnsType: tnsType, // Same transaction type as main entry
+            credit: tnsType === 'CR' ? commissionAmount : 0,
+            debit: tnsType === 'DR' ? commissionAmount : 0,
             date: new Date().toISOString().split('T')[0],
             ti: `${Date.now() + 2}::`
           };
@@ -551,15 +541,13 @@ export const useTransactionForm = ({
           }
         }
 
-        // COMPLEX BUSINESS LOGIC - Company Entry (SAME TYPE)
-        if (companyName) {
-          console.log('🔄 COMPANY: Creating company entry...');
-          
+        // COMPLEX BUSINESS LOGIC - Company Entry (Only if company is involved)
+        if (newEntry.partyName && newEntry.partyName === companyName) {
           const companyEntry = {
             partyName: companyName,
             amount: absoluteAmount,
-            remarks: `${selectedPartyName}${newEntry.partyName ? ` to ${newEntry.partyName.trim()}` : ''}`,
-            tnsType: tnsType, // SAME TYPE as main entry
+            remarks: `Transaction with ${selectedPartyName}`,
+            tnsType: tnsType, // Same transaction type as main entry
             credit: tnsType === 'CR' ? absoluteAmount : 0,
             debit: tnsType === 'DR' ? absoluteAmount : 0,
             date: new Date().toISOString().split('T')[0],
@@ -594,10 +582,7 @@ export const useTransactionForm = ({
           
         // Refresh data after all entries are added
         await onTransactionAdded();
-        
-        console.log('✅ Complex transaction added and data refresh triggered');
         } else {
-        console.error('❌ Transaction failed:', response);
           toast({
             title: "Error",
           description: response.message || "Failed to add transaction",

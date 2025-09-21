@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { partyLedgerAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { LedgerEntry, LedgerData } from '@/types';
+import { clearCacheByPattern } from '@/lib/apiCache';
 
 interface ErrorState {
   hasError: boolean;
@@ -26,6 +27,18 @@ interface UseLedgerDataProps {
 
 // Request queue to prevent concurrent API calls
 const requestQueue = new Map<string, Promise<any>>();
+const lastRequestTime = new Map<string, number>();
+const MIN_REQUEST_INTERVAL = 500; // Minimum 500ms between requests for same party
+
+// Clear request queue for a specific party
+const clearRequestQueueForParty = (partyName: string) => {
+  for (const [key, promise] of requestQueue.entries()) {
+    if (key.includes(partyName)) {
+      requestQueue.delete(key);
+    }
+  }
+  lastRequestTime.delete(partyName);
+};
 
 export const useLedgerData = ({
   selectedPartyName,
@@ -36,6 +49,7 @@ export const useLedgerData = ({
   const [loading, setLoading] = useState(false);
   const loadingRef = useRef(false);
   const [forceUpdate, setForceUpdate] = useState(0);
+  const requestTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [ledgerData, setLedgerData] = useState<{
     ledgerEntries: LedgerEntry[];
     oldRecords: LedgerEntry[];
@@ -80,12 +94,10 @@ export const useLedgerData = ({
     const errorMessage = error?.message || error?.toString() || 'Unknown error occurred';
     const errorCode = error?.code || error?.status?.toString() || 'UNKNOWN_ERROR';
     
-    console.error(`❌ ${context}:`, {
-      error: errorMessage,
-      code: errorCode,
-      retryable,
-      timestamp: new Date().toISOString()
-    });
+    // Only log critical errors to console
+    if (errorCode === '500' || errorCode === 'NETWORK_ERROR' || errorCode === 'TIMEOUT') {
+      console.warn(`⚠️ ${context}: ${errorMessage}`);
+    }
 
     setErrorState(prev => ({
       hasError: true,
@@ -151,7 +163,7 @@ export const useLedgerData = ({
     
     // Validate balance consistency
     if (isNaN(balance)) {
-      console.warn('Invalid balance detected:', entry.balance, 'for entry:', entry.id);
+      // Invalid balance detected
     }
     
     
@@ -163,53 +175,130 @@ export const useLedgerData = ({
       credit: credit,
       debit: debit,
       balance: balance,
+      chk: entry.chk || false,
       partyName: entry.partyName || entry.party_name || selectedPartyName,
       is_old_record: entry.is_old_record || false,
       ti: entry.ti || entry.id || entry._id
     };
   }, [selectedPartyName]);
 
-  // Load ledger data - optimized for speed
-  const loadLedgerData = useCallback(async (showLoading = true, forceRefresh = false) => {
-    if (!selectedPartyName) return;
+  // Load ledger data - ULTRA optimized for speed with throttling
+  const loadLedgerData = useCallback(async (showLoading = true, forceRefresh = false, partyName?: string) => {
+    const currentPartyName = partyName || selectedPartyName;
+    if (!currentPartyName) return;
     
-    // Skip loading state for force refresh to make it faster
-    if (showLoading && !forceRefresh) {
+    // CRITICAL FIX: Prevent any simultaneous API calls
+    if (loadingRef.current) {
+      return;
+    }
+    
+    // Clear cache and request queue for this party when force refreshing (party change)
+    if (forceRefresh) {
+      // Clear ALL party-related cache, not just specific party
+      clearCacheByPattern('party-ledger-.*');
+      clearRequestQueueForParty(currentPartyName);
+    }
+    
+    // Check if we're making requests too frequently for the same party
+    const now = Date.now();
+    const lastTime = lastRequestTime.get(currentPartyName) || 0;
+    const timeSinceLastRequest = now - lastTime;
+    
+    if (timeSinceLastRequest < MIN_REQUEST_INTERVAL && !forceRefresh) {
+      // Clear any existing timeout
+      if (requestTimeoutRef.current) {
+        clearTimeout(requestTimeoutRef.current);
+      }
+      
+      // Schedule the request for later
+      return new Promise<void>((resolve) => {
+        requestTimeoutRef.current = setTimeout(() => {
+          loadLedgerData(showLoading, forceRefresh, currentPartyName).then(resolve);
+        }, MIN_REQUEST_INTERVAL - timeSinceLastRequest);
+      });
+    }
+    
+    // Update last request time
+    lastRequestTime.set(currentPartyName, now);
+    
+    // Only show loading state if explicitly requested
+    if (showLoading) {
       setLoading(true);
     }
     
+    loadingRef.current = true;
+    
     try {
-      console.log('🔄 Loading ledger data for:', selectedPartyName, 'Force refresh:', forceRefresh);
-      
-      // Add cache busting parameter for force refresh
-      const cacheBuster = forceRefresh ? `&_t=${Date.now()}` : '';
-      const response = await partyLedgerAPI.getPartyLedger(selectedPartyName + cacheBuster);
+      // Only add cache busting for force refresh
+      const apiPartyName = forceRefresh ? `${currentPartyName}&_t=${Date.now()}` : currentPartyName;
+      const response = await partyLedgerAPI.getPartyLedger(apiPartyName);
       
       if (response.success && response.data) {
         const responseData = response.data;
-        console.log('✅ Ledger data received:', responseData);
         
-        // Optimized data transformation - minimal processing
-        const transformedData = {
-          ledgerEntries: responseData.ledgerEntries || [],
-          oldRecords: responseData.oldRecords || [],
-          closingBalance: responseData.closingBalance || 0,
+        
+        // Check if responseData is already in LedgerData format or LedgerEntry[] format
+        let transformedData: {
+          ledgerEntries: LedgerEntry[];
+          oldRecords: LedgerEntry[];
+          closingBalance: number;
           summary: {
-            totalCredit: responseData.summary?.totalCredit || 0,
-            totalDebit: responseData.summary?.totalDebit || 0,
-            calculatedBalance: responseData.summary?.calculatedBalance || 0,
-            totalEntries: responseData.summary?.totalEntries || 0
-          },
+            totalCredit: number;
+            totalDebit: number;
+            calculatedBalance: number;
+            totalEntries: number;
+          };
           mondayFinalData: {
-            transactionCount: responseData.mondayFinalData?.transactionCount || 0,
-            totalCredit: responseData.mondayFinalData?.totalCredit || 0,
-            totalDebit: responseData.mondayFinalData?.totalDebit || 0,
-            startingBalance: responseData.mondayFinalData?.startingBalance || 0,
-            finalBalance: responseData.mondayFinalData?.finalBalance || 0
-          }
+            transactionCount: number;
+            totalCredit: number;
+            totalDebit: number;
+            startingBalance: number;
+            finalBalance: number;
+          };
         };
         
-        console.log('📊 Transformed data:', transformedData);
+        if (Array.isArray(responseData)) {
+          // If it's an array of LedgerEntry, create a basic LedgerData structure
+          transformedData = {
+            ledgerEntries: responseData,
+            oldRecords: [],
+            closingBalance: 0,
+            summary: {
+              totalCredit: responseData.reduce((sum, entry) => sum + (entry.credit || 0), 0),
+              totalDebit: responseData.reduce((sum, entry) => sum + (entry.debit || 0), 0),
+              calculatedBalance: 0,
+              totalEntries: responseData.length
+            },
+            mondayFinalData: {
+              transactionCount: 0,
+              totalCredit: 0,
+              totalDebit: 0,
+              startingBalance: 0,
+              finalBalance: 0
+            }
+          };
+        } else {
+          // If it's already in LedgerData format
+          const ledgerData = responseData as any; // Type assertion for flexibility
+          transformedData = {
+            ledgerEntries: ledgerData.ledgerEntries || [],
+            oldRecords: ledgerData.oldRecords || [],
+            closingBalance: ledgerData.closingBalance || 0,
+            summary: {
+              totalCredit: ledgerData.summary?.totalCredit || 0,
+              totalDebit: ledgerData.summary?.totalDebit || 0,
+              calculatedBalance: ledgerData.summary?.calculatedBalance || 0,
+              totalEntries: ledgerData.summary?.totalEntries || 0
+            },
+            mondayFinalData: {
+              transactionCount: ledgerData.mondayFinalData?.transactionCount || 0,
+              totalCredit: ledgerData.mondayFinalData?.totalCredit || 0,
+              totalDebit: ledgerData.mondayFinalData?.totalDebit || 0,
+              startingBalance: ledgerData.mondayFinalData?.startingBalance || 0,
+              finalBalance: ledgerData.mondayFinalData?.finalBalance || 0
+            }
+          };
+        }
         
         // Immediate state update - no batching
         setLedgerData(transformedData);
@@ -223,10 +312,7 @@ export const useLedgerData = ({
         } else if (transformedData.ledgerEntries.length > 0) {
           setShowOldRecords(false);
         }
-        
-        console.log('✅ Ledger data loaded successfully');
       } else {
-        console.error('❌ Failed to load ledger data:', response);
         toast({
           title: "Error",
           description: response.message || "Failed to load ledger data",
@@ -234,16 +320,21 @@ export const useLedgerData = ({
         });
       }
     } catch (error: any) {
-      console.error('❌ Error loading ledger data:', error);
+      // Only log critical errors
+      if (error.message?.includes('timeout') || error.message?.includes('network')) {
+        console.warn('API Error:', error.message);
+      }
+      
       toast({
         title: "Error",
         description: error.message || "Failed to load ledger data",
         variant: "destructive"
       });
     } finally {
-      if (showLoading && !forceRefresh) {
+      if (showLoading) {
         setLoading(false);
       }
+      loadingRef.current = false;
     }
   }, [selectedPartyName, toast, setShowOldRecords]);
 
@@ -252,7 +343,10 @@ export const useLedgerData = ({
     try {
       await loadLedgerData(true, true); // Show loading and force refresh
     } catch (error) {
-      console.error('Error refreshing balance:', error);
+      // Only log critical errors
+      if (error instanceof Error && (error.message.includes('timeout') || error.message.includes('network'))) {
+        console.warn('Balance Refresh Error:', error.message);
+      }
     }
   }, [loadLedgerData]);
 
@@ -275,13 +369,10 @@ export const useLedgerData = ({
     });
   }, []);
 
-  // Load data when party changes - optimized for speed
-  useEffect(() => {
-    if (selectedPartyName) {
-      // Load data immediately with loading state
-      loadLedgerData(true, true); // Show loading and force refresh
-    }
-  }, [selectedPartyName, loadLedgerData]);
+  // Load data when party changes - ULTRA optimized
+  // REMOVED: Automatic data loading on selectedPartyName change
+  // This was causing race conditions with manual party changes
+  // Data loading is now handled manually by handlePartyChange
 
   // Debounced refresh function to prevent excessive API calls
   const debouncedRefresh = useCallback(() => {
@@ -312,7 +403,6 @@ export const useLedgerData = ({
     metrics.averageLoadTime = metrics.loadTimes.reduce((sum, time) => sum + time, 0) / metrics.loadTimes.length;
     metrics.lastLoadTime = loadTime;
     
-    // console.log(`📊 PERFORMANCE: Load time: ${loadTime.toFixed(2)}ms, Average: ${metrics.averageLoadTime.toFixed(2)}ms`);
   }, []);
 
   // Memory optimization: Clean up old data
@@ -328,7 +418,6 @@ export const useLedgerData = ({
       });
       
       if (filteredEntries.length !== ledgerData.ledgerEntries.length) {
-        // console.log(`🧹 CLEANUP: Removed ${ledgerData.ledgerEntries.length - filteredEntries.length} old entries`);
         setLedgerData(prev => prev ? {
           ...prev,
           ledgerEntries: filteredEntries
@@ -337,11 +426,32 @@ export const useLedgerData = ({
     }
   }, [ledgerData]);
 
-  // Auto-cleanup every 5 minutes
+  // Auto-cleanup every 10 minutes - reduced frequency
   useEffect(() => {
-    const cleanupInterval = setInterval(cleanupOldData, 5 * 60 * 1000);
-    return () => clearInterval(cleanupInterval);
-  }, [cleanupOldData]);
+    const cleanupInterval = setInterval(() => {
+      // Only cleanup if we have data and it's been more than 5 minutes since last cleanup
+      if (ledgerData && performanceMetrics.current.lastLoadTime > 0) {
+        const timeSinceLastLoad = Date.now() - performanceMetrics.current.lastLoadTime;
+        if (timeSinceLastLoad > 5 * 60 * 1000) { // 5 minutes
+          cleanupOldData();
+        }
+      }
+    }, 10 * 60 * 1000); // Check every 10 minutes
+    
+    return () => {
+      clearInterval(cleanupInterval);
+      // Clear any pending request timeout
+      if (requestTimeoutRef.current) {
+        clearTimeout(requestTimeoutRef.current);
+      }
+    };
+  }, []); // Empty dependency array - only run once
+
+  // Clear ledger data instantly
+  const clearLedgerData = useCallback(() => {
+    setLedgerData(null);
+    setForceUpdate(prev => prev + 1);
+  }, []);
 
   // Return enhanced hook data
   return {
@@ -354,6 +464,8 @@ export const useLedgerData = ({
     debouncedRefresh,
     clearError,
     forceUpdate,
+    clearLedgerData,
+    setLedgerData, // Export for optimistic updates
     performanceMetrics: performanceMetrics.current
   };
 };

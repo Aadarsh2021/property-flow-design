@@ -113,7 +113,7 @@ export const LedgerTable: React.FC<LedgerTableProps> = ({
   const onRenderCallback = useCallback((id: string, phase: string, actualDuration: number, baseDuration: number, startTime: number, commitTime: number) => {
     // Only log significant renders (> 2ms for table)
     if (actualDuration > 2) {
-      console.log(`🔍 Profiler [${id}]: ${phase} phase took ${actualDuration.toFixed(2)}ms (base: ${baseDuration.toFixed(2)}ms)`);
+      // Performance tracking
     }
   }, []);
 
@@ -182,8 +182,8 @@ export const LedgerTable: React.FC<LedgerTableProps> = ({
       {currentEntries.length > 0 && (
         <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
           <div className="flex justify-between text-sm text-gray-600">
-            <span>Total Entries: {currentEntries.length}</span>
-            <span>Selected: {selectedEntries.length}</span>
+            <span>Total Entries: <span className="font-medium text-blue-600">{currentEntries.length}</span></span>
+            <span>Selected: <span className="font-medium text-green-600">{selectedEntries.length}</span></span>
           </div>
         </div>
       )}

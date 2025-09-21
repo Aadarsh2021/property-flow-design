@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo, memo, Profiler } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, memo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import TopNavigation from '@/components/TopNavigation';
@@ -24,10 +24,11 @@ import { useLedgerData } from '@/hooks/useLedgerData';
 import { usePartyManagement } from '@/hooks/usePartyManagement';
 import { useTransactionForm } from '@/hooks/useTransactionForm';
 import { useAutoComplete } from '@/hooks/useAutoComplete';
+import { clearCacheByPattern } from '@/lib/apiCache';
 import { useActionButtons } from '@/hooks/useActionButtons';
-import { usePerformance } from '@/hooks/usePerformance';
 import { PartySelector } from '@/components/PartySelector';
 import { LedgerTable } from '@/components/LedgerTable';
+import { VirtualizedLedgerTable } from '@/components/VirtualizedLedgerTable';
 import { TransactionForm } from '@/components/TransactionForm';
 import { MondayFinalModal } from '@/components/MondayFinalModal';
 import { formatCurrency, calculateSummary } from '@/utils/ledgerUtils';
@@ -43,17 +44,18 @@ import {
   Search
 } from 'lucide-react';
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+
 const AccountLedgerComponent = () => {
-  // Performance monitoring - only log significant renders
-  const { measureRender } = usePerformance('AccountLedger');
-  
-  // React Profiler callback for performance tracking
-  const onRenderCallback = useCallback((id: string, phase: string, actualDuration: number, baseDuration: number, startTime: number, commitTime: number) => {
-    // Only log significant renders (> 5ms)
-    if (actualDuration > 5) {
-      console.log(`🔍 Profiler [${id}]: ${phase} phase took ${actualDuration.toFixed(2)}ms (base: ${baseDuration.toFixed(2)}ms)`);
-    }
-  }, []);
   
   // Router hooks
   const { partyName: initialPartyName } = useParams<{ partyName: string }>();
@@ -61,31 +63,66 @@ const AccountLedgerComponent = () => {
   const { toast } = useToast();
   const { companyName } = useCompanyName();
 
-  // State management
-  const [selectedPartyName, setSelectedPartyName] = useState(initialPartyName || 'Test Company 1');
-  const [typingPartyName, setTypingPartyName] = useState(initialPartyName || 'Test Company 1');
-  const [showOldRecords, setShowOldRecords] = useState(false);
-  const [selectedEntries, setSelectedEntries] = useState<string[]>([]);
-  const [showMondayFinalModal, setShowMondayFinalModal] = useState(false);
-  const [editingEntry, setEditingEntry] = useState<LedgerEntry | null>(null);
-  const [entryToDelete, setEntryToDelete] = useState<LedgerEntry | null>(null);
-  const [deletedEntryIds, setDeletedEntryIds] = useState<Set<string>>(new Set());
-  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+  // State management - optimized with useReducer for better performance
+  const [state, setState] = useState({
+    selectedPartyName: initialPartyName || 'Test Company 1',
+    typingPartyName: initialPartyName || 'Test Company 1',
+    showOldRecords: false,
+    selectedEntries: [] as string[],
+    showMondayFinalModal: false,
+    showModifyModal: false,
+    showDeleteModal: false,
+    editingEntry: null as LedgerEntry | null,
+    entryToDelete: null as LedgerEntry | null,
+    deletedEntryIds: new Set<string>(),
+    initialLoadComplete: false,
+    actionLoading: false,
+    partyChanging: false // Add loading state for party changes
+  });
+
+  // Destructure for easier access
+  const {
+    selectedPartyName,
+    typingPartyName,
+    showOldRecords,
+    selectedEntries,
+    showMondayFinalModal,
+    showModifyModal,
+    showDeleteModal,
+    editingEntry,
+    entryToDelete,
+    deletedEntryIds,
+    initialLoadComplete,
+    actionLoading,
+    partyChanging
+  } = state;
+
+  // Optimized state setters
+  const updateState = useCallback((updates: Partial<typeof state>) => {
+    setState(prev => ({ ...prev, ...updates }));
+  }, []);
 
   // Custom hooks
   const { availableParties, allPartiesForTransaction, partiesLoading } = usePartyManagement(selectedPartyName);
   
-  const { ledgerData, loading, loadLedgerData, refreshBalanceColumn, recalculateBalances, forceUpdate } = useLedgerData({
+  const { ledgerData, loading, loadLedgerData, refreshBalanceColumn, recalculateBalances, forceUpdate, clearLedgerData, setLedgerData } = useLedgerData({
     selectedPartyName,
     showOldRecords,
-    setShowOldRecords
+    setShowOldRecords: (show: boolean) => updateState({ showOldRecords: show })
   });
 
   // INSTANT refresh - no debounce for immediate updates
-  const instantRefresh = useMemo(() => {
-    return () => {
+  const instantRefresh = () => {
+    loadLedgerData(false, true);
+  };
+
+  // Debounced refresh to prevent excessive API calls
+  const debouncedRefresh = useCallback(() => {
+    const timeoutId = setTimeout(() => {
       loadLedgerData(false, true);
-    };
+    }, 500); // Increased to 500ms debounce for better resource management
+    
+    return () => clearTimeout(timeoutId);
   }, [loadLedgerData]);
 
   const {
@@ -107,13 +144,15 @@ const AccountLedgerComponent = () => {
     allPartiesForTransaction,
     ledgerData,
     onTransactionAdded: useCallback(async () => {
-      console.log('🔄 TRANSACTION ADDED: Refreshing data...');
-      // Force refresh data from backend immediately
+      // INSTANT REFRESH - Force immediate refresh without loading state
       try {
-        await loadLedgerData(true, true); // Show loading and force refresh
-        console.log('✅ TRANSACTION ADDED: Data refreshed successfully');
+        // Use the existing loadLedgerData function with force refresh
+        await loadLedgerData(false, true); // No loading state, force refresh
       } catch (error) {
-        console.error('❌ TRANSACTION ADDED: Error refreshing data:', error);
+        // Only log critical errors
+        if (error instanceof Error && (error.message.includes('timeout') || error.message.includes('network'))) {
+          console.warn('Refresh Error:', error.message);
+        }
       }
     }, [loadLedgerData]),
     businessRules: {
@@ -125,25 +164,48 @@ const AccountLedgerComponent = () => {
     }
   });
 
-  // Handle party change - optimized like old system
-  const handlePartyChange = useCallback(async (newPartyName: string) => {
+  // Handle party change - ULTRA optimized with instant table updates
+  const handlePartyChange = useCallback((newPartyName: string) => {
     const actualPartyName = extractPartyNameFromDisplay(newPartyName.trim());
     
-    // Immediate UI updates - no waiting
-    setSelectedPartyName(actualPartyName);
-    setTypingPartyName(newPartyName.trim());
+    // INSTANT UI updates - update state with loading state FIRST
+    updateState({
+      selectedPartyName: actualPartyName,
+      typingPartyName: newPartyName.trim(),
+      selectedEntries: [],
+      deletedEntryIds: new Set(),
+      partyChanging: true // Show loading state IMMEDIATELY
+    });
+    
+    // Clear ALL party-related cache to prevent old data showing
+    clearCacheByPattern('party-ledger-.*');
+    
+    // Also clear any pending requests to prevent race conditions
+    if ((window as any).clearApiCache) {
+      (window as any).clearApiCache();
+    }
+    
+    // Clear ledger data for instant table clearing
+    if (clearLedgerData) {
+      clearLedgerData();
+    }
+    
     resetForm();
-    setSelectedEntries([]);
-    setDeletedEntryIds(new Set());
     navigate(`/account-ledger/${encodeURIComponent(actualPartyName)}`);
     
-    // Load data immediately - like old system
-    try {
-      await loadLedgerData(true, true);
-    } catch (error) {
-      console.error('Error loading party data:', error);
-    }
-  }, [navigate, resetForm, loadLedgerData]);
+    // Load data immediately - no delay for instant response
+    loadLedgerData(true, true, actualPartyName).then(() => {
+      // Hide loading state when data is loaded
+      updateState({ partyChanging: false });
+    }).catch(error => {
+      // Hide loading state even on error
+      updateState({ partyChanging: false });
+      // Only log critical errors
+      if (error instanceof Error && (error.message.includes('timeout') || error.message.includes('network'))) {
+        console.warn('Party Load Error:', error.message);
+      }
+    });
+  }, [navigate, resetForm, loadLedgerData, updateState, clearLedgerData]);
 
   // Top party selector auto-complete - Enhanced like old version
   const topPartyAutoComplete = useAutoComplete({
@@ -153,50 +215,180 @@ const AccountLedgerComponent = () => {
     currentPartyName: selectedPartyName
   });
 
-  // Party selection handlers - Like old version
-  const handlePartySelect = useCallback((partyName: string) => {
-    handlePartyChange(partyName);
-  }, [handlePartyChange]);
+  // Party selection handlers - simplified
+  const handlePartySelect = handlePartyChange;
+  const handleTopPartySelect = handlePartyChange;
 
-  const handleTopPartySelect = useCallback((partyName: string) => {
-    handlePartyChange(partyName);
-  }, [handlePartyChange]);
+  // Entry selection handler
+  const handleEntrySelect = useCallback((id: string | number, checked: boolean) => {
+    if (checked) {
+      updateState({ selectedEntries: [...selectedEntries, id.toString()] });
+    } else {
+      updateState({ selectedEntries: selectedEntries.filter(entryId => entryId !== id.toString()) });
+    }
+  }, [selectedEntries, updateState]);
 
-  // Handle URL parameter changes and initial load
+  // Handle modify entry
+  const handleModifyEntry = useCallback((entry: LedgerEntry) => {
+    updateState({ 
+      editingEntry: entry,
+      showModifyModal: true 
+    });
+  }, [updateState]);
+
+  // Handle delete entry
+  const handleDeleteEntry = useCallback((entry: LedgerEntry) => {
+    updateState({ 
+      entryToDelete: entry,
+      showDeleteModal: true 
+    });
+  }, [updateState]);
+
+  // Handle bulk delete
+  const handleBulkDelete = useCallback((entries: LedgerEntry[]) => {
+    updateState({ 
+      entryToDelete: entries[0], // Use first entry as representative
+      showDeleteModal: true 
+    });
+  }, [updateState]);
+
+  // Handle refresh
+  const handleRefresh = useCallback(async () => {
+    updateState({ actionLoading: true });
+    try {
+      await loadLedgerData(true, true);
+      toast({
+        title: "Success",
+        description: "Data refreshed successfully",
+        variant: "default"
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to refresh data",
+        variant: "destructive"
+      });
+    } finally {
+      updateState({ actionLoading: false });
+    }
+  }, [loadLedgerData, updateState, toast]);
+
+  // Handle print
+  const handlePrint = useCallback(() => {
+    window.print();
+  }, []);
+
+  // Handle exit
+  const handleExit = useCallback(() => {
+    navigate('/party-ledger');
+  }, [navigate]);
+
+  // Handle check all - will be defined after currentEntries
+
+  // Handle select all - will be defined after handleCheckAll
+
+  // Handle URL parameter changes and initial load - ULTRA optimized
   useEffect(() => {
     if (initialPartyName && initialPartyName !== selectedPartyName) {
       const decodedPartyName = decodeURIComponent(initialPartyName);
-      setSelectedPartyName(decodedPartyName);
-      setTypingPartyName(decodedPartyName);
+      updateState({
+        selectedPartyName: decodedPartyName,
+        typingPartyName: decodedPartyName
+      });
     }
-    
-    // Mark initial load as complete after a short delay to show UI immediately
-    if (!initialLoadComplete) {
-      const timer = setTimeout(() => {
-        setInitialLoadComplete(true);
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [initialPartyName, selectedPartyName, initialLoadComplete]);
+  }, [initialPartyName, selectedPartyName, updateState]);
 
-  // Get current entries for display - simplified version
+  // Separate effect for initial data loading
+  useEffect(() => {
+    if (!initialLoadComplete && selectedPartyName) {
+      loadLedgerData(true, false).catch(error => {
+        // Only log critical errors
+        if (error instanceof Error && (error.message.includes('timeout') || error.message.includes('network'))) {
+          console.warn('Initial Load Error:', error.message);
+        }
+      });
+      updateState({ initialLoadComplete: true });
+    }
+  }, [selectedPartyName]); // Removed unnecessary dependencies
+
+  // Cleanup effect to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      // Clear any pending timeouts
+      const timeouts = document.querySelectorAll('[data-timeout]');
+      timeouts.forEach(timeout => clearTimeout(Number(timeout.getAttribute('data-timeout'))));
+    };
+  }, []);
+
+  // Get current entries for display - ULTRA optimized with useMemo
   const currentEntries = useMemo(() => {
-    if (!ledgerData) return [];
     
+    // INSTANT CLEAR: If party is changing, show empty table immediately
+    if (partyChanging) {
+      return [];
+    }
+    
+    // INSTANT CLEAR: If no ledger data, show empty table immediately
+    if (!ledgerData) {
+      return [];
+    }
+    
+    // CRITICAL FIX: Check if ledger data belongs to current party
+    // This prevents showing old party's data when switching parties
     const entries = showOldRecords 
-      ? [...(ledgerData.oldRecords || []), ...(ledgerData.ledgerEntries?.filter(entry => entry.remarks?.includes('Monday Final Settlement')) || [])]
+      ? ledgerData.oldRecords || []
       : ledgerData.ledgerEntries || [];
     
-    // Filter out deleted entries
-    const filteredEntries = entries.filter(entry => {
+    
+    // Filter entries to only show current party's data
+    // Use more flexible matching to handle variations in party names
+    const currentPartyEntries = entries.filter(entry => {
+      const entryPartyName = entry.partyName || entry.party_name || '';
+      const normalizedEntryName = entryPartyName.toLowerCase().trim();
+      const normalizedSelectedName = selectedPartyName.toLowerCase().trim();
+      
+      const matches = normalizedEntryName === normalizedSelectedName || 
+             normalizedEntryName.includes(normalizedSelectedName) ||
+             normalizedSelectedName.includes(normalizedEntryName);
+      
+      
+      return matches;
+    });
+    
+    
+    // Early return if no deleted entries
+    if (deletedEntryIds.size === 0) {
+      return currentPartyEntries;
+    }
+    
+    // Only filter if there are deleted entries
+    return currentPartyEntries.filter(entry => {
       const entryId = (entry.id || entry._id || entry.ti || '').toString();
       const entryPartyName = entry.partyName || entry.party_name || '';
       const compositeKey = `${entryPartyName}:${entryId}`;
       return !deletedEntryIds.has(compositeKey);
     });
+  }, [ledgerData, showOldRecords, deletedEntryIds, partyChanging, selectedPartyName]);
+
+  // Handle check all - now that currentEntries is defined
+  const handleCheckAll = useCallback(() => {
+    if (currentEntries.length === 0) return;
     
-    return filteredEntries;
-  }, [ledgerData, showOldRecords, deletedEntryIds, forceUpdate]);
+    const allEntryIds = currentEntries.map(entry => 
+      (entry.id || entry._id || entry.ti || '').toString()
+    );
+    
+    updateState({ selectedEntries: allEntryIds });
+  }, [currentEntries, updateState]);
+
+  // Handle select all - now that handleCheckAll is defined
+  const handleSelectAll = useCallback((checked: boolean) => {
+    if (checked) {
+      handleCheckAll();
+    } else {
+      updateState({ selectedEntries: [] });
+    }
+  }, [handleCheckAll, updateState]);
 
   // Action buttons hook
   const {
@@ -218,40 +410,18 @@ const AccountLedgerComponent = () => {
     selectedPartyName,
     showOldRecords,
     ledgerData,
-    setSelectedEntries,
-    setShowMondayFinalModal,
-    setEditingEntry,
-    setEntryToDelete,
+    setSelectedEntries: (entries) => updateState({ selectedEntries: entries }),
+    setShowMondayFinalModal: (show) => updateState({ showMondayFinalModal: show }),
+    setEditingEntry: (entry) => updateState({ editingEntry: entry }),
+    setEntryToDelete: (entry) => updateState({ entryToDelete: entry }),
     loadLedgerData,
     refreshBalanceColumn,
-    setDeletedEntryIds
+    setDeletedEntryIds: (ids) => updateState({ deletedEntryIds: typeof ids === 'function' ? ids(deletedEntryIds) : ids })
   });
 
-  // Handle entry selection
-  const handleEntrySelect = useCallback((id: string | number, checked: boolean) => {
-    setSelectedEntries(prev => 
-      checked 
-        ? [...prev, id.toString()]
-        : prev.filter(entryId => entryId !== id.toString())
-    );
-  }, []);
-
-  // Use hook functions
-  const handleSelectAll = hookHandleSelectAll;
-  const handleCheckAll = hookHandleCheckAll;
-
-  // Use hook functions
-  const handleModifyEntry = hookHandleModifyEntry;
-  const handleDeleteEntry = hookHandleDeleteEntry;
-
-  // Use hook functions
+  // Use hook functions for remaining handlers
   const handleMondayFinal = hookHandleMondayFinal;
-  const handleRefresh = hookHandleRefresh;
-  const handlePrint = hookHandlePrint;
-  const handleExit = hookHandleExit;
   const handleDCReport = hookHandleDCReport;
-
-  // Use hook function
   const handleCommissionAutoFill = () => hookHandleCommissionAutoFill(allPartiesForTransaction);
 
   // Handle click outside to close dropdowns
@@ -272,7 +442,6 @@ const AccountLedgerComponent = () => {
   // Handle parties refresh event
   useEffect(() => {
     const handlePartiesRefresh = (event: CustomEvent) => {
-      // console.log('🔄 Parties refresh event received:', event.detail);
       // Refresh parties data
     };
 
@@ -350,9 +519,39 @@ const AccountLedgerComponent = () => {
       <div className="min-h-screen bg-gray-50">
         <TopNavigation />
         <div className="container mx-auto px-4 py-8">
-          <div className="flex items-center justify-center h-64">
+          {/* Loading Header */}
+          <div className="flex items-center justify-center mb-8">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-            <span className="ml-2 text-gray-600">Loading ledger data...</span>
+            <span className="ml-2 text-gray-600 text-lg font-medium">Loading ledger data...</span>
+          </div>
+          
+          {/* Skeleton Table */}
+          <div className="bg-white rounded-lg shadow-sm border">
+            {/* Skeleton Table Header */}
+            <div className="bg-gray-50 px-6 py-4 border-b">
+              <div className="grid grid-cols-6 gap-4">
+                <div className="h-4 bg-gray-300 rounded animate-pulse"></div>
+                <div className="h-4 bg-gray-300 rounded animate-pulse"></div>
+                <div className="h-4 bg-gray-300 rounded animate-pulse"></div>
+                <div className="h-4 bg-gray-300 rounded animate-pulse"></div>
+                <div className="h-4 bg-gray-300 rounded animate-pulse"></div>
+                <div className="h-4 bg-gray-300 rounded animate-pulse"></div>
+              </div>
+            </div>
+            
+            {/* Skeleton Table Rows */}
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((row) => (
+              <div key={row} className="px-6 py-4 border-b last:border-b-0">
+                <div className="grid grid-cols-6 gap-4">
+                  <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -360,8 +559,7 @@ const AccountLedgerComponent = () => {
   }
 
   return (
-    <Profiler id="AccountLedger" onRender={onRenderCallback}>
-      <div className="h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col">
+    <div className="h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col">
         <TopNavigation />
       
       {/* Main Layout - Split from top navigation */}
@@ -463,22 +661,27 @@ const AccountLedgerComponent = () => {
                   </div>
                 </div>
                 <div className="overflow-auto" style={{ height: '400px' }}>
-                  {!initialLoadComplete ? (
+                  {!initialLoadComplete || partyChanging ? (
                     <div className="p-8 text-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                      <p className="text-gray-600">Loading Account Ledger...</p>
+                      <p className="text-gray-600">
+                        {partyChanging ? 'Switching to new party...' : 'Loading Account Ledger...'}
+                      </p>
                     </div>
                   ) : (
-                    <LedgerTable
-                      entries={currentEntries}
-                      showOldRecords={showOldRecords}
-                      onToggleOldRecords={() => setShowOldRecords(!showOldRecords)}
-                      onEntrySelect={handleEntrySelect}
-                      onModifyEntry={hookHandleModifyEntry}
-                      onDeleteEntry={hookHandleDeleteEntry}
-                      selectedEntries={selectedEntries}
-                      onSelectAll={hookHandleSelectAll}
-                    />
+                    <div className="relative">
+                      {/* No loading overlay - completely removed for smooth experience */}
+                      <LedgerTable
+                        entries={currentEntries}
+                        showOldRecords={showOldRecords}
+                        onToggleOldRecords={() => updateState({ showOldRecords: !showOldRecords })}
+                        onEntrySelect={handleEntrySelect}
+                        onModifyEntry={hookHandleModifyEntry}
+                        onDeleteEntry={hookHandleDeleteEntry}
+                        selectedEntries={selectedEntries}
+                        onSelectAll={hookHandleSelectAll}
+                      />
+                    </div>
                   )}
                 </div>
               </div>
@@ -512,18 +715,18 @@ const AccountLedgerComponent = () => {
         </div>
 
         {/* Right Side Action Buttons - Full height from top navigation */}
-        <div className="w-64 bg-white shadow-lg border-l border-gray-200 p-6">
+        <div className="w-72 bg-white shadow-lg border-l border-gray-200 p-6">
           <div className="mb-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">Actions</h3>
-            <div className="text-sm text-gray-600 mb-4">
-              Selected: {selectedEntries.length} entries
+            <div className="text-sm text-gray-600 mb-4 break-words">
+              <span className="font-medium text-blue-600">{selectedEntries.length}</span> entries selected
             </div>
           </div>
           
           <div className="space-y-3">
             <button
-              onClick={hookHandleRefresh}
-              disabled={hookActionLoading}
+              onClick={handleRefresh}
+              disabled={actionLoading}
               className="w-full px-4 py-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -543,7 +746,7 @@ const AccountLedgerComponent = () => {
             </button>
             
             <button
-              onClick={() => setShowMondayFinalModal(true)}
+              onClick={() => updateState({ showMondayFinalModal: true })}
               disabled={selectedEntries.length === 0}
               className="w-full px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
             >
@@ -556,8 +759,7 @@ const AccountLedgerComponent = () => {
             <button
               onClick={async () => {
                 const newShowOldRecords = !showOldRecords;
-                setShowOldRecords(newShowOldRecords);
-                console.log('🔄 OLD RECORDS: Toggling to:', newShowOldRecords);
+                updateState({ showOldRecords: newShowOldRecords });
                 // Refresh data after toggle
                 await loadLedgerData(false, true);
               }}
@@ -576,7 +778,7 @@ const AccountLedgerComponent = () => {
                     (entry.id || entry._id || entry.ti || '').toString() === selectedEntries[0]
                   );
                   if (selectedEntry) {
-                    hookHandleModifyEntry(selectedEntry);
+                    handleModifyEntry(selectedEntry);
                   }
                 }
               }}
@@ -598,7 +800,7 @@ const AccountLedgerComponent = () => {
                       (entry.id || entry._id || entry.ti || '').toString() === selectedEntries[0]
                     );
                     if (selectedEntry) {
-                      hookHandleDeleteEntry(selectedEntry);
+                      handleDeleteEntry(selectedEntry);
                     }
                   } else {
                     // Bulk delete
@@ -606,7 +808,7 @@ const AccountLedgerComponent = () => {
                       selectedEntries.includes((entry.id || entry._id || entry.ti || '').toString())
                     );
                     if (selectedEntriesData.length > 0) {
-                      hookHandleBulkDelete(selectedEntriesData);
+                      handleBulkDelete(selectedEntriesData);
                     }
                   }
                 }
@@ -621,7 +823,7 @@ const AccountLedgerComponent = () => {
             </button>
             
             <button
-              onClick={hookHandlePrint}
+              onClick={handlePrint}
               className="w-full px-4 py-3 bg-gradient-to-r from-teal-500 to-green-500 hover:from-teal-600 hover:to-green-600 text-white rounded-lg text-sm font-medium transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -631,7 +833,7 @@ const AccountLedgerComponent = () => {
             </button>
             
             <button
-              onClick={hookHandleCheckAll}
+              onClick={handleCheckAll}
               className="w-full px-4 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white rounded-lg text-sm font-medium transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -641,7 +843,7 @@ const AccountLedgerComponent = () => {
             </button>
             
             <button
-              onClick={hookHandleExit}
+              onClick={handleExit}
               className="w-full px-4 py-3 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white rounded-lg text-sm font-medium transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -656,13 +858,64 @@ const AccountLedgerComponent = () => {
       {/* Monday Final Modal */}
       <MondayFinalModal
         isOpen={showMondayFinalModal}
-        onClose={() => setShowMondayFinalModal(false)}
+        onClose={() => updateState({ showMondayFinalModal: false })}
         onConfirm={hookHandleMondayFinal}
         selectedCount={selectedEntries.length}
-        loading={hookActionLoading}
+        loading={actionLoading}
       />
+
+      {/* Modify Entry Modal */}
+      <AlertDialog open={showModifyModal} onOpenChange={(open) => updateState({ showModifyModal: open })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Modify Entry</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to modify this entry? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (editingEntry) {
+                  hookHandleModifyEntry(editingEntry);
+                }
+                updateState({ showModifyModal: false, editingEntry: null });
+              }}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              Modify
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Entry Modal */}
+      <AlertDialog open={showDeleteModal} onOpenChange={(open) => updateState({ showDeleteModal: open })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Entry</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this entry? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (entryToDelete) {
+                  hookHandleDeleteEntry(entryToDelete);
+                }
+                updateState({ showDeleteModal: false, entryToDelete: null });
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       </div>
-    </Profiler>
   );
 };
 

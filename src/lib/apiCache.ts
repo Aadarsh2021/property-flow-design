@@ -145,6 +145,13 @@ export const clearCache = (key: string) => apiCache.clearKey(key);
 export const clearAllCache = () => apiCache.clearAll();
 export const clearCacheByPattern = (pattern: string) => apiCache.clearByPattern(pattern);
 
+// Global cache clearing function for debugging
+if (typeof window !== 'undefined') {
+  (window as any).clearApiCache = () => {
+    apiCache.clearAll();
+  };
+}
+
 /**
  * Simple API call function
  */

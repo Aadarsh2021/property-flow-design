@@ -24,6 +24,10 @@ interface User {
   phone: string;
   city: string;
   state: string;
+  role?: string;
+  status?: string;
+  is_approved?: boolean;
+  auth_provider?: string;
   created_at: string;
   updated_at: string;
   partyCount: number;
@@ -246,6 +250,106 @@ class AdminApiService {
     return this.makeRequest<{ disapprovedUserId: string }>(`/admin/users/${userId}/disapprove`, {
       method: 'DELETE',
     });
+  }
+
+  /**
+   * Create a new user
+   */
+  async createUser(userData: {
+    name: string;
+    email: string;
+    phone?: string;
+    city?: string;
+    state?: string;
+    role?: string;
+    password: string;
+  }): Promise<User> {
+    return this.makeRequest<User>('/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+  }
+
+  /**
+   * Update user information
+   */
+  async updateUser(userId: string, userData: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    city?: string;
+    state?: string;
+    role?: string;
+    status?: string;
+  }): Promise<User> {
+    return this.makeRequest<User>(`/admin/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(userData),
+    });
+  }
+
+  /**
+   * Toggle user status
+   */
+  async toggleUserStatus(userId: string): Promise<User> {
+    return this.makeRequest<User>(`/admin/users/${userId}/toggle-status`, {
+      method: 'PUT',
+    });
+  }
+
+  /**
+   * Update user role
+   */
+  async updateUserRole(userId: string, role: string): Promise<User> {
+    return this.makeRequest<User>(`/admin/users/${userId}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ role }),
+    });
+  }
+
+  /**
+   * Get user activity
+   */
+  async getUserActivity(userId: string, limit?: number): Promise<any[]> {
+    const params = limit ? `?limit=${limit}` : '';
+    return this.makeRequest<any[]>(`/admin/users/${userId}/activity${params}`);
+  }
+
+  /**
+   * Bulk user actions
+   */
+  async bulkUserActions(action: string, userIds: string[], data?: any): Promise<{
+    results: Array<{ userId: string; status: string; error?: string }>;
+    totalProcessed: number;
+  }> {
+    return this.makeRequest<{
+      results: Array<{ userId: string; status: string; error?: string }>;
+      totalProcessed: number;
+    }>('/admin/users/bulk-actions', {
+      method: 'POST',
+      body: JSON.stringify({ action, userIds, data }),
+    });
+  }
+
+  /**
+   * Export users data
+   */
+  async exportUsers(format: 'json' | 'csv' = 'json'): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/admin/users/export?format=${format}`, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Export failed: ${response.status} ${response.statusText}`);
+    }
+
+    if (format === 'csv') {
+      return response.text();
+    } else {
+      return response.json();
+    }
   }
 }
 

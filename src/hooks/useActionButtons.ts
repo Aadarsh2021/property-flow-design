@@ -60,7 +60,6 @@ export const useActionButtons = ({
     perf.actionTimes.set(actionName, times);
     perf.averageActionTime.set(actionName, times.reduce((sum, time) => sum + time, 0) / times.length);
     
-    // console.log(`📊 ACTION PERFORMANCE: ${actionName} took ${duration.toFixed(2)}ms (avg: ${perf.averageActionTime.get(actionName)?.toFixed(2)}ms)`);
   }, []);
 
   // Debounced functions for better performance
@@ -117,7 +116,6 @@ export const useActionButtons = ({
   // Handle modify entry - COMPLEX BUSINESS LOGIC like old system
   const handleModifyEntry = useCallback(async (entry: LedgerEntry) => {
     const startTime = performance.now();
-    console.log('🚀 MODIFY: Starting...');
     
     const entryId = entry.id || entry._id || entry.ti;
     if (!entryId) {
@@ -150,7 +148,6 @@ export const useActionButtons = ({
       const newAmount = entry.tnsType === 'CR' ? parseFloat(String(entry.credit || '0')) : parseFloat(String(entry.debit || '0'));
       
       if (Math.abs(newAmount - entryAmount) > 0) {
-        console.log('🔄 MODIFY: Amount changed, will trigger balance recalculation');
       }
 
       const updateData = {
@@ -160,26 +157,21 @@ export const useActionButtons = ({
         tnsType: entry.tnsType
       };
       
-      console.log('📤 MODIFY: Sending update data:', updateData);
       
       // Update entry in backend
       const response = await partyLedgerAPI.updateEntry(entryId, updateData as any);
       
-      console.log('📥 MODIFY: Response received:', response);
       
       if (response.success) {
         const endTime = performance.now();
         const duration = endTime - startTime;
-        console.log(`✅ MODIFY: Completed in ${duration.toFixed(2)}ms`);
         
         // COMPLEX BUSINESS LOGIC - Cascade Update for Related Entries
         if (entry.remarks && entry.remarks.includes('(') && entry.remarks.includes(')')) {
-          console.log('🔄 MODIFY: Detected party-to-party transaction, checking for related entries...');
           
           // Extract party name from remarks
           const partyNameInRemarks = entry.remarks.match(/\(([^)]+)\)/)?.[1];
           if (partyNameInRemarks) {
-            console.log(`🔄 MODIFY: Looking for related entries with party: ${partyNameInRemarks}`);
             
             // This would typically trigger a search for related entries
             // and update them accordingly in a real implementation
@@ -261,15 +253,8 @@ export const useActionButtons = ({
     
     // Prevent multiple simultaneous deletions
     if (actionLoading) {
-      console.log('⚠️ Delete operation already in progress, skipping...');
       return;
     }
-    
-    console.log('🚀 DELETE: Starting...', { 
-      entryId: entry.id || entry._id || entry.ti, 
-      partyName: selectedPartyName,
-      remarks: entry.remarks 
-    });
     
     const entryId = entry.id || entry._id || entry.ti;
     if (!entryId) {
@@ -291,7 +276,6 @@ export const useActionButtons = ({
                                  entry.remarks?.includes('Monday Settlement');
       
       if (isMondayFinalEntry) {
-        console.log('🔄 DELETE: Monday Final entry detected, using special deletion logic...');
         
         // Use special Monday Final deletion API
         const response = await partyLedgerAPI.deleteMondayFinalEntry(entryId);
@@ -299,7 +283,6 @@ export const useActionButtons = ({
         if (response.success) {
           const endTime = performance.now();
           const duration = endTime - startTime;
-          console.log(`✅ MONDAY FINAL DELETE: Completed in ${duration.toFixed(2)}ms`);
           
           toast({ 
             title: "Monday Final Deleted", 
@@ -324,7 +307,6 @@ export const useActionButtons = ({
                                entry.partyName?.toLowerCase() === 'commission';
       
       if (isCommissionEntry) {
-        console.log('🔄 DELETE: Commission entry detected, checking for related entries...');
         
         // Check if this commission entry is related to other transactions
         const relatedTransactions = ledgerData?.ledgerEntries?.filter(ledgerEntry => 
@@ -333,7 +315,7 @@ export const useActionButtons = ({
         ) || [];
         
         if (relatedTransactions.length > 0) {
-          console.log(`🔄 DELETE: Found ${relatedTransactions.length} related transactions`);
+          // Found related transactions
         }
       }
 
@@ -343,27 +325,26 @@ export const useActionButtons = ({
                             entry.remarks.includes(')');
       
       if (isPartyToParty) {
-        console.log('🔄 DELETE: Party-to-party transaction detected, will cascade delete...');
         
         // Extract party name from remarks for cascade deletion
         const partyNameInRemarks = entry.remarks.match(/\(([^)]+)\)/)?.[1];
         if (partyNameInRemarks) {
-          console.log(`🔄 DELETE: Looking for related entries with party: ${partyNameInRemarks}`);
+          // Looking for related entries with party
         }
       }
 
       // Delete from backend
+      console.log('🗑️ Attempting to delete entry:', entryId);
       const response = await partyLedgerAPI.deleteEntry(entryId);
+      console.log('🗑️ Delete response:', response);
       
       if (response.success) {
         const endTime = performance.now();
         const duration = endTime - startTime;
-        console.log(`✅ DELETE: Completed in ${duration.toFixed(2)}ms`);
         
         // COMPLEX BUSINESS LOGIC - Handle cascade delete for related entries
         if (response.data?.relatedDeletedCount > 0) {
           const relatedParties = response.data.relatedParties || [];
-          console.log(`🔄 CASCADE DELETE: Found ${response.data.relatedDeletedCount} related entries in parties:`, relatedParties);
           
           // Show detailed success message with cascade information
           let successMessage = `Entry deleted successfully`;
@@ -461,11 +442,9 @@ export const useActionButtons = ({
     
     // Prevent multiple simultaneous bulk deletions
     if (actionLoading) {
-      console.log('⚠️ Bulk delete operation already in progress, skipping...');
       return;
     }
     
-    // console.log('🚀 BULK DELETE: Starting...', { entryCount: entries.length });
     
     if (entries.length === 0) {
       toast({
@@ -509,7 +488,9 @@ export const useActionButtons = ({
         if (!entryId) return { success: false, relatedDeletedCount: 0, relatedParties: [] };
         
         try {
+          console.log('🗑️ Bulk delete - attempting to delete entry:', entryId);
           const response = await partyLedgerAPI.deleteEntry(entryId);
+          console.log('🗑️ Bulk delete response:', response);
           return {
             success: response.success,
             relatedDeletedCount: response.data?.relatedDeletedCount || 0,
@@ -536,7 +517,6 @@ export const useActionButtons = ({
       
       const endTime = performance.now();
       const duration = endTime - startTime;
-      // console.log(`✅ BULK DELETE: Completed in ${duration.toFixed(2)}ms`);
       
       // Show success message with cascade delete details
       if (totalRelatedDeleted > 0) {
@@ -570,7 +550,6 @@ export const useActionButtons = ({
   // Handle Monday Final action
   const handleMondayFinal = useCallback(async () => {
     const startTime = performance.now();
-    console.log('🚀 MONDAY FINAL: Starting...', { selectedEntries: selectedEntries.length });
     
     if (selectedEntries.length === 0) {
       toast({
@@ -588,17 +567,14 @@ export const useActionButtons = ({
         selectedEntries.includes((entry.id || entry._id || entry.ti || '').toString())
       );
 
-      console.log('📤 MONDAY FINAL: Sending party names:', [selectedPartyName]);
 
       // Call Monday Final API
       const response = await partyLedgerAPI.updateMondayFinal([selectedPartyName]);
       
-      console.log('📥 MONDAY FINAL: Response received:', response);
       
       if (response.success) {
         const endTime = performance.now();
         const duration = endTime - startTime;
-        console.log(`✅ MONDAY FINAL: Completed in ${duration.toFixed(2)}ms`);
         
         toast({
           title: "Monday Final Completed",
@@ -611,7 +587,6 @@ export const useActionButtons = ({
       } else {
         const endTime = performance.now();
         const duration = endTime - startTime;
-        console.log(`❌ MONDAY FINAL: Failed in ${duration.toFixed(2)}ms`);
         
         toast({
           title: "Error",
@@ -637,7 +612,6 @@ export const useActionButtons = ({
   // Handle refresh with debouncing to prevent spam
   const handleRefresh = useCallback(async () => {
     const startTime = performance.now();
-    // console.log('🚀 REFRESH: Starting...');
 
     // Show immediate feedback
     toast({
@@ -652,7 +626,6 @@ export const useActionButtons = ({
       
       const endTime = performance.now();
       const duration = endTime - startTime;
-      // console.log(`✅ REFRESH: Completed in ${duration.toFixed(2)}ms`);
 
       toast({
         title: "Refreshed",
@@ -662,7 +635,6 @@ export const useActionButtons = ({
       console.error('Refresh error:', error);
       const endTime = performance.now();
       const duration = endTime - startTime;
-      // console.log(`❌ REFRESH: Failed in ${duration.toFixed(2)}ms`);
 
       toast({
         title: "Error",

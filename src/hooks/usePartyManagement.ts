@@ -41,7 +41,10 @@ export const usePartyManagement = (currentPartyName?: string) => {
         setAllPartiesForTransaction(filteredParties);
       }
     } catch (error: any) {
-      console.error('❌ Load parties error:', error);
+      // Only log critical errors
+      if (error instanceof Error && (error.message.includes('timeout') || error.message.includes('network'))) {
+        console.warn('Parties Load Error:', error.message);
+      }
       toast({
         title: "Error",
         description: "Failed to load parties",

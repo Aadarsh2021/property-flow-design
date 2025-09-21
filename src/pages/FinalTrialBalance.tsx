@@ -175,30 +175,42 @@ const FinalTrialBalance = () => {
       const allParties = partiesResponse.data || [];
       // Loading trial balance for parties
       
-      // OPTIMIZED: Get closing balance for each party using Account Ledger API
-      // Limit to first 20 parties for better performance
-      const limitedParties = allParties.slice(0, 20);
-      // Processing limited parties for performance
+      // ULTRA OPTIMIZED: Use batch API call instead of individual calls
+      // Limit to first 50 parties for better performance
+      const limitedParties = allParties.slice(0, 50);
       
-      const partyBalances = await Promise.all(
-        limitedParties.map(async (party) => {
-          try {
-            const ledgerResponse = await partyLedgerAPI.getPartyLedger(party.party_name);
-            if (ledgerResponse.success && ledgerResponse.data && Array.isArray(ledgerResponse.data)) {
-              const entries = ledgerResponse.data;
-              const closingBalance = entries.length > 0 ? entries[entries.length - 1].balance || 0 : 0;
-              return {
-                name: party.party_name,
-                closingBalance: closingBalance
-              };
-            }
-            return null;
-          } catch (error) {
-            // Failed to load ledger for party
-            return null;
-          }
-        })
+      // Use batch API call to get all party balances at once
+      const batchResponse = await finalTrialBalanceAPI.getBatchBalances(
+        limitedParties.map(party => party.party_name)
       );
+      
+      let partyBalances = [];
+      if (batchResponse.success && batchResponse.data) {
+        partyBalances = batchResponse.data.map((balance: any) => ({
+          name: balance.partyName,
+          closingBalance: balance.closingBalance || 0
+        }));
+      } else {
+        // Fallback to individual calls if batch API fails
+        partyBalances = await Promise.all(
+          limitedParties.map(async (party) => {
+            try {
+              const ledgerResponse = await partyLedgerAPI.getPartyLedger(party.party_name);
+              if (ledgerResponse.success && ledgerResponse.data && Array.isArray(ledgerResponse.data)) {
+                const entries = ledgerResponse.data;
+                const closingBalance = entries.length > 0 ? entries[entries.length - 1].balance || 0 : 0;
+                return {
+                  name: party.party_name,
+                  closingBalance: closingBalance
+                };
+              }
+              return null;
+            } catch (error) {
+              return null;
+            }
+          })
+        );
+      }
 
       // Commission party is now automatically created for all users
       // It will be included in allParties and processed normally

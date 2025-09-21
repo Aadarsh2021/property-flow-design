@@ -10,16 +10,66 @@ import { apiCall, cachedApiCall } from './apiCache';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software.vercel.app/api';
 
+// Request queue to prevent concurrent API calls
+const requestQueue = new Map<string, Promise<any>>();
+const activeRequests = new Set<string>();
+const MAX_CONCURRENT_REQUESTS = 3;
+const REQUEST_THROTTLE_MS = 100; // 100ms between requests
+
 const getAuthToken = (): string | null => {
   return localStorage.getItem('token');
+};
+
+// Throttle function to limit request frequency
+const throttle = (func: Function, delay: number) => {
+  let timeoutId: NodeJS.Timeout | null = null;
+  let lastExecTime = 0;
+  
+  return (...args: any[]) => {
+    const currentTime = Date.now();
+    
+    if (currentTime - lastExecTime > delay) {
+      func(...args);
+      lastExecTime = currentTime;
+    } else {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        func(...args);
+        lastExecTime = Date.now();
+      }, delay - (currentTime - lastExecTime));
+    }
+  };
 };
 
 const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> => {
   const url = `${API_BASE_URL}${endpoint}`;
   const token = getAuthToken();
   
+  // Create a unique key for this request
+  const requestKey = `${endpoint}-${JSON.stringify(options)}`;
+  
+  // Check if this exact request is already in progress
+  if (requestQueue.has(requestKey)) {
+    return requestQueue.get(requestKey);
+  }
+  
+  // Check if we have too many concurrent requests
+  if (activeRequests.size >= MAX_CONCURRENT_REQUESTS) {
+    // Wait for a slot to become available
+    await new Promise(resolve => {
+      const checkSlot = () => {
+        if (activeRequests.size < MAX_CONCURRENT_REQUESTS) {
+          resolve(undefined);
+        } else {
+          setTimeout(checkSlot, 50);
+        }
+      };
+      checkSlot();
+    });
+  }
+  
   // Add timeout for better performance
-  const timeoutMs = 15000; // 15 seconds timeout for better UX
+  const timeoutMs = 15000; // Increased to 15 seconds for better reliability
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
     controller.abort();
@@ -35,29 +85,45 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
     ...options,
   };
   
-  try {
-    const response = await fetch(url, config);
-    clearTimeout(timeoutId);
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+  // Create the request promise
+  const requestPromise = (async () => {
+    try {
+      activeRequests.add(requestKey);
+      
+      // Add small delay to prevent overwhelming the server
+      await new Promise(resolve => setTimeout(resolve, REQUEST_THROTTLE_MS));
+      
+      const response = await fetch(url, config);
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const responseData = await response.json();
+      return responseData;
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      
+      if (error.name === 'AbortError') {
+        throw new Error(`Request timed out after ${timeoutMs/1000} seconds`);
+      }
+      
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error('Network error. Please check your connection.');
+      }
+      throw error;
+    } finally {
+      activeRequests.delete(requestKey);
+      requestQueue.delete(requestKey);
     }
-    
-    const responseData = await response.json();
-    return responseData;
-  } catch (error: any) {
-    clearTimeout(timeoutId);
-    
-    if (error.name === 'AbortError') {
-      throw new Error(`Request timed out after ${timeoutMs/1000} seconds`);
-    }
-    
-    if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      throw new Error('Network error. Please check your connection.');
-    }
-    throw error;
-  }
+  })();
+  
+  // Store the request in the queue
+  requestQueue.set(requestKey, requestPromise);
+  
+  return requestPromise;
 };
 
 export const checkBackendHealth = async (): Promise<boolean> => {
@@ -104,15 +170,21 @@ export const partyLedgerAPI = {
     const isForceRefresh = partyName.includes('&_t=');
     const cleanPartyName = partyName.split('&_t=')[0];
     
+    
     if (isForceRefresh) {
       // Force refresh - bypass cache completely
       return apiCall<LedgerEntry[]>(`/party-ledger/${encodeURIComponent(cleanPartyName)}`);
     } else {
-      // Use very short cache for normal requests
+      // Use longer cache for better resource management
+      const cacheKey = `party-ledger-${userId}-${cleanPartyName}`;
+      const cacheTime = 30 * 1000; // Increased to 30 seconds cache to reduce API calls
+      
       return cachedApiCall(
-        `party-ledger-${userId}-${cleanPartyName}`,
-        () => apiCall<LedgerEntry[]>(`/party-ledger/${encodeURIComponent(cleanPartyName)}`),
-        5 * 1000 // 5 seconds cache for faster updates
+        cacheKey,
+        () => {
+          return apiCall<LedgerEntry[]>(`/party-ledger/${encodeURIComponent(cleanPartyName)}`);
+        },
+        cacheTime
       );
     }
   },
@@ -199,6 +271,19 @@ export const finalTrialBalanceAPI = {
   }>('/final-trial-balance/refresh', {
     method: 'GET',
   }),
+  // NEW: Batch API for getting multiple party balances at once
+  getBatchBalances: (partyNames: string[]) => {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = user.id || 'anonymous';
+    return cachedApiCall(
+      `batch-balances-${userId}-${partyNames.join(',')}`,
+      () => apiCall<any[]>('/final-trial-balance/batch-balances', {
+        method: 'POST',
+        body: JSON.stringify({ partyNames }),
+      }),
+      2 * 60 * 1000 // 2 minutes cache
+    );
+  },
   generateReport: (reportData: { startDate: string; endDate: string; partyName?: string }) => apiCall<TrialBalanceEntry[]>('/final-trial-balance', {
     method: 'POST',
     body: JSON.stringify(reportData),

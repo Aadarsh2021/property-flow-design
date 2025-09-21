@@ -47,6 +47,13 @@ export const useAutoComplete = ({
     }
   }, [currentPartyName]);
 
+  // Trigger search when search term changes
+  useEffect(() => {
+    if (searchTerm !== undefined) {
+      filterParties(searchTerm);
+    }
+  }, [searchTerm]); // Removed filterParties dependency to prevent infinite loop
+
   // Fuzzy search implementation
   const fuzzySearch = useCallback((text: string, query: string): number => {
     if (!query) return 0;
@@ -93,7 +100,6 @@ export const useAutoComplete = ({
   // Enhanced search with fuzzy matching and smart scoring
   const performSearch = useCallback((searchTerm: string): SearchResult[] => {
     const startTime = performance.now();
-    // console.log('🔍 ENHANCED SEARCH: Starting...', { searchTerm: searchTerm.substring(0, 20) });
     
     let availableParties = parties;
     
@@ -113,7 +119,6 @@ export const useAutoComplete = ({
       
       const endTime = performance.now();
       const duration = endTime - startTime;
-      // console.log(`✅ ENHANCED SEARCH: Completed in ${duration.toFixed(2)}ms (${results.length} results)`);
       return results;
     }
     
@@ -177,12 +182,11 @@ export const useAutoComplete = ({
     
     const endTime = performance.now();
     const duration = endTime - startTime;
-    // console.log(`✅ ENHANCED SEARCH: Completed in ${duration.toFixed(2)}ms (${results.length} results)`);
     
     return results.slice(0, maxSuggestions);
   }, [parties, excludeCurrentParty, currentPartyName, maxSuggestions, enableSmartMatching, fuzzySearch, highlightText]);
 
-  // Debounced search function
+  // Debounced search function - Reduced delay for instant response
   const debouncedSearch = useMemo(
     () => debounce((searchTerm: string) => {
       setIsSearching(true);
@@ -212,7 +216,7 @@ export const useAutoComplete = ({
       }
       
       setIsSearching(false);
-    }, 150),
+    }, 50), // Reduced from 150ms to 50ms for instant response
     [performSearch]
   );
 
@@ -236,10 +240,10 @@ export const useAutoComplete = ({
     // Set loading state
     setIsSearching(true);
     
-    // Debounce the search
+    // Debounce the search - Reduced delay for instant response
     searchTimeoutRef.current = setTimeout(() => {
       debouncedSearch(searchTerm);
-    }, 50);
+    }, 25); // Reduced from 50ms to 25ms for instant response
   }, [debouncedSearch]);
 
   // Handle input change

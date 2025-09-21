@@ -45,7 +45,7 @@ const TransactionFormComponent: React.FC<TransactionFormProps> = ({
   const onRenderCallback = useCallback((id: string, phase: string, actualDuration: number, baseDuration: number, startTime: number, commitTime: number) => {
     // Only log significant renders (> 3ms for form)
     if (actualDuration > 3) {
-      console.log(`🔍 Profiler [${id}]: ${phase} phase took ${actualDuration.toFixed(2)}ms (base: ${baseDuration.toFixed(2)}ms)`);
+      // Performance tracking
     }
   }, []);
   
@@ -135,12 +135,12 @@ const TransactionFormComponent: React.FC<TransactionFormProps> = ({
           </label>
           <PartySelector
             parties={allPartiesForTransaction}
-            selectedPartyName=""
+            selectedPartyName={newEntry.partyName}
             onPartySelect={onPartyNameChange}
             placeholder="Search other party name"
             className="w-full"
             onKeyDown={handlePartyNameKeyDown}
-            excludeCurrentParty={true}
+            excludeCurrentParty={false}
             currentPartyName=""
           />
         </div>

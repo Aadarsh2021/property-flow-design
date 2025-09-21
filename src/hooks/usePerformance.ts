@@ -20,7 +20,7 @@ export const usePerformance = (componentName: string) => {
       
       // Only log if render time is significant (> 5ms) and not too frequent (max once per 100ms)
       if (renderTime > 5 && (now - lastLogTime.current) > 100) {
-        console.log(`⚡ ${componentName} rendered in ${renderTime.toFixed(2)}ms (render #${renderCount.current})`);
+        // Performance tracking
         lastLogTime.current = now;
       }
     });
@@ -34,7 +34,7 @@ export const usePerformance = (componentName: string) => {
         const end = performance.now();
         // Only log if measurement is significant (> 1ms)
         if (end - start > 1) {
-          console.log(`⏱️ ${name} took ${(end - start).toFixed(2)}ms`);
+          // Performance tracking
         }
       };
     }
@@ -60,7 +60,7 @@ export const useAPIPerformance = () => {
       if (duration > 1000) {
         console.warn(`🐌 Slow API call: ${endpoint} took ${duration.toFixed(2)}ms`);
       } else if (duration > 500) {
-        console.log(`⏱️ API call: ${endpoint} took ${duration.toFixed(2)}ms`);
+        // Performance tracking
       }
       
       return result;
