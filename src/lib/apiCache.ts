@@ -174,4 +174,4 @@ export const apiCall = async <T>(
   return response.json();
 };
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software-quag8azl0-aadarsh2021s-projects.vercel.app/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software.vercel.app/api';
