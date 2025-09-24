@@ -26,7 +26,6 @@ import {
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { adminApi, type DashboardStats, type User, type SystemHealth } from '@/lib/adminApi';
 import { clearCacheByPattern } from '@/lib/apiCache';
-import UserManagement from '@/components/UserManagement';
 
 const AdminDashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats>({
@@ -817,7 +816,100 @@ const AdminDashboard: React.FC = () => {
           </TabsContent>
 
           <TabsContent value="users">
-            <UserManagement onRefresh={handleRefresh} />
+            <Card>
+              <CardHeader>
+                <CardTitle>User Management</CardTitle>
+                <CardDescription>
+                  Manage users and their permissions
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingStates.users ? (
+                  <div className="space-y-4">
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse"></div>
+                          <div className="space-y-2">
+                            <div className="h-4 bg-gray-200 rounded w-32 animate-pulse"></div>
+                            <div className="h-3 bg-gray-200 rounded w-48 animate-pulse"></div>
+                            <div className="h-3 bg-gray-200 rounded w-24 animate-pulse"></div>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-4">
+                          <div className="text-right space-y-2">
+                            <div className="h-3 bg-gray-200 rounded w-20 animate-pulse"></div>
+                            <div className="h-3 bg-gray-200 rounded w-16 animate-pulse"></div>
+                          </div>
+                          <div className="flex space-x-2">
+                            <div className="h-8 bg-gray-200 rounded w-16 animate-pulse"></div>
+                            <div className="h-8 bg-gray-200 rounded w-20 animate-pulse"></div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {users.length > 0 ? (
+                      <div className="space-y-3">
+                        {users.map((user) => (
+                        <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div className="flex items-center space-x-4">
+                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                              <Users className="h-5 w-5 text-blue-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-900">{user.name || 'No Name'}</p>
+                              <p className="text-sm text-gray-500">{user.email}</p>
+                              <p className="text-xs text-gray-400">
+                                {user.city && user.state ? `${user.city}, ${user.state}` : 'Location not set'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-4">
+                            <div className="text-right">
+                              <div className="flex space-x-4 text-sm text-gray-500">
+                                <span>{user.partyCount} parties</span>
+                                <span>{user.transactionCount} transactions</span>
+                              </div>
+                              <p className="text-xs text-gray-400">
+                                Joined {new Date(user.created_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <div className="flex space-x-2">
+                              <Button
+                                onClick={() => handleResetPassword(user)}
+                                variant="outline"
+                                size="sm"
+                                disabled={resettingPassword === user.id}
+                                className="text-blue-600 hover:text-blue-700"
+                              >
+                                <Key className="h-4 w-4 mr-1" />
+                                {resettingPassword === user.id ? 'Resetting...' : 'Reset Password'}
+                              </Button>
+                              <Button
+                                onClick={() => handleDeleteUser(user.id, user.name || user.email)}
+                                variant="outline"
+                                size="sm"
+                                disabled={deletingUser === user.id}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4 mr-1" />
+                                {deletingUser === user.id ? 'Deleting...' : 'Delete'}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    ) : (
+                      <p className="text-gray-500 text-center py-8">No users found</p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Transaction Management tab removed - not implemented */}
