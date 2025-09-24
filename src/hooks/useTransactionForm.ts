@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { partyLedgerAPI } from '@/lib/api';
+import { SupabaseService } from '@/lib/supabaseService';
 import { useToast } from '@/hooks/use-toast';
 import { useCompanyName } from '@/hooks/useCompanyName';
 import { Party, LedgerEntry } from '@/types';
@@ -23,7 +23,7 @@ interface UseTransactionFormProps {
   selectedPartyName: string;
   allPartiesForTransaction: Party[];
   onTransactionAdded: () => void;
-  ledgerData?: {
+  ledgerData?: LedgerEntry[] | {
     ledgerEntries: LedgerEntry[];
     oldRecords: LedgerEntry[];
     closingBalance: number;
@@ -39,20 +39,21 @@ export const useTransactionForm = ({
   businessRules
 }: UseTransactionFormProps) => {
   const { toast } = useToast();
-  const { companyName } = useCompanyName();
+  const { companyName } = useCompanyName(user?.id);
   const [loading, setLoading] = useState(false);
 
   // Get last non-commission transaction amount for commission calculation
   const getLastTransactionAmount = useCallback((partyName: string): number => {
     if (!ledgerData) return 0;
     
-    // Get all entries (current + old records) to find the last NON-COMMISSION transaction
-    const allEntries = [...(ledgerData.ledgerEntries || []), ...(ledgerData.oldRecords || [])];
+    // Supabase returns entries directly as array, not nested in ledgerEntries
+    const allEntries = Array.isArray(ledgerData) ? ledgerData : (ledgerData.ledgerEntries || []);
     
     // Filter out commission transactions to find the last regular transaction
     const nonCommissionEntries = allEntries.filter(entry => 
       !entry.remarks?.toLowerCase().includes('commission') &&
-      entry.tnsType !== 'Monday Settlement'
+      entry.tnsType !== 'Monday Settlement' &&
+      entry.type !== 'Monday Settlement'
     );
     
     if (nonCommissionEntries.length === 0) return 0;
@@ -64,7 +65,8 @@ export const useTransactionForm = ({
       if (dateA.getTime() !== dateB.getTime()) {
         return dateA.getTime() - dateB.getTime();
       }
-      return (a.ti || '').localeCompare(b.ti || '');
+      // Use id for secondary sorting since ti might not exist in Supabase
+      return (a.id || a.ti || '').localeCompare(b.id || b.ti || '');
     });
     
     const lastEntry = sortedEntries[sortedEntries.length - 1];
@@ -128,7 +130,10 @@ export const useTransactionForm = ({
 
       // Balance limit check
       if (selectedParty.balanceLimit && selectedParty.balanceLimit !== '0' && selectedParty.balanceLimit !== 'Unlimited') {
-        const currentBalance = ledgerData?.closingBalance || 0;
+        // Calculate current balance from entries
+        const allEntries = Array.isArray(ledgerData) ? ledgerData : (ledgerData?.ledgerEntries || []);
+        const currentBalance = allEntries.length > 0 ? (allEntries[0]?.balance || 0) : 0;
+        
         const balanceLimit = typeof selectedParty.balanceLimit === 'string' 
           ? parseFloat(selectedParty.balanceLimit) || 0
           : selectedParty.balanceLimit || 0;
@@ -156,10 +161,8 @@ export const useTransactionForm = ({
     // 4. Daily transaction limit check
     if (ledgerData) {
       const today = new Date().toISOString().split('T')[0];
-      const todayTransactions = [
-        ...(ledgerData.ledgerEntries || []),
-        ...(ledgerData.oldRecords || [])
-      ].filter(entry => entry.date === today).length;
+      const allEntries = Array.isArray(ledgerData) ? ledgerData : (ledgerData.ledgerEntries || []);
+      const todayTransactions = allEntries.filter(entry => entry.date === today).length;
 
       if (todayTransactions >= effectiveBusinessRules.maxDailyTransactions) {
         warnings.push(`Daily transaction limit reached (${todayTransactions}/${effectiveBusinessRules.maxDailyTransactions}). Consider if this transaction is necessary.`);
@@ -193,10 +196,8 @@ export const useTransactionForm = ({
 
     // 7. Duplicate transaction check
     if (ledgerData) {
-      const recentTransactions = [
-        ...(ledgerData.ledgerEntries || []),
-        ...(ledgerData.oldRecords || [])
-      ].filter(entry => {
+      const allEntries = Array.isArray(ledgerData) ? ledgerData : (ledgerData.ledgerEntries || []);
+      const recentTransactions = allEntries.filter(entry => {
         const entryDate = new Date(entry.date);
         const now = new Date();
         const diffInMinutes = (now.getTime() - entryDate.getTime()) / (1000 * 60);
@@ -283,13 +284,14 @@ export const useTransactionForm = ({
       
       // Auto-calculate commission when typing "commission"
       if (value.toLowerCase().trim() === 'commission') {
-        if (ledgerData && ledgerData.ledgerEntries && ledgerData.ledgerEntries.length > 0) {
+        const allEntries = Array.isArray(ledgerData) ? ledgerData : (ledgerData?.ledgerEntries || []);
+        if (allEntries.length > 0) {
           // Calculate sum of all transactions for the selected party
           let totalAmount = 0;
           let transactionCount = 0;
           
           // Sum all transactions for the selected party
-          ledgerData.ledgerEntries.forEach(entry => {
+          allEntries.forEach(entry => {
             const entryPartyName = entry.partyName || entry.party_name || '';
             if (entryPartyName === selectedPartyName) {
               const entryAmount = entry.credit || entry.debit || 0;
@@ -326,13 +328,14 @@ export const useTransactionForm = ({
       
       // Auto-calculate commission when typing "commission"
       if (value.toLowerCase().trim() === 'commission') {
-        if (ledgerData && ledgerData.ledgerEntries && ledgerData.ledgerEntries.length > 0) {
+        const allEntries = Array.isArray(ledgerData) ? ledgerData : (ledgerData?.ledgerEntries || []);
+        if (allEntries.length > 0) {
           // Calculate sum of all transactions for the selected party
           let totalAmount = 0;
           let transactionCount = 0;
           
           // Sum all transactions for the selected party
-          ledgerData.ledgerEntries.forEach(entry => {
+          allEntries.forEach(entry => {
             const entryPartyName = entry.partyName || entry.party_name || '';
             if (entryPartyName === selectedPartyName) {
               const entryAmount = entry.credit || entry.debit || 0;
@@ -484,10 +487,10 @@ export const useTransactionForm = ({
           ti: `${Date.now()}::`
       };
 
-      // Add main entry
-      const response = await partyLedgerAPI.addEntry(entryData);
+      // Add main entry using direct Supabase
+      const newEntry = await SupabaseService.createLedgerEntry(userId, entryData);
       
-      if (response.success) {
+      if (newEntry) {
         let successMessage = `Transaction added successfully`;
         let successCount = 1;
 
@@ -507,11 +510,9 @@ export const useTransactionForm = ({
           };
 
           try {
-            const otherPartyResponse = await partyLedgerAPI.addEntry(otherPartyEntry);
-            if (otherPartyResponse.success) {
-              successMessage += `\n📤 ${newEntry.partyName.trim()} party entry saved`;
-              successCount++;
-            }
+            await SupabaseService.createLedgerEntry(userId, otherPartyEntry);
+            successMessage += `\n📤 ${newEntry.partyName.trim()} party entry saved`;
+            successCount++;
           } catch (error) {
             console.error('Failed to add other party entry:', error);
           }
@@ -532,10 +533,8 @@ export const useTransactionForm = ({
           };
 
           try {
-            const commissionResponse = await partyLedgerAPI.addEntry(commissionEntry);
-            if (commissionResponse.success) {
-              successMessage += `\n💰 Commission entry saved (${commissionRate}%)`;
-            }
+            await SupabaseService.createLedgerEntry(userId, commissionEntry);
+            successMessage += `\n💰 Commission entry saved (${commissionRate}%)`;
           } catch (error) {
             console.error('Failed to add commission entry:', error);
           }
@@ -555,10 +554,8 @@ export const useTransactionForm = ({
           };
 
           try {
-            const companyResponse = await partyLedgerAPI.addEntry(companyEntry);
-            if (companyResponse.success) {
-              successMessage += `\n🏢 ${companyName} party entry saved`;
-            }
+            await SupabaseService.createLedgerEntry(userId, companyEntry);
+            successMessage += `\n🏢 ${companyName} party entry saved`;
           } catch (error) {
             console.error('Failed to add company entry:', error);
           }

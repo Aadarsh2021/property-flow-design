@@ -17,13 +17,14 @@
  * @version 1.0.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { Link } from 'react-router-dom';
 import { Settings, FileText, BarChart3, Users, TrendingUp, DollarSign, LogIn, UserPlus, ArrowRight, Plus, ChartBar, Calculator } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { dashboardAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
+import { useSupabaseParties, useSupabaseLedgerEntries } from '@/hooks/useSupabase';
+import { SupabaseService } from '@/lib/supabaseService';
 import { useCompanyName } from '@/hooks/useCompanyName';
 import { startPerfLog, logPageLoad } from '@/lib/performanceLogger';
 
@@ -60,11 +61,15 @@ interface DashboardStats {
 // RecentActivity interface removed - recent activity feature removed
 
 const Index = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { toast } = useToast();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   // Recent activity state removed
   const [loading, setLoading] = useState(false);
+  
+  // Use direct Supabase hooks
+  const { parties } = useSupabaseParties(user?.id || '');
+  const { entries: allEntries } = useSupabaseLedgerEntries(user?.id || '');
 
   // Performance monitoring
   useEffect(() => {
@@ -77,61 +82,88 @@ const Index = () => {
     };
   }, []);
   // Pagination removed - recent activity feature removed
-  const { companyName } = useCompanyName();
+  const { companyName } = useCompanyName(user?.id);
 
-  // Fetch dashboard statistics
-  const fetchDashboardStats = async () => {
-    // Prevent multiple simultaneous calls
-    if (loading) {
-      // Dashboard stats already loading
-      return;
-    }
-    
-    // Fetching dashboard stats
-    const endPerfLog = startPerfLog('Dashboard Stats API', 'api');
-    
-    if (!isAuthenticated) {
-      // Don't make API calls if user is not authenticated
+  // Calculate dashboard statistics from direct Supabase data
+  const calculateDashboardStats = useCallback(() => {
+    if (!isAuthenticated || !user?.id) {
       setStats(null);
       return;
     }
     
     setLoading(true);
     try {
-      const statsResponse = await dashboardAPI.getStats();
+      // Calculate statistics from parties and entries
+      const totalParties = parties.length;
+      const totalTransactions = allEntries.length;
       
-      if (statsResponse.success) {
-        // Dashboard data received successfully
-        setStats(statsResponse.data);
-        endPerfLog();
-      } else {
-        // Dashboard API error
-        toast({
-          title: "Error",
-          description: "Failed to load dashboard statistics",
-          variant: "destructive"
-        });
-      }
+      // Calculate totals
+      const totalCredit = allEntries.reduce((sum, entry) => sum + (entry.credit || 0), 0);
+      const totalDebit = allEntries.reduce((sum, entry) => sum + (entry.debit || 0), 0);
+      const totalBalance = totalCredit - totalDebit;
       
-      // Recent activity processing removed
+      // Calculate commission data
+      const commissionEntries = allEntries.filter(entry => 
+        entry.remarks?.toLowerCase().includes('commission') || 
+        entry.party_name?.toLowerCase().includes('commission')
+      );
+      
+      const commissionCollected = commissionEntries
+        .filter(entry => entry.credit > 0)
+        .reduce((sum, entry) => sum + entry.credit, 0);
+      
+      const commissionPaid = commissionEntries
+        .filter(entry => entry.debit > 0)
+        .reduce((sum, entry) => sum + entry.debit, 0);
+      
+      const netCommissionProfit = commissionCollected - commissionPaid;
+      
+      const statsData: DashboardStats = {
+        overview: {
+          totalParties,
+          totalTransactions,
+          totalCredit,
+          totalDebit,
+          totalBalance
+        },
+        companyBalance: {
+          netBalance: totalBalance,
+          commissionCollected,
+          commissionPaid,
+          netCommissionProfit,
+          totalCredits: totalCredit,
+          totalDebits: totalDebit,
+          commissionTransactionCount: commissionEntries.length,
+          businessActivity: totalCredit + totalDebit,
+          autoCalculated: true
+        },
+        parties: parties.map(party => ({
+          id: party.id,
+          name: party.party_name,
+          srNo: party.sr_no,
+          address: party.address || '',
+          phone: party.phone || '',
+          email: party.email || ''
+        }))
+      };
+      
+      setStats(statsData);
     } catch (error) {
-      // Dashboard data error
+      console.error('Error calculating dashboard stats:', error);
       toast({
         title: "Error",
-        description: "Failed to load dashboard data",
+        description: "Failed to calculate dashboard statistics",
         variant: "destructive"
       });
     } finally {
       setLoading(false);
-      // Dashboard stats fetch completed
-      // Dashboard stats load finished
     }
-  };
+  }, [isAuthenticated, user?.id, parties, allEntries, toast]);
 
-  // Load stats when component mounts
+  // Calculate stats when data changes
   useEffect(() => {
-    fetchDashboardStats();
-  }, [isAuthenticated]);
+    calculateDashboardStats();
+  }, [calculateDashboardStats]);
 
   // Format currency
   const formatCurrency = (amount: number | undefined | null) => {

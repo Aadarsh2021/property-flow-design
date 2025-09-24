@@ -20,20 +20,25 @@
 import React, { useState, useEffect } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { newPartyAPI } from '../lib/api';
+import { useSupabaseParties } from '../hooks/useSupabase';
 import { useToast } from '../hooks/use-toast';
 import { NewPartyData } from '../types';
 import { useCompanyName } from '../hooks/useCompanyName';
+import { useAuth } from '../contexts/AuthContext';
 import { isCompanyParty, isCommissionParty, getCompanyPartyRestrictionMessage, getCommissionPartyRestrictionMessage } from '../lib/companyPartyUtils';
 
 const NewParty = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
-  const { companyName } = useCompanyName();
+  const { companyName } = useCompanyName(user?.id);
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editPartyId, setEditPartyId] = useState<string | null>(null);
+  
+  // Use direct Supabase hooks
+  const { createParty, updateParty, parties } = useSupabaseParties(user?.id || '');
 
   // Performance monitoring
   useEffect(() => {
@@ -85,33 +90,33 @@ const NewParty = () => {
   const loadPartyForEdit = async (partyId: string) => {
     try {
       setLoading(true);
-      const response = await newPartyAPI.getById(partyId);
       
-      if (response.success && response.data) {
-        const party = response.data;
+      // Find party in the parties array from Supabase hook
+      const party = parties.find(p => p.id === partyId);
+      
+      if (party) {
         setFormData({
-          srNo: party.srNo || '',
-          partyName: party.partyName || '',
+          srNo: party.sr_no || '',
+          partyName: party.party_name || '',
           status: party.status || 'R',
-          commiSystem: party.commiSystem || 'Take',
-          balanceLimit: party.balanceLimit || '',
-          mCommission: party.mCommission || 'No Commission',
+          commiSystem: party.commi_system || 'Take',
+          balanceLimit: party.balance_limit || '',
+          mCommission: party.m_commission || 'No Commission',
           rate: party.rate || '',
-          mondayFinal: party.mondayFinal || 'No', // Load existing mondayFinal
-
+          mondayFinal: party.monday_final || 'No', // Load existing monday_final
         });
         
         toast({
           title: "Edit Mode",
-          description: `Editing party: ${party.partyName}`,
+          description: `Editing party: ${party.party_name}`,
         });
       } else {
         toast({
           title: "Error",
-          description: "Failed to load party for editing",
+          description: "Party not found",
           variant: "destructive"
         });
-        navigate('/party-report');
+        navigate('/party-ledger');
       }
     } catch (error) {
       console.error('Error loading party for edit:', error);
@@ -120,7 +125,7 @@ const NewParty = () => {
         description: "Failed to load party for editing",
         variant: "destructive"
       });
-      navigate('/party-report');
+      navigate('/party-ledger');
     } finally {
       setLoading(false);
     }
@@ -128,16 +133,20 @@ const NewParty = () => {
 
   const getNextSrNo = async () => {
     try {
-      const response = await newPartyAPI.getNextSrNo();
-      if (response.success) {
-        setFormData(prev => ({
-          ...prev,
-          srNo: response.data.nextSrNo
-        }));
-      }
+      // Calculate next SR number from existing parties
+      const maxSrNo = parties.reduce((max, party) => {
+        const srNo = parseInt(party.sr_no) || 0;
+        return Math.max(max, srNo);
+      }, 0);
+      
+      const nextSrNo = (maxSrNo + 1).toString();
+      setFormData(prev => ({
+        ...prev,
+        srNo: nextSrNo
+      }));
     } catch (error) {
-      console.error('Error fetching next SR number:', error);
-      // Keep default SR number if API fails
+      console.error('Error calculating next SR number:', error);
+      // Keep default SR number if calculation fails
     }
   };
 
@@ -271,42 +280,41 @@ const NewParty = () => {
 
     setLoading(true);
     try {
+      // Convert form data to Supabase format
+      const partyData = {
+        party_name: formData.partyName,
+        sr_no: formData.srNo,
+        status: formData.status,
+        commi_system: formData.commiSystem,
+        balance_limit: formData.balanceLimit,
+        m_commission: formData.mCommission,
+        rate: formData.rate,
+        monday_final: formData.mondayFinal,
+        address: '',
+        phone: '',
+        email: ''
+      };
+
       if (isEditMode && editPartyId) {
-        const response = await newPartyAPI.update(editPartyId, formData);
-        if (response.success) {
-          toast({
-            title: "Success",
-            description: "Party updated successfully",
-          });
-          navigate('/party-ledger');
-        } else {
-          toast({
-            title: "Error",
-            description: response.message || "Failed to update party",
-            variant: "destructive"
-          });
-        }
+        await updateParty(editPartyId, partyData);
+        toast({
+          title: "Success",
+          description: "Party updated successfully",
+        });
+        navigate('/party-ledger');
       } else {
-        const response = await newPartyAPI.create(formData);
-        if (response.success) {
-          toast({
-            title: "Success",
-            description: "Party created successfully",
-          });
-          navigate('/party-ledger');
-        } else {
-          toast({
-            title: "Error",
-            description: response.message || "Failed to create party",
-            variant: "destructive"
-          });
-        }
+        await createParty(partyData);
+        toast({
+          title: "Success",
+          description: "Party created successfully",
+        });
+        navigate('/party-ledger');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating/updating party:', error);
       toast({
         title: "Error",
-        description: "Failed to create/update party. Please try again.",
+        description: error.message || "Failed to create/update party. Please try again.",
         variant: "destructive"
       });
     } finally {

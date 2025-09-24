@@ -22,9 +22,9 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import TopNavigation from '@/components/TopNavigation';
-import { newPartyAPI, partyLedgerAPI } from '@/lib/api';
+import { useSupabaseParties } from '@/hooks/useSupabase';
+import { SupabaseService } from '@/lib/supabaseService';
 import { Party } from '@/types';
-import { useParties, useRefreshParties } from '@/hooks/useParties';
 import { Search, Filter, Download, Printer, RefreshCw, Eye, Edit, Trash2, Plus, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -68,26 +68,26 @@ const PartyReport = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [autoCompleteLeft, setAutoCompleteLeft] = useState(40);
 
-  // Use React Query hooks for data fetching
+  // Use direct Supabase hooks for data fetching
   const { 
-    data: partiesData = [], 
-    isLoading: partiesLoading, 
+    parties: partiesData = [], 
+    loading: partiesLoading, 
     error: partiesError,
     refetch: refetchParties 
-  } = useParties();
+  } = useSupabaseParties(user?.id || '');
 
-  const refreshParties = useRefreshParties();
+  const refreshParties = refetchParties;
 
   // Transform parties data with Monday Final status
   const parties = useMemo(() => {
     return partiesData.map((party: any) => ({
       _id: party.id,
-      name: party.partyName || party.name,
-      srNo: party.srNo,
+      name: party.party_name,
+      srNo: party.sr_no,
       status: party.status,
-      balanceLimit: parseFloat(party.balanceLimit) || 0,
-      mCommission: party.mCommission || 'No Commission',
-      commiSystem: party.commiSystem,
+      balanceLimit: parseFloat(party.balance_limit) || 0,
+      mCommission: party.m_commission || 'No Commission',
+      commiSystem: party.commi_system,
       rate: party.rate,
       mondayFinal: 'No' as const, // Will be updated by status check
     }));
@@ -229,17 +229,13 @@ const PartyReport = () => {
   // Function to check Monday Final status dynamically
   const checkMondayFinalStatus = async (partyName: string): Promise<'Yes' | 'No'> => {
     try {
-      const response = await partyLedgerAPI.getPartyLedger(partyName);
+      const entries = await SupabaseService.getLedgerEntries(user?.id || '', partyName);
       
-      if (response.success && response.data) {
-        // response.data is an object with ledgerEntries and oldRecords properties
-        const ledgerEntries = response.data.ledgerEntries || [];
-        const oldRecords = response.data.oldRecords || [];
-        
-        // Check both arrays for Monday Final Settlement
-        const hasMondayFinal = [...ledgerEntries, ...oldRecords].some((entry: any) => {
+      if (entries && entries.length > 0) {
+        // Check for Monday Final Settlement
+        const hasMondayFinal = entries.some((entry: any) => {
           const hasSettlement = entry.remarks?.includes('Monday Final Settlement');
-          const partyMatch = entry.partyName === partyName || entry.party_name === partyName;
+          const partyMatch = entry.party_name === partyName;
           
           return hasSettlement && partyMatch;
         });
@@ -274,28 +270,19 @@ const PartyReport = () => {
     setActionLoading(true);
     try {
       console.log('🗑️ Deleting party:', selectedParty);
-      const response = await newPartyAPI.delete(selectedParty._id!);
-      console.log('🗑️ Delete response:', response);
+      await SupabaseService.deleteParty(selectedParty._id!);
+      console.log('🗑️ Delete successful');
       
-      if (response.success) {
-        const deletedTransactions = response.data?.deletedTransactions || 0;
-        toast({
-          title: "✅ Success",
-          description: `Party "${selectedParty.name}" and ${deletedTransactions} transactions deleted permanently from database`,
-        });
-        
-        // Refresh parties data
-        refreshParties();
-        setSelectedParty(null);
-        setShowDeleteModal(false);
-      } else {
-        console.error('❌ Delete failed:', response);
-        toast({
-          title: "❌ Error",
-          description: response.message || "Failed to delete party",
-          variant: "destructive"
-        });
-      }
+      // Refresh parties data
+      refreshParties();
+      
+      toast({
+        title: "✅ Success",
+        description: `Party "${selectedParty.name}" deleted successfully`,
+      });
+      
+      setSelectedParty(null);
+      setShowDeleteModal(false);
     } catch (error) {
       console.error('❌ Delete party error:', error);
       toast({

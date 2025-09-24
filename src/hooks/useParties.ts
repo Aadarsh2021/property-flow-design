@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { partyLedgerAPI, newPartyAPI } from '@/lib/api';
+import { useSupabaseParties } from './useSupabase';
 import { useToast } from '@/hooks/use-toast';
 
 // Query keys for consistent caching
@@ -14,19 +14,15 @@ export const PARTY_QUERY_KEYS = {
 };
 
 // Hook to fetch all parties with caching
-export const useParties = () => {
-  return useQuery({
-    queryKey: PARTY_QUERY_KEYS.lists(),
-    queryFn: async () => {
-      const response = await partyLedgerAPI.getAllParties();
-      if (!response.success) {
-        throw new Error(response.message || 'Failed to fetch parties');
-      }
-      return response.data || [];
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
-  });
+export const useParties = (userId: string) => {
+  const { parties, loading, error, refetch } = useSupabaseParties(userId);
+  
+  return {
+    data: parties,
+    isLoading: loading,
+    error,
+    refetch
+  };
 };
 
 // Hook to fetch party ledger with caching
@@ -70,25 +66,19 @@ export const usePartyBalance = (partyName: string, enabled = true) => {
 };
 
 // Hook to delete party with cache invalidation
-export const useDeleteParty = () => {
-  const queryClient = useQueryClient();
+export const useDeleteParty = (userId: string) => {
+  const { deleteParty } = useSupabaseParties(userId);
   const { toast } = useToast();
 
   return useMutation({
     mutationFn: async (partyId: string) => {
-      const response = await newPartyAPI.delete(partyId);
-      if (!response.success) {
-        throw new Error(response.message || 'Failed to delete party');
-      }
-      return response.data;
+      await deleteParty(partyId);
+      return { partyId };
     },
     onSuccess: (data) => {
-      // Invalidate all party queries to refetch data
-      queryClient.invalidateQueries({ queryKey: PARTY_QUERY_KEYS.all });
-      
       toast({
         title: "✅ Success",
-        description: `Party "${data.partyName}" and ${data.deletedTransactions} transactions deleted permanently from database`,
+        description: `Party deleted successfully`,
       });
     },
     onError: (error: Error) => {

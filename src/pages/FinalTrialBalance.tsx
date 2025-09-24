@@ -20,7 +20,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { useNavigate } from 'react-router-dom';
-import { finalTrialBalanceAPI, partyLedgerAPI } from '../lib/api';
+import { useSupabaseParties, useSupabaseLedgerEntries } from '@/hooks/useSupabase';
+import { SupabaseService } from '@/lib/supabaseService';
 import { useToast } from '../hooks/use-toast';
 
 interface TrialBalanceEntry {
@@ -54,7 +55,6 @@ const FinalTrialBalance = () => {
   const [trialBalanceData, setTrialBalanceData] = useState<TrialBalanceData | null>(null);
   const [partyName, setPartyName] = useState('');
   const [selectedEntries, setSelectedEntries] = useState<string[]>([]);
-  const [parties, setParties] = useState<Party[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [filteredParties, setFilteredParties] = useState<Party[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -62,6 +62,23 @@ const FinalTrialBalance = () => {
   const [showInlineSuggestion, setShowInlineSuggestion] = useState(false);
   const [inputRef, setInputRef] = useState<HTMLInputElement | null>(null);
   const [textWidth, setTextWidth] = useState(0);
+
+  // Use direct Supabase hooks
+  const { parties: supabaseParties, loading: partiesLoading } = useSupabaseParties(''); // Will be set with user ID
+  const [parties, setParties] = useState<Party[]>([]);
+
+  // Load parties from Supabase
+  useEffect(() => {
+    if (supabaseParties && supabaseParties.length > 0) {
+      const transformedParties = supabaseParties.map(party => ({
+        _id: party.id,
+        party_name: party.party_name,
+        email: party.email || '',
+        phone: party.phone || ''
+      }));
+      setParties(transformedParties);
+    }
+  }, [supabaseParties]);
 
   // Handle click outside dropdown
   useEffect(() => {
@@ -159,58 +176,34 @@ const FinalTrialBalance = () => {
     }
   }, [partyName, parties]);
 
-  // Load trial balance data using Account Ledger API for each party
+  // Load trial balance data using direct Supabase
   const loadTrialBalance = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     // Loading trial balance
     const startTime = performance.now();
     try {
-      // Get all parties first
-      const partiesResponse = await partyLedgerAPI.getAllParties();
+      // Get all parties from Supabase
+      const allParties = supabaseParties || [];
+      console.log(`📊 Loaded ${allParties.length} parties for trial balance`);
       
-      if (!partiesResponse.success) {
-        throw new Error('Failed to load parties');
-      }
-      
-      const allParties = partiesResponse.data || [];
-      // Loading trial balance for parties
-      
-      // ULTRA OPTIMIZED: Use batch API call instead of individual calls
       // Limit to first 50 parties for better performance
       const limitedParties = allParties.slice(0, 50);
       
-      // Use batch API call to get all party balances at once
-      const batchResponse = await finalTrialBalanceAPI.getBatchBalances(
-        limitedParties.map(party => party.party_name)
+      // Get balances for all parties using direct Supabase
+      const partyBalances = await Promise.all(
+        limitedParties.map(async (party) => {
+          try {
+            const balance = await SupabaseService.getPartyBalance('', party.party_name);
+            return {
+              name: party.party_name,
+              closingBalance: balance
+            };
+          } catch (error) {
+            console.error(`Error getting balance for ${party.party_name}:`, error);
+            return null;
+          }
+        })
       );
-      
-      let partyBalances = [];
-      if (batchResponse.success && batchResponse.data) {
-        partyBalances = batchResponse.data.map((balance: any) => ({
-          name: balance.partyName,
-          closingBalance: balance.closingBalance || 0
-        }));
-      } else {
-        // Fallback to individual calls if batch API fails
-        partyBalances = await Promise.all(
-          limitedParties.map(async (party) => {
-            try {
-              const ledgerResponse = await partyLedgerAPI.getPartyLedger(party.party_name);
-              if (ledgerResponse.success && ledgerResponse.data && Array.isArray(ledgerResponse.data)) {
-                const entries = ledgerResponse.data;
-                const closingBalance = entries.length > 0 ? entries[entries.length - 1].balance || 0 : 0;
-                return {
-                  name: party.party_name,
-                  closingBalance: closingBalance
-                };
-              }
-              return null;
-            } catch (error) {
-              return null;
-            }
-          })
-        );
-      }
 
       // Commission party is now automatically created for all users
       // It will be included in allParties and processed normally

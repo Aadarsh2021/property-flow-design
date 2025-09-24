@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { partyLedgerAPI } from '@/lib/api';
+import { SupabaseService } from '@/lib/supabaseService';
 import { useToast } from '@/hooks/use-toast';
 import { LedgerEntry, LedgerData } from '@/types';
 import { clearCacheByPattern } from '@/lib/apiCache';
@@ -23,6 +23,7 @@ interface UseLedgerDataProps {
   selectedPartyName: string;
   showOldRecords: boolean;
   setShowOldRecords: (show: boolean) => void;
+  userId?: string;
 }
 
 // Request queue to prevent concurrent API calls
@@ -43,7 +44,8 @@ const clearRequestQueueForParty = (partyName: string) => {
 export const useLedgerData = ({
   selectedPartyName,
   showOldRecords,
-  setShowOldRecords
+  setShowOldRecords,
+  userId = ''
 }: UseLedgerDataProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -229,12 +231,14 @@ export const useLedgerData = ({
     loadingRef.current = true;
     
     try {
-      // Only add cache busting for force refresh
-      const apiPartyName = forceRefresh ? `${currentPartyName}&_t=${Date.now()}` : currentPartyName;
-      const response = await partyLedgerAPI.getPartyLedger(apiPartyName);
+      // Get ledger entries using direct Supabase
+      const entries = await SupabaseService.getLedgerEntries(userId, currentPartyName);
       
-      if (response.success && response.data) {
-        const responseData = response.data;
+      if (entries && entries.length > 0) {
+        const responseData = {
+          ledgerEntries: entries,
+          oldRecords: []
+        };
         
         
         // Check if responseData is already in LedgerData format or LedgerEntry[] format

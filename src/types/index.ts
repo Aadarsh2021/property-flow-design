@@ -174,9 +174,9 @@ export interface LedgerEntryInput {
 // User Settings Types
 export interface UserSettings {
   decimalFormat: 'FULL AMOUNT' | 'DECIMAL' | 'CURRENCY';
-  companyAccount: string;
-  company_account?: string; // Backend compatibility
-  password: string;
+  companyName: string;
+  company_name?: string; // Backend compatibility
+  company_account?: string; // Legacy compatibility
   entryOrder: 'FIRST AMOUNT' | 'LAST AMOUNT' | 'CUSTOM ORDER';
   ntPosition: 'BOTTOM' | 'TOP' | 'MIDDLE';
   agentReport: 'THREE' | 'FIVE' | 'TEN';

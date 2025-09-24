@@ -28,7 +28,7 @@ import { Eye, EyeOff, Lock, User, Building2, Mail, Phone, Home } from 'lucide-re
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { startJourneyStep, completeJourneyStep, failJourneyStep } from '@/lib/journeyTracker';
-import { authAPI } from '@/lib/api';
+import AuthService from '@/lib/authService';
 import { signUpWithEmail, signInWithGoogle, sendEmailVerificationToUser } from '@/lib/firebase';
 
 const Register = () => {
@@ -374,9 +374,9 @@ const Register = () => {
         formattedPhone = cleanPhone.substring(1);
       }
       
-      // Step 3: Create user in PostgreSQL (Business Data)
-              // Creating user in PostgreSQL for business data...
-      const response = await authAPI.register({
+      // Step 3: Create user with direct Supabase
+              // Creating user with direct Supabase...
+      const response = await AuthService.register({
         fullname: formData.fullname.trim(),
         email: formData.email.trim().toLowerCase(),
         phone: formattedPhone,
@@ -471,10 +471,10 @@ const Register = () => {
         return;
       }
 
-      // Step 3: Try to create account with backend
+      // Step 3: Create account with direct Supabase
       try {
-                 // Backend now properly handles Google users without defaults
-         const createResponse = await authAPI.register({
+                 // Direct Supabase handles Google users
+         const createResponse = await AuthService.register({
            fullname: googleResult.user.displayName || 'Google User',
            email: userEmail,
            phone: '', // Empty for Google users

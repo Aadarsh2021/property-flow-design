@@ -1,26 +1,25 @@
 import { useState, useEffect, useRef } from 'react';
-import { userSettingsAPI } from '@/lib/api';
+import { useSupabaseUserSettings } from './useSupabase';
 
-export const useCompanyName = () => {
+export const useCompanyName = (userId?: string) => {
   const [companyName, setCompanyName] = useState<string>('Company');
   const [loading, setLoading] = useState(true);
   const lastUserIdRef = useRef<string | null>(null);
+  
+  // Use direct Supabase hook
+  const { settings } = useSupabaseUserSettings(userId || '');
 
   const loadCompanyName = async () => {
     try {
-      // Get user ID from localStorage
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      
-      if (user.id) {
+      if (userId) {
         // Check if user has changed
-        if (lastUserIdRef.current !== user.id) {
+        if (lastUserIdRef.current !== userId) {
           // User changed, reloading company name
-          lastUserIdRef.current = user.id;
+          lastUserIdRef.current = userId;
         }
         
-        const settingsResponse = await userSettingsAPI.getSettings(user.id);
-        if (settingsResponse.success && settingsResponse.data?.company_account) {
-          setCompanyName(settingsResponse.data.company_account);
+        if (settings?.company_account) {
+          setCompanyName(settings.company_account);
           // Company name loaded
         } else {
           // If no settings found, use default
@@ -46,33 +45,15 @@ export const useCompanyName = () => {
     setCompanyName(newName);
   };
 
-  // Load company name on mount and when user changes
+  // Load company name when settings change
   useEffect(() => {
-    loadCompanyName();
-    
-    // Listen for storage changes (user login/logout)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'user') {
-        // User storage changed, reloading company name
-        loadCompanyName();
-      }
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    
-    // Also listen for custom events (same tab user changes)
-    const handleUserChange = () => {
-      // User changed event received, reloading company name
-      loadCompanyName();
-    };
-    
-    window.addEventListener('userChanged', handleUserChange);
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('userChanged', handleUserChange);
-    };
-  }, []);
+    if (settings?.company_account) {
+      setCompanyName(settings.company_account);
+    } else {
+      setCompanyName('Company');
+    }
+    setLoading(false);
+  }, [settings]);
 
   return {
     companyName,

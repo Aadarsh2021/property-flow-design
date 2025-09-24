@@ -29,7 +29,7 @@ const TopNavigation = () => {
   const navigate = useNavigate();
   const { user, logout, isAuthenticated } = useAuth();
   const { toast } = useToast();
-  const { companyName } = useCompanyName();
+  const { companyName } = useCompanyName(user?.id);
 
   const toggleDropdown = (dropdown: string) => {
     setActiveDropdown(activeDropdown === dropdown ? null : dropdown);

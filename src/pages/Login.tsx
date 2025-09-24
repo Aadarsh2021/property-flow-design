@@ -27,7 +27,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Eye, EyeOff, Lock, User, Building2, Home, Wifi, WifiOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { authAPI } from '@/lib/api';
+import AuthService from '@/lib/authService';
 import { signInWithEmail, signInWithGoogle } from '@/lib/firebase';
 
 const Login = () => {
@@ -61,7 +61,7 @@ const Login = () => {
   // Get the page user was trying to access
   const from = location.state?.from?.pathname || '/dashboard';
 
-  // Handle Google redirect result
+  // Handle Google redirect result (keeping for backward compatibility)
   useEffect(() => {
     const handleGoogleRedirect = async () => {
       try {
@@ -228,70 +228,44 @@ const Login = () => {
         return;
       }
 
-      // Try to authenticate with backend (user might already exist)
-      try {
-        const response = await authAPI.googleLogin({
-          email: userEmail,
-          googleId: googleUser.uid,
-          fullname: googleUser.displayName || '',
-          profilePicture: googleUser.photoURL || ''
-        });
+      // Use direct Supabase authentication
+      const response = await AuthService.googleLogin({
+        email: userEmail,
+        uid: googleUser.uid,
+        displayName: googleUser.displayName || '',
+        photoURL: googleUser.photoURL || ''
+      });
+      
+      if (response.success) {
+        // Direct Supabase authentication successful
+        login(response.data.token, response.data.user);
         
-        if (response.success) {
-          // Backend authentication successful
-          login(response.data.token, response.data.user);
-          
-          // Check if user needs initial setup
-          const userNeedsSetup = !response.data.user.company_account || 
-            (response.data.user.created_at && new Date(response.data.user.created_at) > new Date(Date.now() - 5 * 60 * 1000));
-          
-          if (userNeedsSetup) {
-            toast({
-              title: "🎉 Google Login Successful!",
-              description: "Please complete your initial setup to get started.",
-            });
-            navigate('/user-settings', { replace: true });
-          } else {
-            toast({
-              title: "🎉 Google Login Successful!",
-              description: "Welcome back!",
-            });
-            navigate(from, { replace: true });
-          }
-        } else if (response.message && response.message.includes('pending admin approval')) {
+        // Check if user needs initial setup
+        const userNeedsSetup = !response.data.user.company_account || 
+          (response.data.user.created_at && new Date(response.data.user.created_at) > new Date(Date.now() - 5 * 60 * 1000));
+        
+        if (userNeedsSetup) {
           toast({
-            title: "⏳ Account Pending Approval",
-            description: "Your account is pending admin approval. Please wait for approval before logging in.",
-            variant: "destructive"
+            title: "🎉 Google Login Successful!",
+            description: "Please complete your initial setup to get started.",
           });
-          return;
+          navigate('/user-settings', { replace: true });
         } else {
-          // User doesn't exist in backend, create account
-          const createResponse = await authAPI.register({
-            fullname: googleUser.displayName || 'Google User',
-            email: userEmail,
-            phone: googleUser.phoneNumber || '',
-            password: '',
-            googleId: googleUser.uid,
-            profilePicture: googleUser.photoURL || ''
+          toast({
+            title: "🎉 Google Login Successful!",
+            description: "Welcome back!",
           });
-          
-          if (createResponse.success) {
-            login(createResponse.data.token, createResponse.data.user);
-            
-            toast({
-              title: "🎉 Account Created & Login Successful!",
-              description: "Please complete your initial setup to get started.",
-            });
-            
-            navigate('/user-settings', { replace: true });
-          } else {
-            setError(createResponse.message || 'Failed to create account');
-          }
+          navigate(from, { replace: true });
         }
-      } catch (backendError: any) {
-        console.error('❌ Backend authentication error:', backendError);
-        setError(backendError.message || 'Backend authentication failed');
+      } else if (response.message && response.message.includes('pending admin approval')) {
+        toast({
+          title: "⏳ Account Pending Approval",
+          description: "Your account is pending admin approval. Please wait for approval before logging in.",
+          variant: "destructive"
+        });
+        return;
+      } else {
+        setError(response.message || 'Google login failed');
       }
     } catch (error: any) {
       console.error('❌ Google login result error:', error);
@@ -318,7 +292,8 @@ const Login = () => {
         return;
       }
 
-              // Google authentication successful
+      // Google authentication successful
+      console.log('✅ Google authentication successful:', googleResult.user);
       
       // Step 2: Check if user exists in PostgreSQL backend
       const userEmail = googleResult.user.email;
@@ -327,120 +302,50 @@ const Login = () => {
         return;
       }
 
-      // Step 3: Try to authenticate with backend (user might already exist)
-      try {
-        const response = await authAPI.googleLogin({
-          email: userEmail,
-          googleId: googleResult.user.uid,
-          fullname: googleResult.user.displayName || '',
-          profilePicture: googleResult.user.photoURL || ''
-        });
+      // Step 3: Use direct Supabase authentication
+      const response = await AuthService.googleLogin({
+        email: userEmail,
+        uid: googleResult.user.uid,
+        displayName: googleResult.user.displayName || '',
+        photoURL: googleResult.user.photoURL || ''
+      });
+      
+      if (response.success) {
+        // Direct Supabase authentication successful
+        console.log('✅ Direct Supabase authentication successful:', response.data.user);
         
-        if (response.success) {
-          // Backend authentication successful
-          
-          // Use AuthContext to handle login
-          login(response.data.token, response.data.user);
-          
-          // Check if user needs initial setup
-          // User needs setup if: no company account OR created very recently (within 5 minutes)
-          const userNeedsSetup = !response.data.user.company_account || 
-            (response.data.user.created_at && new Date(response.data.user.created_at) > new Date(Date.now() - 5 * 60 * 1000));
-          
-          if (userNeedsSetup) {
-            toast({
-              title: "🎉 Google Login Successful!",
-              description: "Please complete your initial setup to get started.",
-            });
-            navigate('/user-settings', { replace: true });
-          } else {
-            toast({
-              title: "🎉 Google Login Successful!",
-              description: "Welcome back!",
-            });
-            // Navigate to the page user was trying to access or home
-            navigate(from, { replace: true });
-          }
-        } else if (response.message && response.message.includes('pending admin approval')) {
-          // Show approval pending message
+        // Use AuthContext to handle login
+        login(response.data.token, response.data.user);
+        
+        // Check if user needs initial setup
+        // User needs setup if: no company account OR created very recently (within 5 minutes)
+        const userNeedsSetup = !response.data.user.company_account || 
+          (response.data.user.created_at && new Date(response.data.user.created_at) > new Date(Date.now() - 5 * 60 * 1000));
+        
+        if (userNeedsSetup) {
           toast({
-            title: "⏳ Account Pending Approval",
-            description: "Your account is pending admin approval. Please wait for approval before logging in.",
-            variant: "destructive"
+            title: "🎉 Google Login Successful!",
+            description: "Please complete your initial setup to get started.",
           });
-          return;
+          navigate('/user-settings', { replace: true });
         } else {
-          // Check if it's an approval error
-          if (response.message && response.message.includes('pending admin approval')) {
-            toast({
-              title: "⏳ Account Pending Approval",
-              description: "Your account is pending admin approval. Please wait for approval before logging in.",
-              variant: "destructive"
-            });
-            return;
-          }
-          
-          // User doesn't exist in backend, create account
-          // Creating new user account for Google user...
-          
-          const createResponse = await authAPI.register({
-            fullname: googleResult.user.displayName || 'Google User',
-            email: userEmail,
-            phone: googleResult.user.phoneNumber || '',
-            password: '', // No password for Google users
-            googleId: googleResult.user.uid,
-            profilePicture: googleResult.user.photoURL || ''
-          });
-          
-          if (createResponse.success) {
-            // New user account created successfully
-            
-            // Login with newly created account
-            login(createResponse.data.token, createResponse.data.user);
-            
-            toast({
-              title: "🎉 Account Created & Login Successful!",
-              description: "Please complete your initial setup to get started.",
-            });
-            
-            // New users should always go to settings first
-            navigate('/user-settings', { replace: true });
-          } else {
-            setError(createResponse.message || 'Failed to create account');
-          }
-        }
-      } catch (backendError: any) {
-        console.error('❌ Backend authentication error:', backendError);
-        
-        // If backend is not available, create a temporary session
-        if (backendError.message.includes('Network error') || backendError.message.includes('Failed to fetch')) {
-          // Backend unavailable, creating temporary session...
-          
-          // Create temporary user object from Google data
-          const tempUser = {
-            _id: googleResult.user.uid,
-            fullname: googleResult.user.displayName || 'Google User',
-            email: userEmail,
-            phone: googleResult.user.phoneNumber || '',
-            role: 'user',
-            status: 'active'
-          };
-          
-          // Create temporary token (you might want to implement proper JWT generation)
-          const tempToken = btoa(JSON.stringify(tempUser));
-          
-          login(tempToken, tempUser);
-          
           toast({
-            title: "⚠️ Temporary Login",
-            description: "Backend unavailable. Some features may be limited.",
-            variant: "destructive"
+            title: "🎉 Google Login Successful!",
+            description: "Welcome back!",
           });
-          
+          // Navigate to the page user was trying to access or home
           navigate(from, { replace: true });
-        } else {
-          setError(backendError.message || 'Backend authentication failed');
         }
+      } else if (response.message && response.message.includes('pending admin approval')) {
+        // Show approval pending message
+        toast({
+          title: "⏳ Account Pending Approval",
+          description: "Your account is pending admin approval. Please wait for approval before logging in.",
+          variant: "destructive"
+        });
+        return;
+      } else {
+        setError(response.message || 'Google login failed');
       }
     } catch (error: any) {
       console.error('❌ Google login error:', error);
@@ -517,15 +422,14 @@ const Login = () => {
       // We use backend API for image uploads, so no direct Supabase session needed
       console.log('ℹ️ Skipping Supabase session creation - using backend API for storage');
 
-      // Step 3: Authenticate with PostgreSQL (Business Data)
-              // Authenticating with PostgreSQL...
-      const response = await authAPI.login({
+      // Step 3: Use direct Supabase authentication
+      const response = await AuthService.login({
         email: email,
         password: password
       });
       
       if (response.success) {
-        // PostgreSQL authentication successful
+        // Direct Supabase authentication successful
         
         // Use AuthContext to handle login
         login(response.data.token, response.data.user);
@@ -550,7 +454,7 @@ const Login = () => {
           navigate(from, { replace: true });
         }
       } else {
-        // PostgreSQL authentication failed
+        // Direct Supabase authentication failed
         if (response.message === 'Invalid email or password') {
           // Just show error message - no prompts
           toast({
@@ -567,8 +471,8 @@ const Login = () => {
           });
         }
         
-        console.error('❌ PostgreSQL authentication failed:', response.message);
-        setError(response.message || 'Business data authentication failed');
+        console.error('❌ Direct Supabase authentication failed:', response.message);
+        setError(response.message || 'Authentication failed');
       }
     } catch (error: any) {
       console.error('❌ Login error:', error);
@@ -651,8 +555,8 @@ const Login = () => {
       
       await sendPasswordResetEmail(auth, email.trim());
       
-      // Step 2: Update password in database
-      const response = await authAPI.syncPassword(email.trim(), newPassword);
+      // Step 2: Update password in database using direct Supabase
+      const response = await AuthService.syncPassword(email.trim(), newPassword);
       
       if (response.success) {
         setForgotPasswordSuccess(true);

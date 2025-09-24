@@ -18,9 +18,10 @@
  */
 
 import React, { useState, useEffect, useContext } from 'react';
-import { ChevronDown, Lock, Shield, CheckCircle, AlertCircle } from 'lucide-react';
+import { Shield, CheckCircle } from 'lucide-react';
 import TopNavigation from '../components/TopNavigation';
-import { userSettingsAPI } from '../lib/api';
+import { useSupabaseUserSettings } from '@/hooks/useSupabase';
+import type { UserSettings } from '../types';
 import { useToast } from '../hooks/use-toast';
 import { AuthContext } from '../contexts/AuthContext';
 import { useCompanyName } from '../hooks/useCompanyName';
@@ -28,52 +29,38 @@ import { useCompanyName } from '../hooks/useCompanyName';
 const UserSettings = () => {
   const { toast } = useToast();
   const { user } = useContext(AuthContext);
-  const { refreshCompanyName } = useCompanyName();
-  const [loading, setLoading] = useState(false);
+  const { refreshCompanyName } = useCompanyName(user?.id);
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [verificationStep, setVerificationStep] = useState(1);
-  const [confirmPassword, setConfirmPassword] = useState('');
+  
+  // Use direct Supabase hook for user settings
+  const { 
+    settings: supabaseSettings, 
+    loading, 
+    error: settingsError,
+    updateSettings: updateSupabaseSettings 
+  } = useSupabaseUserSettings(user?.id || '');
+  
   const [settings, setSettings] = useState({
-    companyAccount: '',
-    password: ''
+    companyName: ''
   });
 
-  // Load user settings on component mount
+  // Load user settings from Supabase
   useEffect(() => {
-    loadUserSettings();
-  }, []);
-
-  const loadUserSettings = async () => {
-    try {
-      if (!user?.id) {
-        console.error('No user ID available');
-        return;
-      }
-      
-      const response = await userSettingsAPI.getSettings(user.id);
-      if (response.success) {
-        // Map backend fields to frontend fields
-        setSettings({
-          companyAccount: response.data.company_account || '',
-          password: response.data.password || ''
-        });
-      }
-    } catch (error) {
-      console.error('Error loading user settings:', error);
-      // Keep default settings if API fails
+    if (supabaseSettings) {
+      setSettings({
+        companyName: supabaseSettings.company_account || ''
+      });
     }
-  };
+  }, [supabaseSettings]);
 
   const handleSaveClick = () => {
-    // First verification step - show confirmation dialog
+    // Show confirmation dialog
     setShowConfirmation(true);
-    setVerificationStep(1);
-    setConfirmPassword('');
   };
 
   const handleConfirmSettings = () => {
-    // Second verification step - password confirmation
-    setVerificationStep(2);
+    // Direct save without password confirmation
+    handleFinalSave();
   };
 
   const handleFinalSave = async () => {
@@ -82,16 +69,16 @@ const UserSettings = () => {
     console.log('📊 JOURNEY: Step 3 - Company Setup in User Settings');
     console.log('📊 SETTINGS: Starting user settings save...');
     
-    // Validate password confirmation
-    if (settings.password !== confirmPassword) {
+    // Validate company name
+    if (!settings.companyName.trim()) {
       toast({
         title: "Error",
-        description: "Passwords do not match. Please try again.",
+        description: "Company name is required. Please enter a company name.",
         variant: "destructive"
       });
       const endTime = performance.now();
       const duration = endTime - startTime;
-      console.log(`❌ ACTION: handleFinalSave failed in ${duration.toFixed(2)}ms - Password mismatch`);
+      console.log(`❌ ACTION: handleFinalSave failed in ${duration.toFixed(2)}ms - Company name required`);
       return;
     }
 
@@ -107,43 +94,33 @@ const UserSettings = () => {
       }
       
       // Clean settings data - only send required fields
-      const cleanSettings = {
-        company_account: settings.companyAccount,
-        password: settings.password
+      const cleanSettings: Partial<UserSettings> = {
+        companyName: settings.companyName
       };
       
-      const response = await userSettingsAPI.updateSettings(user.id, cleanSettings);
-      if (response.success) {
-        // Refresh company name globally after successful update
-        await refreshCompanyName();
-        
-        // Dispatch event to refresh parties list (for company party creation)
-        window.dispatchEvent(new CustomEvent('partiesRefreshed', { 
-          detail: { reason: 'company_settings_updated', companyName: settings.companyAccount } 
-        }));
-        console.log('🔄 Parties refresh event dispatched after company settings update');
-        
-        toast({
-          title: "Success",
-          description: "Settings saved successfully! Company party created automatically.",
-        });
-        
-        // Auto-close modal after successful save
-        setShowConfirmation(false);
-        setVerificationStep(1);
-        setConfirmPassword('');
-        
-        // Auto-close the entire settings page and go to dashboard
-        setTimeout(() => {
-          window.history.back();
-        }, 1500); // Wait 1.5 seconds for user to see success message
-      } else {
-        toast({
-          title: "Error",
-          description: response.message || "Failed to save settings",
-          variant: "destructive"
-        });
-      }
+      await updateSupabaseSettings({ company_account: settings.companyName });
+      
+      // Refresh company name globally after successful update
+      await refreshCompanyName();
+      
+      // Dispatch event to refresh parties list (for company party creation)
+      window.dispatchEvent(new CustomEvent('partiesRefreshed', { 
+        detail: { reason: 'company_settings_updated', companyName: settings.companyName } 
+      }));
+      console.log('🔄 Parties refresh event dispatched after company settings update');
+      
+      toast({
+        title: "Success",
+        description: "Settings saved successfully! Company party created automatically.",
+      });
+      
+      // Auto-close modal after successful save
+      setShowConfirmation(false);
+      
+      // Auto-close the entire settings page and go to dashboard
+      setTimeout(() => {
+        window.history.back();
+      }, 1500); // Wait 1.5 seconds for user to see success message
     } catch (error) {
       console.error('Error saving settings:', error);
       toast({
@@ -162,8 +139,6 @@ const UserSettings = () => {
 
   const handleCancel = () => {
     setShowConfirmation(false);
-    setVerificationStep(1);
-    setConfirmPassword('');
   };
 
   const handleClose = () => {
@@ -173,8 +148,8 @@ const UserSettings = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <TopNavigation />
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 max-w-md">
+      <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4 py-8">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 max-w-md w-full">
           <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 rounded-t-lg">
             <h2 className="text-lg font-semibold">User Settings</h2>
           </div>
@@ -182,24 +157,13 @@ const UserSettings = () => {
           <div className="p-6 space-y-6">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-gray-700 w-32">Company Account</label>
+                <label className="text-sm font-medium text-gray-700 w-32">Company Name</label>
                 <div className="flex-1 ml-4">
                   <input
                     type="text"
-                    value={settings.companyAccount}
-                    onChange={(e) => setSettings({...settings, companyAccount: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-gray-700 w-32">Password</label>
-                <div className="flex-1 ml-4">
-                  <input
-                    type="password"
-                    value={settings.password}
-                    onChange={(e) => setSettings({...settings, password: e.target.value})}
+                    value={settings.companyName}
+                    onChange={(e) => setSettings({...settings, companyName: e.target.value})}
+                    placeholder="Enter your company name"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -213,7 +177,7 @@ const UserSettings = () => {
                 className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium disabled:opacity-50 flex items-center space-x-2"
               >
                 <Shield className="w-4 h-4" />
-                <span>{loading ? 'Saving...' : 'Save with Verification'}</span>
+                <span>{loading ? 'Saving...' : 'Save Company Name'}</span>
               </button>
               <button
                 onClick={handleClose}
@@ -232,82 +196,35 @@ const UserSettings = () => {
               <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 rounded-t-lg">
                 <h3 className="text-lg font-semibold flex items-center space-x-2">
                   <Shield className="w-5 h-5" />
-                  <span>Double Verification Required</span>
+                  <span>Confirm Company Name</span>
                 </h3>
               </div>
               
               <div className="p-6 space-y-4">
-                {verificationStep === 1 ? (
-                  <>
-                    <div className="flex items-center space-x-3 text-blue-600">
-                      <CheckCircle className="w-5 h-5" />
-                      <span className="font-medium">Step 1: Confirm Settings</span>
-                    </div>
-                    
-                    <div className="bg-gray-50 p-4 rounded-md space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">Company Account:</span>
-                        <span className="text-sm font-medium">{settings.companyAccount || 'Not set'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">Password:</span>
-                        <span className="text-sm font-medium">{settings.password ? '••••••••' : 'Not set'}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="text-sm text-gray-600">
-                      Please review your settings above. Click "Confirm" to proceed to password verification.
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-center space-x-3 text-green-600">
-                      <CheckCircle className="w-5 h-5" />
-                      <span className="font-medium">Step 2: Password Verification</span>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      <label className="block text-sm font-medium text-gray-700">
-                        Confirm Password
-                      </label>
-                      <input
-                        type="password"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Re-enter your password"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                      {confirmPassword && settings.password !== confirmPassword && (
-                        <div className="flex items-center space-x-2 text-red-600 text-sm">
-                          <AlertCircle className="w-4 h-4" />
-                          <span>Passwords do not match</span>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="text-sm text-gray-600">
-                      Please re-enter your password to confirm the changes.
-                    </div>
-                  </>
-                )}
+                <div className="flex items-center space-x-3 text-blue-600">
+                  <CheckCircle className="w-5 h-5" />
+                  <span className="font-medium">Confirm Company Name</span>
+                </div>
+                
+                <div className="bg-gray-50 p-4 rounded-md space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Company Name:</span>
+                    <span className="text-sm font-medium">{settings.companyName || 'Not set'}</span>
+                  </div>
+                </div>
+                
+                <div className="text-sm text-gray-600">
+                  Please review your company name above. Click "Confirm" to save the changes.
+                </div>
                 
                 <div className="flex space-x-3 pt-4">
-                  {verificationStep === 1 ? (
-                    <button
-                      onClick={handleConfirmSettings}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium flex-1"
-                    >
-                      Confirm Settings
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleFinalSave}
-                      disabled={loading || settings.password !== confirmPassword}
-                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium flex-1 disabled:opacity-50"
-                    >
-                      {loading ? 'Saving...' : 'Save Settings'}
-                    </button>
-                  )}
+                  <button
+                    onClick={handleConfirmSettings}
+                    disabled={loading}
+                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium flex-1 disabled:opacity-50"
+                  >
+                    {loading ? 'Saving...' : 'Confirm & Save'}
+                  </button>
                   <button
                     onClick={handleCancel}
                     className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors font-medium"
