@@ -165,45 +165,7 @@ const AccountLedgerComponent = () => {
     console.log('Set ledger data requested (handled automatically)');
   }, []);
 
-  const {
-    newEntry,
-    loading: formLoading,
-    validationErrors,
-    validationWarnings,
-    handlePartyNameChange,
-    handlePartyNameChangeEnhanced,
-    handleAmountChange,
-    handleRemarksChange,
-    handleAddEntry,
-    resetForm,
-    validateTransaction,
-    effectiveBusinessRules,
-    calculateCommissionAmount
-  } = useTransactionForm({
-    selectedPartyName,
-    allPartiesForTransaction,
-    ledgerData,
-    user,
-    onTransactionAdded: useCallback(async () => {
-      // INSTANT REFRESH - Force immediate refresh without loading state
-      try {
-        // Use the existing loadLedgerData function with force refresh
-        await loadLedgerData(); // No loading state, force refresh
-      } catch (error) {
-        // Only log critical errors
-        if (error instanceof Error && (error.message.includes('timeout') || error.message.includes('network'))) {
-          console.warn('Refresh Error:', error.message);
-        }
-      }
-    }, [loadLedgerData]),
-    businessRules: {
-      maxTransactionAmount: 10000000,
-      minTransactionAmount: 1,
-      maxDailyTransactions: 50,
-      requireRemarksForHighValue: true,
-      highValueThreshold: 50000
-    }
-  });
+  // Transaction form hook will be defined after other hooks to avoid circular dependencies
 
   // Handle party change - ULTRA optimized with instant table updates
   const handlePartyChange = useCallback((newPartyName: string) => {
@@ -313,6 +275,47 @@ const AccountLedgerComponent = () => {
       updateState({ actionLoading: false });
     }
   }, [loadLedgerData, updateState, toast]);
+
+  // Transaction form hook - moved here to avoid circular dependencies
+  const {
+    newEntry,
+    loading: formLoading,
+    validationErrors,
+    validationWarnings,
+    handlePartyNameChange,
+    handlePartyNameChangeEnhanced,
+    handleAmountChange,
+    handleRemarksChange,
+    handleAddEntry,
+    resetForm,
+    validateTransaction,
+    effectiveBusinessRules,
+    calculateCommissionAmount
+  } = useTransactionForm({
+    selectedPartyName,
+    allPartiesForTransaction,
+    ledgerData,
+    user,
+    onTransactionAdded: useCallback(async () => {
+      // INSTANT REFRESH - Force immediate refresh without loading state
+      try {
+        // Use the existing loadLedgerData function with force refresh
+        await loadLedgerData(); // No loading state, force refresh
+      } catch (error) {
+        // Only log critical errors
+        if (error instanceof Error && (error.message.includes('timeout') || error.message.includes('network'))) {
+          console.warn('Refresh Error:', error.message);
+        }
+      }
+    }, [loadLedgerData]),
+    businessRules: {
+      maxTransactionAmount: 10000000,
+      minTransactionAmount: 1,
+      maxDailyTransactions: 50,
+      requireRemarksForHighValue: true,
+      highValueThreshold: 50000
+    }
+  });
 
   // Handle print
   const handlePrint = useCallback(() => {
