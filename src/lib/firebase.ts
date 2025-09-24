@@ -50,12 +50,35 @@ export const signInWithEmail = async (email: string, password: string) => {
 // Google Authentication functions
 export const signInWithGoogle = async () => {
   try {
-    const { signInWithPopup } = await import('firebase/auth');
+    const { signInWithRedirect, getRedirectResult } = await import('firebase/auth');
     const googleProvider = await getGoogleProvider();
-    const result = await signInWithPopup(auth, googleProvider);
-    return { success: true, user: result.user };
+    
+    // First check if we're returning from a redirect
+    const redirectResult = await getRedirectResult(auth);
+    if (redirectResult) {
+      return { success: true, user: redirectResult.user };
+    }
+    
+    // If no redirect result, start the redirect flow
+    await signInWithRedirect(auth, googleProvider);
+    return { success: true, user: null }; // Will be handled by redirect
   } catch (error: any) {
     console.error('Google sign-in error:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Check for redirect result on page load
+export const checkRedirectResult = async () => {
+  try {
+    const { getRedirectResult } = await import('firebase/auth');
+    const result = await getRedirectResult(auth);
+    if (result) {
+      return { success: true, user: result.user };
+    }
+    return { success: false, user: null };
+  } catch (error: any) {
+    console.error('Redirect result check error:', error);
     return { success: false, error: error.message };
   }
 };

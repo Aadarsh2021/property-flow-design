@@ -55,10 +55,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isApproved, setIsApproved] = useState(false);
   const [requiresApproval, setRequiresApproval] = useState(false);
 
-  // Initialize auth state from localStorage
+  // Initialize auth state from localStorage and check for redirect results
   useEffect(() => {
-    const initializeAuth = () => {
+    const initializeAuth = async () => {
       try {
+        // First check for Google redirect result
+        const { checkRedirectResult } = await import('@/lib/firebase');
+        const redirectResult = await checkRedirectResult();
+        
+        if (redirectResult.success && redirectResult.user) {
+          // User just completed Google login via redirect
+          // We need to handle this in the login component
+          console.log('Google redirect result found:', redirectResult.user);
+          // Don't set loading to false yet, let the login component handle this
+          return;
+        }
+        
+        // Check localStorage for existing auth
         const storedToken = localStorage.getItem('token');
         const storedUser = localStorage.getItem('user');
         

@@ -61,6 +61,26 @@ const Login = () => {
   // Get the page user was trying to access
   const from = location.state?.from?.pathname || '/dashboard';
 
+  // Handle Google redirect result
+  useEffect(() => {
+    const handleGoogleRedirect = async () => {
+      try {
+        const { checkRedirectResult } = await import('@/lib/firebase');
+        const redirectResult = await checkRedirectResult();
+        
+        if (redirectResult.success && redirectResult.user) {
+          // User just completed Google login via redirect
+          console.log('Handling Google redirect result:', redirectResult.user);
+          await handleGoogleLoginResult(redirectResult.user);
+        }
+      } catch (error) {
+        console.error('Error handling Google redirect:', error);
+      }
+    };
+
+    handleGoogleRedirect();
+  }, []);
+
   // Redirect authenticated users to dashboard
   useEffect(() => {
     if (login && typeof login === 'function') {
@@ -194,6 +214,91 @@ const Login = () => {
     
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
+  };
+
+  // Handle Google login result (for redirect flow)
+  const handleGoogleLoginResult = async (googleUser: any) => {
+    setGoogleLoading(true);
+    setError('');
+    
+    try {
+      const userEmail = googleUser.email;
+      if (!userEmail) {
+        setError('Google account email not found');
+        return;
+      }
+
+      // Try to authenticate with backend (user might already exist)
+      try {
+        const response = await authAPI.googleLogin({
+          email: userEmail,
+          googleId: googleUser.uid,
+          fullname: googleUser.displayName || '',
+          profilePicture: googleUser.photoURL || ''
+        });
+        
+        if (response.success) {
+          // Backend authentication successful
+          login(response.data.token, response.data.user);
+          
+          // Check if user needs initial setup
+          const userNeedsSetup = !response.data.user.company_account || 
+            (response.data.user.created_at && new Date(response.data.user.created_at) > new Date(Date.now() - 5 * 60 * 1000));
+          
+          if (userNeedsSetup) {
+            toast({
+              title: "🎉 Google Login Successful!",
+              description: "Please complete your initial setup to get started.",
+            });
+            navigate('/user-settings', { replace: true });
+          } else {
+            toast({
+              title: "🎉 Google Login Successful!",
+              description: "Welcome back!",
+            });
+            navigate(from, { replace: true });
+          }
+        } else if (response.message && response.message.includes('pending admin approval')) {
+          toast({
+            title: "⏳ Account Pending Approval",
+            description: "Your account is pending admin approval. Please wait for approval before logging in.",
+            variant: "destructive"
+          });
+          return;
+        } else {
+          // User doesn't exist in backend, create account
+          const createResponse = await authAPI.register({
+            fullname: googleUser.displayName || 'Google User',
+            email: userEmail,
+            phone: googleUser.phoneNumber || '',
+            password: '',
+            googleId: googleUser.uid,
+            profilePicture: googleUser.photoURL || ''
+          });
+          
+          if (createResponse.success) {
+            login(createResponse.data.token, createResponse.data.user);
+            
+            toast({
+              title: "🎉 Account Created & Login Successful!",
+              description: "Please complete your initial setup to get started.",
+            });
+            
+            navigate('/user-settings', { replace: true });
+          } else {
+            setError(createResponse.message || 'Failed to create account');
+          }
+        }
+      } catch (backendError: any) {
+        console.error('❌ Backend authentication error:', backendError);
+        setError(backendError.message || 'Backend authentication failed');
+      }
+    } catch (error: any) {
+      console.error('❌ Google login result error:', error);
+      setError(error.message || 'Google login failed');
+    } finally {
+      setGoogleLoading(false);
+    }
   };
 
   // Handle Google Login
