@@ -98,6 +98,13 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        
+        // For 400 status codes, return the error data instead of throwing
+        // This allows the calling code to handle business logic errors properly
+        if (response.status === 400) {
+          return errorData;
+        }
+        
         throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
       }
       
