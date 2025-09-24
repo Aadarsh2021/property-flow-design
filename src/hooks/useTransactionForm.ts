@@ -29,6 +29,7 @@ interface UseTransactionFormProps {
     closingBalance: number;
   } | null;
   businessRules?: Partial<BusinessRules>;
+  user?: { id: string } | null;
 }
 
 export const useTransactionForm = ({
@@ -36,7 +37,8 @@ export const useTransactionForm = ({
   allPartiesForTransaction,
   onTransactionAdded,
   ledgerData,
-  businessRules
+  businessRules,
+  user
 }: UseTransactionFormProps) => {
   const { toast } = useToast();
   const { companyName } = useCompanyName(user?.id);

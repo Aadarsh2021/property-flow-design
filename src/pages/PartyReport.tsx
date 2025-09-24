@@ -25,6 +25,7 @@ import TopNavigation from '@/components/TopNavigation';
 import { useSupabaseParties } from '@/hooks/useSupabase';
 import { SupabaseService } from '@/lib/supabaseService';
 import { Party } from '@/types';
+import { useAuth } from '@/contexts/AuthContext';
 import { Search, Filter, Download, Printer, RefreshCw, Eye, Edit, Trash2, Plus, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -51,6 +52,7 @@ const PartyRowSkeleton = () => (
 const PartyReport = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedParty, setSelectedParty] = useState<Party | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);

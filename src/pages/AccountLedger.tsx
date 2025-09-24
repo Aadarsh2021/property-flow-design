@@ -61,8 +61,8 @@ const AccountLedgerComponent = () => {
   const { partyName: initialPartyName } = useParams<{ partyName: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { companyName } = useCompanyName(user?.id);
   const { user } = useAuth();
+  const { companyName } = useCompanyName(user?.id);
 
   // State management - optimized with useReducer for better performance
   const [state, setState] = useState({
@@ -183,6 +183,7 @@ const AccountLedgerComponent = () => {
     selectedPartyName,
     allPartiesForTransaction,
     ledgerData,
+    user,
     onTransactionAdded: useCallback(async () => {
       // INSTANT REFRESH - Force immediate refresh without loading state
       try {

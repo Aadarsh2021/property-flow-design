@@ -31,8 +31,8 @@ const NewParty = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
-  const { companyName } = useCompanyName(user?.id);
   const { user } = useAuth();
+  const { companyName } = useCompanyName(user?.id);
   const [loading, setLoading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editPartyId, setEditPartyId] = useState<string | null>(null);
