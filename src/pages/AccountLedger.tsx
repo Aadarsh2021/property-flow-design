@@ -426,27 +426,7 @@ const AccountLedgerComponent = () => {
     });
   }, [ledgerData, showOldRecords, deletedEntryIds, partyChanging, selectedPartyName]);
 
-  // Handle check all - now that currentEntries is defined
-  const handleCheckAll = useCallback(() => {
-    if (currentEntries.length === 0) return;
-    
-    const allEntryIds = currentEntries.map(entry => 
-      (entry.id || entry._id || entry.ti || '').toString()
-    );
-    
-    updateState({ selectedEntries: allEntryIds });
-  }, [currentEntries, updateState]);
-
-  // Handle select all - now that handleCheckAll is defined
-  const handleSelectAll = useCallback((checked: boolean) => {
-    if (checked) {
-      handleCheckAll();
-    } else {
-      updateState({ selectedEntries: [] });
-    }
-  }, [handleCheckAll, updateState]);
-
-  // Action buttons hook
+  // Action buttons hook - moved here after currentEntries to avoid circular dependencies
   const {
     handleSelectAll: hookHandleSelectAll,
     handleCheckAll: hookHandleCheckAll,
