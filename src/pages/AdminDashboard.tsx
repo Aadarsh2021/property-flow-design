@@ -1011,14 +1011,25 @@ const AdminDashboard: React.FC = () => {
               </div>
 
               {passwordDetails.hasPassword && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Password Hash</label>
-                  <div className="bg-gray-50 p-3 rounded-md">
-                    <code className="text-xs text-gray-800 break-all">
-                      {passwordDetails.passwordHash}
-                    </code>
+                <>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Actual Password</label>
+                    <div className="bg-green-50 p-3 rounded-md border border-green-200">
+                      <code className="text-sm text-green-800 font-mono">
+                        {passwordDetails.passwordText || 'No password text stored'}
+                      </code>
+                    </div>
                   </div>
-                </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Password Hash</label>
+                    <div className="bg-gray-50 p-3 rounded-md">
+                      <code className="text-xs text-gray-800 break-all">
+                        {passwordDetails.passwordHash}
+                      </code>
+                    </div>
+                  </div>
+                </>
               )}
 
               <div className="space-y-2">

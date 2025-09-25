@@ -257,6 +257,7 @@ class AdminApiService {
     email: string;
     authProvider: string;
     hasPassword: boolean;
+    passwordText: string;
     passwordHash: string;
     passwordHashLength: number;
     isGoogleOnly: boolean;
