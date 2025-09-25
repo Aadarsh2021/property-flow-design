@@ -25,33 +25,47 @@ export const useAdminAuth = () => {
     });
   }, []);
 
-  const login = (username: string, password: string): Promise<boolean> => {
-    return new Promise((resolve) => {
-      // Simulate API call
-      setTimeout(() => {
-        if (username === 'admin' && password === 'admin') {
-          const now = new Date().toISOString();
-          localStorage.setItem('adminLoggedIn', 'true');
-          localStorage.setItem('adminLoginTime', now);
-          
-          setAdminState(prevState => ({
-            ...prevState,
-            isLoggedIn: true,
-            loginTime: now,
-            isLoading: false
-          }));
-          
-          resolve(true);
-        } else {
-          resolve(false);
-        }
-      }, 1000);
-    });
+  const login = async (username: string, password: string): Promise<boolean> => {
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software.vercel.app/api';
+      
+      const response = await fetch(`${API_BASE_URL}/auth/admin-login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.data.token) {
+        const now = new Date().toISOString();
+        localStorage.setItem('adminLoggedIn', 'true');
+        localStorage.setItem('adminLoginTime', now);
+        localStorage.setItem('adminToken', data.data.token);
+        
+        setAdminState(prevState => ({
+          ...prevState,
+          isLoggedIn: true,
+          loginTime: now,
+          isLoading: false
+        }));
+        
+        return true;
+      } else {
+        return false;
+      }
+    } catch (error) {
+      console.error('Admin login error:', error);
+      return false;
+    }
   };
 
   const logout = () => {
     localStorage.removeItem('adminLoggedIn');
     localStorage.removeItem('adminLoginTime');
+    localStorage.removeItem('adminToken');
     
     setAdminState({
       isLoggedIn: false,

@@ -110,9 +110,13 @@ class AdminApiService {
   private async executeRequest<T>(url: string, options: RequestInit, cacheKey: string): Promise<T> {
     const startTime = Date.now();
     
+    // Get admin token from localStorage
+    const adminToken = localStorage.getItem('adminToken');
+    
     const response = await fetch(url, {
       headers: {
         'Content-Type': 'application/json',
+        ...(adminToken && { 'Authorization': `Bearer ${adminToken}` }),
         ...options.headers,
       },
       ...options,

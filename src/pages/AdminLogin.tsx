@@ -29,16 +29,16 @@ const AdminLogin: React.FC = () => {
     setError('');
     setIsLoading(true);
 
-    // Direct credential check
-    if (username === 'admin' && password === 'admin') {
-      // Store admin session
-      localStorage.setItem('adminLoggedIn', 'true');
-      localStorage.setItem('adminLoginTime', new Date().toISOString());
+    try {
+      const success = await login(username, password);
       
-      // Navigate immediately
-      navigate('/admin/dashboard');
-    } else {
-      setError('Invalid admin credentials. Please try again.');
+      if (success) {
+        navigate('/admin/dashboard');
+      } else {
+        setError('Invalid admin credentials. Please try again.');
+      }
+    } catch (error) {
+      setError('Login failed. Please try again.');
     }
     
     setIsLoading(false);
