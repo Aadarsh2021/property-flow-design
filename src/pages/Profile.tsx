@@ -48,6 +48,7 @@ import {
 import AuthService from '@/lib/authService';
 import { useSupabaseUserSettings } from '@/hooks/useSupabase';
 import { updateUserPassword, updateUserProfile, sendEmailVerificationToUser } from '@/lib/firebase';
+import { authAPI } from '@/lib/api';
 // Profile image upload functions using backend API
 const uploadProfileImage = async (file: File, userId: string): Promise<{ success: boolean; url?: string; error?: string }> => {
   try {
@@ -146,6 +147,72 @@ const Profile = () => {
   
   // Use direct Supabase hooks
   const { updateSettings } = useSupabaseUserSettings(user?.id || '');
+  
+  // Additional API functions for compatibility with old system
+  const getProfileAPI = async () => {
+    try {
+      const response = await authAPI.getProfile();
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to get profile');
+    } catch (error) {
+      console.error('Error getting profile via API:', error);
+      throw error;
+    }
+  };
+
+  const updateProfileAPI = async (profileData: any) => {
+    try {
+      const response = await authAPI.updateProfile(profileData);
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to update profile');
+    } catch (error) {
+      console.error('Error updating profile via API:', error);
+      throw error;
+    }
+  };
+
+  const changePasswordAPI = async (passwordData: { currentPassword: string; newPassword: string }) => {
+    try {
+      const response = await authAPI.changePassword(passwordData);
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to change password');
+    } catch (error) {
+      console.error('Error changing password via API:', error);
+      throw error;
+    }
+  };
+
+  const setupPasswordAPI = async (passwordData: { password: string }) => {
+    try {
+      const response = await authAPI.setupPassword(passwordData);
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to setup password');
+    } catch (error) {
+      console.error('Error setting up password via API:', error);
+      throw error;
+    }
+  };
+
+  const deleteAccountAPI = async () => {
+    try {
+      const response = await authAPI.deleteAccount();
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to delete account');
+    } catch (error) {
+      console.error('Error deleting account via API:', error);
+      throw error;
+    }
+  };
   
   // Form states
   const [isEditing, setIsEditing] = useState(false);

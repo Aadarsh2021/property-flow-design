@@ -23,6 +23,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSupabaseParties, useSupabaseLedgerEntries } from '@/hooks/useSupabase';
 import { SupabaseService } from '@/lib/supabaseService';
 import { useToast } from '../hooks/use-toast';
+import { finalTrialBalanceAPI } from '@/lib/api';
 
 interface TrialBalanceEntry {
   id: string;
@@ -66,6 +67,59 @@ const FinalTrialBalance = () => {
   // Use direct Supabase hooks
   const { parties: supabaseParties, loading: partiesLoading } = useSupabaseParties(''); // Will be set with user ID
   const [parties, setParties] = useState<Party[]>([]);
+
+  // Additional API functions for compatibility with old system
+  const loadTrialBalanceAPI = async () => {
+    try {
+      const response = await finalTrialBalanceAPI.getAll();
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to load trial balance');
+    } catch (error) {
+      console.error('Error loading trial balance via API:', error);
+      throw error;
+    }
+  };
+
+  const forceRefreshTrialBalanceAPI = async () => {
+    try {
+      const response = await finalTrialBalanceAPI.forceRefresh();
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to force refresh trial balance');
+    } catch (error) {
+      console.error('Error force refreshing trial balance via API:', error);
+      throw error;
+    }
+  };
+
+  const getBatchBalancesAPI = async (partyNames: string[]) => {
+    try {
+      const response = await finalTrialBalanceAPI.getBatchBalances(partyNames);
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to get batch balances');
+    } catch (error) {
+      console.error('Error getting batch balances via API:', error);
+      throw error;
+    }
+  };
+
+  const generateReportAPI = async (reportData: { startDate: string; endDate: string; partyName?: string }) => {
+    try {
+      const response = await finalTrialBalanceAPI.generateReport(reportData);
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to generate report');
+    } catch (error) {
+      console.error('Error generating report via API:', error);
+      throw error;
+    }
+  };
 
   // Load parties from Supabase
   useEffect(() => {

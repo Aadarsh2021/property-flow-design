@@ -26,6 +26,7 @@ import { NewPartyData } from '../types';
 import { useCompanyName } from '../hooks/useCompanyName';
 import { useAuth } from '../contexts/AuthContext';
 import { isCompanyParty, isCommissionParty, getCompanyPartyRestrictionMessage, getCommissionPartyRestrictionMessage } from '../lib/companyPartyUtils';
+import { newPartyAPI } from '@/lib/api';
 
 const NewParty = () => {
   const navigate = useNavigate();
@@ -39,6 +40,59 @@ const NewParty = () => {
   
   // Use direct Supabase hooks
   const { createParty, updateParty, parties } = useSupabaseParties(user?.id || '');
+
+  // Additional API functions for compatibility with old system
+  const createPartyAPI = async (partyData: NewPartyData) => {
+    try {
+      const response = await newPartyAPI.create(partyData);
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to create party');
+    } catch (error) {
+      console.error('Error creating party via API:', error);
+      throw error;
+    }
+  };
+
+  const updatePartyAPI = async (partyId: string, partyData: Partial<NewPartyData>) => {
+    try {
+      const response = await newPartyAPI.update(partyId, partyData);
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to update party');
+    } catch (error) {
+      console.error('Error updating party via API:', error);
+      throw error;
+    }
+  };
+
+  const deletePartyAPI = async (partyId: string) => {
+    try {
+      const response = await newPartyAPI.delete(partyId);
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to delete party');
+    } catch (error) {
+      console.error('Error deleting party via API:', error);
+      throw error;
+    }
+  };
+
+  const getNextSrNoAPI = async () => {
+    try {
+      const response = await newPartyAPI.getNextSrNo();
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to get next SR number');
+    } catch (error) {
+      console.error('Error getting next SR number via API:', error);
+      throw error;
+    }
+  };
 
   // Performance monitoring
   useEffect(() => {

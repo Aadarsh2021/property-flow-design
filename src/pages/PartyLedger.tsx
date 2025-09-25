@@ -7,7 +7,7 @@
  * @version 2.0.0
  */
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -21,6 +21,8 @@ import { SupabaseService } from '@/lib/supabaseService';
 import { useToast } from '../hooks/use-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { Party } from '../types';
+import { partyLedgerAPI, newPartyAPI } from '@/lib/api';
+import { clearCacheByPattern } from '@/lib/apiCache';
 import { Search, Plus, RefreshCw, Eye, Filter, Download, Printer, Loader2 } from 'lucide-react';
 
 interface PartyWithMondayFinalStatus extends Party {
@@ -85,6 +87,46 @@ const PartyLedger = () => {
   } = useSupabaseParties(user?.id || '');
 
   const refreshParties = refetchParties;
+
+  // Additional API functions for compatibility with old system
+  const loadParties = useCallback(async () => {
+    try {
+      const response = await partyLedgerAPI.getAllParties();
+      if (response.success) {
+        return response.data;
+      }
+      return [];
+    } catch (error) {
+      console.error('Error loading parties:', error);
+      return [];
+    }
+  }, []);
+
+  const deleteParty = useCallback(async (partyId: string) => {
+    try {
+      const response = await newPartyAPI.delete(partyId);
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to delete party');
+    } catch (error) {
+      console.error('Error deleting party:', error);
+      throw error;
+    }
+  }, []);
+
+  const updateParty = useCallback(async (partyId: string, partyData: any) => {
+    try {
+      const response = await newPartyAPI.update(partyId, partyData);
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to update party');
+    } catch (error) {
+      console.error('Error updating party:', error);
+      throw error;
+    }
+  }, []);
 
   // OPTIMIZED: Function to check Monday Final status using direct Supabase
   const checkMondayFinalStatus = async (partyName: string): Promise<'Yes' | 'No'> => {

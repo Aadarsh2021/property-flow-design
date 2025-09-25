@@ -26,6 +26,7 @@ import { useSupabaseParties } from '@/hooks/useSupabase';
 import { SupabaseService } from '@/lib/supabaseService';
 import { Party } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { partyLedgerAPI, newPartyAPI } from '@/lib/api';
 import { Search, Filter, Download, Printer, RefreshCw, Eye, Edit, Trash2, Plus, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -79,6 +80,61 @@ const PartyReport = () => {
   } = useSupabaseParties(user?.id || '');
 
   const refreshParties = refetchParties;
+
+  // Additional API functions for compatibility with old system
+  const loadPartiesAPI = async () => {
+    try {
+      const response = await partyLedgerAPI.getAllParties();
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to load parties');
+    } catch (error) {
+      console.error('Error loading parties via API:', error);
+      throw error;
+    }
+  };
+
+  const deletePartyAPI = async (partyId: string) => {
+    try {
+      const response = await newPartyAPI.delete(partyId);
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to delete party');
+    } catch (error) {
+      console.error('Error deleting party via API:', error);
+      throw error;
+    }
+  };
+
+  const updatePartyAPI = async (partyId: string, partyData: any) => {
+    try {
+      const response = await newPartyAPI.update(partyId, partyData);
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to update party');
+    } catch (error) {
+      console.error('Error updating party via API:', error);
+      throw error;
+    }
+  };
+
+  const generateReportAPI = async (reportData: any) => {
+    try {
+      // This would typically call a report generation API
+      // For now, we'll use the parties data
+      const response = await partyLedgerAPI.getAllParties();
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to generate report');
+    } catch (error) {
+      console.error('Error generating report via API:', error);
+      throw error;
+    }
+  };
 
   // Transform parties data with Monday Final status
   const parties = useMemo(() => {

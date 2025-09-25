@@ -10,6 +10,8 @@ import { SupabaseService } from '@/lib/supabaseService';
 import { LedgerEntry } from '@/types';
 import { useCompanyName } from '@/hooks/useCompanyName';
 import { useAuth } from '@/contexts/AuthContext';
+import { newPartyAPI, partyLedgerAPI, userSettingsAPI } from '@/lib/api';
+import { clearCacheByPattern } from '@/lib/apiCache';
 import { 
   isCompanyParty, 
   isCommissionParty,
@@ -132,6 +134,34 @@ const AccountLedgerComponent = () => {
 
   // Note: Balance management is handled automatically by Supabase
   // No need for manual refresh/recalculate functions
+
+  // Additional API functions for compatibility with old system
+  const loadParties = useCallback(async () => {
+    try {
+      const response = await partyLedgerAPI.getAllParties();
+      if (response.success) {
+        return response.data;
+      }
+      return [];
+    } catch (error) {
+      console.error('Error loading parties:', error);
+      return [];
+    }
+  }, []);
+
+  const refreshBalanceColumn = useCallback(async () => {
+    // Refresh balance calculation
+    try {
+      await loadLedgerData();
+    } catch (error) {
+      console.error('Error refreshing balance:', error);
+    }
+  }, [loadLedgerData]);
+
+  const clearLedgerData = useCallback(() => {
+    // Clear ledger data cache
+    clearCacheByPattern(`party-ledger-${user?.id}-${selectedPartyName}`);
+  }, [user?.id, selectedPartyName]);
 
   // Transaction form hook will be defined after other hooks to avoid circular dependencies
 
@@ -294,6 +324,72 @@ const AccountLedgerComponent = () => {
   const handleExit = useCallback(() => {
     navigate('/party-ledger');
   }, [navigate]);
+
+  // Additional API functions for compatibility
+  const addEntry = useCallback(async (entryData: any) => {
+    try {
+      const response = await partyLedgerAPI.addEntry(entryData);
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to add entry');
+    } catch (error) {
+      console.error('Error adding entry:', error);
+      throw error;
+    }
+  }, []);
+
+  const updateEntry = useCallback(async (entryId: string, updateData: any) => {
+    try {
+      const response = await partyLedgerAPI.updateEntry(entryId, updateData);
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to update entry');
+    } catch (error) {
+      console.error('Error updating entry:', error);
+      throw error;
+    }
+  }, []);
+
+  const deleteEntry = useCallback(async (entryId: string) => {
+    try {
+      const response = await partyLedgerAPI.deleteEntry(entryId);
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to delete entry');
+    } catch (error) {
+      console.error('Error deleting entry:', error);
+      throw error;
+    }
+  }, []);
+
+  const deleteMondayFinalEntry = useCallback(async (entryId: string) => {
+    try {
+      const response = await partyLedgerAPI.deleteMondayFinalEntry(entryId);
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to delete Monday Final entry');
+    } catch (error) {
+      console.error('Error deleting Monday Final entry:', error);
+      throw error;
+    }
+  }, []);
+
+  const updateMondayFinal = useCallback(async (partyNames: string[]) => {
+    try {
+      const response = await partyLedgerAPI.updateMondayFinal(partyNames);
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to update Monday Final');
+    } catch (error) {
+      console.error('Error updating Monday Final:', error);
+      throw error;
+    }
+  }, []);
 
   // Handle check all - will be defined after currentEntries
 

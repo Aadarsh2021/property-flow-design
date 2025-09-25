@@ -27,6 +27,7 @@ import { useSupabaseParties, useSupabaseLedgerEntries } from '@/hooks/useSupabas
 import { SupabaseService } from '@/lib/supabaseService';
 import { useCompanyName } from '@/hooks/useCompanyName';
 import { startPerfLog, logPageLoad } from '@/lib/performanceLogger';
+import { partyLedgerAPI, finalTrialBalanceAPI } from '@/lib/api';
 
 interface DashboardStats {
   overview: {
@@ -70,6 +71,46 @@ const Index = () => {
   // Use direct Supabase hooks
   const { parties } = useSupabaseParties(user?.id || '');
   const { entries: allEntries } = useSupabaseLedgerEntries(user?.id || '');
+
+  // Additional API functions for compatibility with old system
+  const loadDashboardStatsAPI = async () => {
+    try {
+      const response = await partyLedgerAPI.getAllParties();
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to load dashboard stats');
+    } catch (error) {
+      console.error('Error loading dashboard stats via API:', error);
+      throw error;
+    }
+  };
+
+  const loadTrialBalanceAPI = async () => {
+    try {
+      const response = await finalTrialBalanceAPI.getAll();
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to load trial balance');
+    } catch (error) {
+      console.error('Error loading trial balance via API:', error);
+      throw error;
+    }
+  };
+
+  const forceRefreshStatsAPI = async () => {
+    try {
+      const response = await finalTrialBalanceAPI.forceRefresh();
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to force refresh stats');
+    } catch (error) {
+      console.error('Error force refreshing stats via API:', error);
+      throw error;
+    }
+  };
 
   // Performance monitoring
   useEffect(() => {
