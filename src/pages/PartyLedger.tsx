@@ -97,6 +97,8 @@ const PartyLedger = () => {
     try {
       const response = await partyLedgerAPI.getAllParties();
       if (response.success) {
+        console.log('🔍 Party data received:', response.data);
+        console.log('🔍 First party structure:', response.data?.[0]);
         setPartiesData(response.data || []);
       } else {
         setPartiesError(response.message || 'Failed to load parties');
