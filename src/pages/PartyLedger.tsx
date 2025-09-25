@@ -69,7 +69,7 @@ const PartyLedger = () => {
     if (user?.id) {
       refreshParties();
     }
-  }, [user?.id, refreshParties]);
+  }, [user?.id]); // Remove refreshParties from dependency array to avoid circular dependency
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
