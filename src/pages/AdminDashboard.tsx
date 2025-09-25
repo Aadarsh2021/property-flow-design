@@ -77,13 +77,17 @@ const AdminDashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    // Check if admin is logged in
+    // Check if admin is logged in and has valid token
     const adminLoggedIn = localStorage.getItem('adminLoggedIn');
-    if (!adminLoggedIn) {
+    const adminToken = localStorage.getItem('adminToken');
+    
+    if (!adminLoggedIn || !adminToken) {
+      console.log('❌ Admin not properly authenticated, redirecting to login');
       navigate('/admin');
       return;
     }
 
+    console.log('✅ Admin authenticated, loading dashboard data');
     // Load initial data
     loadDashboardData();
 

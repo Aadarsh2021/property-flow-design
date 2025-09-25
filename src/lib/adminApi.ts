@@ -112,6 +112,7 @@ class AdminApiService {
     
     // Get admin token from localStorage
     const adminToken = localStorage.getItem('adminToken');
+    console.log('🔑 Admin API Request:', { url, hasToken: !!adminToken, tokenPreview: adminToken ? adminToken.substring(0, 20) + '...' : 'none' });
     
     const response = await fetch(url, {
       headers: {
