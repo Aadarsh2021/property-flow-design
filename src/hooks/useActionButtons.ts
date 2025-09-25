@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
-import { SupabaseService } from '@/lib/supabaseService';
+import { partyLedgerAPI } from '@/lib/api';
 import { LedgerEntry } from '@/types';
 import { debounce } from 'lodash';
 
@@ -158,8 +158,9 @@ export const useActionButtons = ({
       };
       
       
-      // Update entry using direct Supabase
-      const updatedEntry = await SupabaseService.updateLedgerEntry(entryId, updateData as any);
+      // Update entry using API
+      const response = await partyLedgerAPI.updateEntry(entryId, updateData);
+      const updatedEntry = response.success ? response.data : null;
       
       if (updatedEntry) {
         const endTime = performance.now();
@@ -276,8 +277,8 @@ export const useActionButtons = ({
       
       if (isMondayFinalEntry) {
         
-        // Use direct Supabase deletion
-        await SupabaseService.deleteLedgerEntry(entryId);
+        // Use API deletion
+        await partyLedgerAPI.deleteEntry(entryId);
         const endTime = performance.now();
         const duration = endTime - startTime;
         
@@ -324,9 +325,9 @@ export const useActionButtons = ({
         }
       }
 
-      // Delete using direct Supabase
+      // Delete using API
       console.log('🗑️ Attempting to delete entry:', entryId);
-      await SupabaseService.deleteLedgerEntry(entryId);
+      await partyLedgerAPI.deleteEntry(entryId);
       console.log('🗑️ Delete successful');
       const endTime = performance.now();
       const duration = endTime - startTime;
@@ -439,7 +440,7 @@ export const useActionButtons = ({
         
         try {
           console.log('🗑️ Bulk delete - attempting to delete entry:', entryId);
-          await SupabaseService.deleteLedgerEntry(entryId);
+          await partyLedgerAPI.deleteEntry(entryId);
           console.log('🗑️ Bulk delete successful');
           return {
             success: true,

@@ -1,13 +1,31 @@
 import { useState, useEffect, useRef } from 'react';
-import { useSupabaseUserSettings } from './useSupabase';
+import { userSettingsAPI } from '@/lib/api';
 
 export const useCompanyName = (userId?: string) => {
   const [companyName, setCompanyName] = useState<string>('Company');
   const [loading, setLoading] = useState(true);
   const lastUserIdRef = useRef<string | null>(null);
   
-  // Use direct Supabase hook
-  const { settings } = useSupabaseUserSettings(userId || '');
+  // Use API calls instead of direct Supabase hook
+  const [settings, setSettings] = useState<any>(null);
+
+  // Load settings via API
+  useEffect(() => {
+    const loadSettings = async () => {
+      if (!userId) return;
+      
+      try {
+        const response = await userSettingsAPI.getSettings(userId);
+        if (response.success) {
+          setSettings(response.data);
+        }
+      } catch (error) {
+        console.error('Error loading user settings:', error);
+      }
+    };
+
+    loadSettings();
+  }, [userId]);
 
   const loadCompanyName = async () => {
     try {

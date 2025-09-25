@@ -17,10 +17,9 @@
  * @version 1.0.0
  */
 
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { Shield, CheckCircle } from 'lucide-react';
 import TopNavigation from '../components/TopNavigation';
-import { useSupabaseUserSettings } from '@/hooks/useSupabase';
 import type { UserSettings } from '../types';
 import { useToast } from '../hooks/use-toast';
 import { AuthContext } from '../contexts/AuthContext';
@@ -33,12 +32,29 @@ const UserSettings = () => {
   const [showConfirmation, setShowConfirmation] = useState(false);
   
   // Use direct Supabase hook for user settings
-  const { 
-    settings: supabaseSettings, 
-    loading, 
-    error: settingsError,
-    updateSettings: updateSupabaseSettings 
-  } = useSupabaseUserSettings(user?.id || '');
+  // Use API calls instead of direct Supabase hooks
+  const [supabaseSettings, setSupabaseSettings] = useState<UserSettings | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+
+  const updateSupabaseSettings = useCallback(async (newSettings: UserSettings) => {
+    setLoading(true);
+    try {
+      // Use the existing userSettingsAPI
+      const response = await import('@/lib/api').then(api => api.userSettingsAPI.update(newSettings));
+      if (response.success) {
+        setSupabaseSettings(newSettings);
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to update settings');
+    } catch (error) {
+      console.error('Error updating settings:', error);
+      setSettingsError(error instanceof Error ? error.message : 'Failed to update settings');
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
   
   const [settings, setSettings] = useState({
     companyName: ''

@@ -16,8 +16,6 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useNavigate } from 'react-router-dom';
-import { useSupabaseParties } from '@/hooks/useSupabase';
-import { SupabaseService } from '@/lib/supabaseService';
 import { useToast } from '../hooks/use-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { Party } from '../types';
@@ -65,6 +63,13 @@ const PartyLedger = () => {
       // PartyLedger page loaded
     };
   }, []);
+
+  // Load parties when component mounts or user changes
+  useEffect(() => {
+    if (user?.id) {
+      refreshParties();
+    }
+  }, [user?.id, refreshParties]);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -78,15 +83,36 @@ const PartyLedger = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [autoCompleteLeft, setAutoCompleteLeft] = useState(40);
 
-  // Use direct Supabase hooks for data fetching
-  const { 
-    parties: partiesData = [], 
-    loading: partiesLoading, 
-    error: partiesError,
-    refetch: refetchParties 
-  } = useSupabaseParties(user?.id || '');
+  // Use API calls instead of direct Supabase hooks
+  const [partiesData, setPartiesData] = useState<any[]>([]);
+  const [partiesLoading, setPartiesLoading] = useState(false);
+  const [partiesError, setPartiesError] = useState<string | null>(null);
 
-  const refreshParties = refetchParties;
+  // Load parties via API
+  const refreshParties = useCallback(async () => {
+    if (!user?.id) return;
+    
+    setPartiesLoading(true);
+    setPartiesError(null);
+    try {
+      const response = await partyLedgerAPI.getAllParties();
+      if (response.success) {
+        setPartiesData(response.data || []);
+      } else {
+        setPartiesError(response.message || 'Failed to load parties');
+      }
+    } catch (error) {
+      console.error('Error loading parties:', error);
+      setPartiesError('Failed to load parties');
+      toast({
+        title: "Error",
+        description: "Failed to load parties",
+        variant: "destructive"
+      });
+    } finally {
+      setPartiesLoading(false);
+    }
+  }, [user?.id, toast]);
 
   // Additional API functions for compatibility with old system
   const loadParties = useCallback(async () => {
@@ -134,7 +160,9 @@ const PartyLedger = () => {
     // Checking Monday Final status
     
     try {
-      const entries = await SupabaseService.getLedgerEntries(user?.id || '', partyName);
+      // Use API call instead of direct Supabase
+      const response = await partyLedgerAPI.getPartyLedger(partyName);
+      const entries = response.success ? response.data : [];
       
       if (entries && entries.length > 0) {
         // OPTIMIZED: Check only first 50 entries for performance

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { SupabaseService } from '@/lib/supabaseService';
+import { partyLedgerAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { LedgerEntry, LedgerData } from '@/types';
 import { clearCacheByPattern } from '@/lib/apiCache';
@@ -231,8 +231,9 @@ export const useLedgerData = ({
     loadingRef.current = true;
     
     try {
-      // Get ledger entries using direct Supabase
-      const entries = await SupabaseService.getLedgerEntries(userId, currentPartyName);
+      // Get ledger entries using API
+      const response = await partyLedgerAPI.getPartyLedger(currentPartyName);
+      const entries = response.success ? response.data : [];
       
       if (entries && entries.length > 0) {
         const responseData = {

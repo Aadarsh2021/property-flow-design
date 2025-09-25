@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useSupabaseParties } from './useSupabase';
+import { useState, useCallback } from 'react';
+import { partyLedgerAPI, newPartyAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
 // Query keys for consistent caching
@@ -15,7 +16,30 @@ export const PARTY_QUERY_KEYS = {
 
 // Hook to fetch all parties with caching
 export const useParties = (userId: string) => {
-  const { parties, loading, error, refetch } = useSupabaseParties(userId);
+  // Use API calls instead of direct Supabase hooks
+  const [parties, setParties] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refetch = useCallback(async () => {
+    if (!userId) return;
+    
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await partyLedgerAPI.getAllParties();
+      if (response.success) {
+        setParties(response.data || []);
+      } else {
+        setError(response.message || 'Failed to load parties');
+      }
+    } catch (err) {
+      console.error('Error loading parties:', err);
+      setError('Failed to load parties');
+    } finally {
+      setLoading(false);
+    }
+  }, [userId]);
   
   return {
     data: parties,
@@ -67,8 +91,20 @@ export const usePartyBalance = (partyName: string, enabled = true) => {
 
 // Hook to delete party with cache invalidation
 export const useDeleteParty = (userId: string) => {
-  const { deleteParty } = useSupabaseParties(userId);
   const { toast } = useToast();
+  
+  const deleteParty = useCallback(async (partyId: string) => {
+    try {
+      const response = await newPartyAPI.delete(partyId);
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to delete party');
+    } catch (error) {
+      console.error('Error deleting party:', error);
+      throw error;
+    }
+  }, []);
 
   return useMutation({
     mutationFn: async (partyId: string) => {

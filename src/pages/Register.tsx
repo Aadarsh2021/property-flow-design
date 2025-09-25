@@ -28,7 +28,7 @@ import { Eye, EyeOff, Lock, User, Building2, Mail, Phone, Home } from 'lucide-re
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { startJourneyStep, completeJourneyStep, failJourneyStep } from '@/lib/journeyTracker';
-import AuthService from '@/lib/authService';
+import { authAPI } from '@/lib/api';
 import { signUpWithEmail, signInWithGoogle, sendEmailVerificationToUser } from '@/lib/firebase';
 
 const Register = () => {
@@ -376,7 +376,7 @@ const Register = () => {
       
       // Step 3: Create user with direct Supabase
               // Creating user with direct Supabase...
-      const response = await AuthService.register({
+      const response = await authAPI.register({
         fullname: formData.fullname.trim(),
         email: formData.email.trim().toLowerCase(),
         phone: formattedPhone,
@@ -474,7 +474,7 @@ const Register = () => {
       // Step 3: Create account with direct Supabase
       try {
                  // Direct Supabase handles Google users
-         const createResponse = await AuthService.register({
+         const createResponse = await authAPI.register({
            fullname: googleResult.user.displayName || 'Google User',
            email: userEmail,
            phone: '', // Empty for Google users

@@ -23,8 +23,6 @@ import { Link } from 'react-router-dom';
 import { Settings, FileText, BarChart3, Users, TrendingUp, DollarSign, LogIn, UserPlus, ArrowRight, Plus, ChartBar, Calculator } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { useSupabaseParties, useSupabaseLedgerEntries } from '@/hooks/useSupabase';
-import { SupabaseService } from '@/lib/supabaseService';
 import { useCompanyName } from '@/hooks/useCompanyName';
 import { startPerfLog, logPageLoad } from '@/lib/performanceLogger';
 import { partyLedgerAPI, finalTrialBalanceAPI } from '@/lib/api';
@@ -68,9 +66,11 @@ const Index = () => {
   // Recent activity state removed - cleaned up
   const [loading, setLoading] = useState(false);
   
-  // Use direct Supabase hooks
-  const { parties } = useSupabaseParties(user?.id || '');
-  const { entries: allEntries } = useSupabaseLedgerEntries(user?.id || '');
+  // Use API calls instead of direct Supabase hooks
+  const [parties, setParties] = useState<any[]>([]);
+  const [allEntries, setAllEntries] = useState<any[]>([]);
+  const [partiesLoading, setPartiesLoading] = useState(false);
+  const [entriesLoading, setEntriesLoading] = useState(false);
 
   // Additional API functions for compatibility with old system
   const loadDashboardStatsAPI = async () => {
@@ -122,10 +122,85 @@ const Index = () => {
       endPerfLog();
     };
   }, []);
+
+  // Load data when component mounts or user changes
+  useEffect(() => {
+    if (isAuthenticated && user?.id) {
+      loadPartiesData();
+    }
+  }, [isAuthenticated, user?.id]); // Remove loadPartiesData from dependencies
+
+  // Load entries when parties are loaded
+  useEffect(() => {
+    if (parties.length > 0) {
+      loadEntriesData();
+    }
+  }, [parties]); // Remove loadEntriesData from dependencies to prevent circular dependency
+
+  // Calculate stats when data changes
+  useEffect(() => {
+    if (parties.length > 0) {
+      calculateDashboardStats();
+    }
+  }, [parties, allEntries]); // Remove calculateDashboardStats from dependencies
   // Pagination removed - recent activity feature removed - cleaned up
   const { companyName } = useCompanyName(user?.id);
 
-  // Calculate dashboard statistics from direct Supabase data
+  // Load parties and entries via API
+  const loadPartiesData = useCallback(async () => {
+    if (!isAuthenticated || !user?.id) return;
+    
+    setPartiesLoading(true);
+    try {
+      const response = await partyLedgerAPI.getAllParties();
+      if (response.success) {
+        setParties(response.data || []);
+      }
+    } catch (error) {
+      console.error('Error loading parties:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load parties data",
+        variant: "destructive"
+      });
+    } finally {
+      setPartiesLoading(false);
+    }
+  }, [isAuthenticated, user?.id, toast]);
+
+  const loadEntriesData = useCallback(async () => {
+    if (!isAuthenticated || !user?.id) return;
+    
+    setEntriesLoading(true);
+    try {
+      // Load entries for all parties (filter out parties with undefined names)
+      const validParties = parties.filter(party => party.party_name && party.party_name.trim() !== '');
+      const entriesPromises = validParties.map(async (party) => {
+        try {
+          const response = await partyLedgerAPI.getPartyLedger(party.party_name);
+          return response.success ? response.data || [] : [];
+        } catch (error) {
+          console.error(`Error loading entries for party ${party.party_name}:`, error);
+          return [];
+        }
+      });
+      
+      const allEntriesArrays = await Promise.all(entriesPromises);
+      const flatEntries = allEntriesArrays.flat();
+      setAllEntries(flatEntries);
+    } catch (error) {
+      console.error('Error loading entries:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load entries data",
+        variant: "destructive"
+      });
+    } finally {
+      setEntriesLoading(false);
+    }
+  }, [isAuthenticated, user?.id, parties, toast]);
+
+  // Calculate dashboard statistics from API data
   const calculateDashboardStats = useCallback(() => {
     if (!isAuthenticated || !user?.id) {
       setStats(null);
@@ -203,20 +278,27 @@ const Index = () => {
 
   // Calculate stats when data changes
   useEffect(() => {
-    calculateDashboardStats();
-  }, [calculateDashboardStats]);
+    if (parties.length > 0) {
+      calculateDashboardStats();
+    }
+  }, [parties, allEntries]); // Use direct dependencies instead of function reference
 
-  // Format currency
+  // Format currency - simplified to prevent initialization issues
   const formatCurrency = (amount: number | undefined | null) => {
     if (amount === undefined || amount === null || isNaN(amount)) {
       return '₹0';
     }
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(amount);
+    try {
+      return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(amount);
+    } catch (error) {
+      // Fallback to simple formatting if Intl.NumberFormat fails
+      return `₹${Math.round(amount).toLocaleString()}`;
+    }
   };
 
 
@@ -365,7 +447,7 @@ const Index = () => {
                     <div>
                       <p className="text-sm font-medium text-blue-100">Company Net Balance</p>
                       <p className="text-2xl font-bold">
-                        {loading ? '...' : formatCurrency(stats?.overview?.totalBalance)}
+                        {(loading || partiesLoading || entriesLoading) ? '...' : formatCurrency(stats?.overview?.totalBalance)}
                       </p>
                     </div>
                     <div className="bg-blue-400 p-3 rounded-lg">
@@ -382,7 +464,7 @@ const Index = () => {
                     <div>
                       <p className="text-sm font-medium text-green-100">Commission Collected</p>
                       <p className="text-2xl font-bold">
-                        {loading ? '...' : formatCurrency(stats?.companyBalance?.commissionCollected || 0)}
+                        {(loading || partiesLoading || entriesLoading) ? '...' : formatCurrency(stats?.companyBalance?.commissionCollected || 0)}
                       </p>
                     </div>
                     <div className="bg-green-400 p-3 rounded-lg">
@@ -399,7 +481,7 @@ const Index = () => {
                     <div>
                       <p className="text-sm font-medium text-red-100">Commission Paid</p>
                       <p className="text-2xl font-bold">
-                        {loading ? '...' : formatCurrency(stats?.companyBalance?.commissionPaid || 0)}
+                        {(loading || partiesLoading || entriesLoading) ? '...' : formatCurrency(stats?.companyBalance?.commissionPaid || 0)}
                       </p>
                     </div>
                     <div className="bg-red-400 p-3 rounded-lg">
@@ -416,7 +498,7 @@ const Index = () => {
                     <div>
                       <p className="text-sm font-medium text-purple-100">Net Commission Profit</p>
                       <p className="text-2xl font-bold">
-                        {loading ? '...' : formatCurrency(stats?.companyBalance?.netCommissionProfit || 0)}
+                        {(loading || partiesLoading || entriesLoading) ? '...' : formatCurrency(stats?.companyBalance?.netCommissionProfit || 0)}
                       </p>
                     </div>
                     <div className="bg-purple-400 p-3 rounded-lg">
@@ -437,7 +519,7 @@ const Index = () => {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Total Credits (Received)</p>
                     <p className="text-xl font-bold text-green-600">
-                      {loading ? '...' : formatCurrency(stats?.overview?.totalCredit)}
+                      {(loading || partiesLoading || entriesLoading) ? '...' : formatCurrency(stats?.overview?.totalCredit)}
                     </p>
                   </div>
                   <div className="bg-green-100 p-3 rounded-lg">
@@ -454,7 +536,7 @@ const Index = () => {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Total Debits (Paid)</p>
                     <p className="text-xl font-bold text-red-600">
-                      {loading ? '...' : formatCurrency(stats?.overview?.totalDebit)}
+                      {(loading || partiesLoading || entriesLoading) ? '...' : formatCurrency(stats?.overview?.totalDebit)}
                     </p>
                   </div>
                   <div className="bg-red-100 p-3 rounded-lg">
@@ -471,7 +553,7 @@ const Index = () => {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Commission Transactions</p>
                     <p className="text-xl font-bold text-blue-600">
-                      {loading ? '...' : stats?.companyBalance?.commissionTransactionCount || 0}
+                      {(loading || partiesLoading || entriesLoading) ? '...' : stats?.companyBalance?.commissionTransactionCount || 0}
                     </p>
                   </div>
                   <div className="bg-blue-100 p-3 rounded-lg">
@@ -488,7 +570,7 @@ const Index = () => {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Business Activity</p>
                     <p className="text-xl font-bold text-purple-600">
-                      {loading ? '...' : formatCurrency(stats?.overview?.totalCredit + stats?.overview?.totalDebit || 0)}
+                      {(loading || partiesLoading || entriesLoading) ? '...' : formatCurrency(stats?.overview?.totalCredit + stats?.overview?.totalDebit || 0)}
                     </p>
                   </div>
                   <div className="bg-purple-100 p-3 rounded-lg">
@@ -508,7 +590,7 @@ const Index = () => {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Total Parties</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      {loading ? '...' : stats?.overview.totalParties || 0}
+                      {(loading || partiesLoading || entriesLoading) ? '...' : stats?.overview.totalParties || 0}
                     </p>
                   </div>
                   <div className="bg-blue-100 p-3 rounded-lg">
@@ -525,7 +607,7 @@ const Index = () => {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Total Transactions</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      {loading ? '...' : stats?.overview.totalTransactions || 0}
+                      {(loading || partiesLoading || entriesLoading) ? '...' : stats?.overview.totalTransactions || 0}
                     </p>
                   </div>
                   <div className="bg-green-100 p-3 rounded-lg">
@@ -542,7 +624,7 @@ const Index = () => {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Overall Balance</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      {loading ? '...' : stats ? formatCurrency(stats.overview.totalBalance) : '₹0'}
+                      {(loading || partiesLoading || entriesLoading) ? '...' : stats ? formatCurrency(stats.overview.totalBalance) : '₹0'}
                     </p>
                   </div>
                   <div className="bg-purple-100 p-3 rounded-lg">
@@ -563,7 +645,7 @@ const Index = () => {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Settlements</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      {loading ? '...' : stats?.overview.totalTransactions || 0}
+                      {(loading || partiesLoading || entriesLoading) ? '...' : stats?.overview.totalTransactions || 0}
                     </p>
                   </div>
                   <div className="bg-orange-100 p-3 rounded-lg">

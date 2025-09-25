@@ -187,17 +187,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Parse stored user data
       const userData = JSON.parse(storedUser);
       
-      // If user is not approved, try to fetch latest status from Supabase
+      // If user is not approved, try to fetch latest status from API
       if (userData.is_approved === false) {
         try {
-          // Make direct Supabase call to check current user status
-          const response = await AuthService.getProfile(userData.id);
+          // Make API call to check current user status
+          const { authAPI } = await import('@/lib/api');
+          const response = await authAPI.getProfile();
           
           if (response.success && response.data) {
             const updatedUser = {
               ...userData,
-              is_approved: response.data.user.is_approved || true,
-              requiresApproval: response.data.user.is_approved === false
+              is_approved: response.data.is_approved || true,
+              requiresApproval: response.data.is_approved === false
             };
             
             // Update localStorage with fresh data
@@ -218,8 +219,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             setRequiresApproval(false);
             return;
           }
-        } catch (supabaseError) {
-          console.warn('Supabase call failed, using cached data:', supabaseError.message);
+        } catch (apiError) {
+          console.warn('API call failed, using cached data:', apiError.message);
         }
       }
       

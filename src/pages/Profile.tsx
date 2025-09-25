@@ -45,8 +45,7 @@ import {
   CheckCircle,
   Trash2
 } from 'lucide-react';
-import AuthService from '@/lib/authService';
-import { useSupabaseUserSettings } from '@/hooks/useSupabase';
+// Removed AuthService import - using API instead
 import { updateUserPassword, updateUserProfile, sendEmailVerificationToUser } from '@/lib/firebase';
 import { authAPI } from '@/lib/api';
 // Profile image upload functions using backend API
@@ -145,8 +144,19 @@ const Profile = () => {
   const { toast } = useToast();
   const { companyName, refreshCompanyName } = useCompanyName(user?.id);
   
-  // Use direct Supabase hooks
-  const { updateSettings } = useSupabaseUserSettings(user?.id || '');
+  // Use API calls instead of direct Supabase hooks
+  const updateSettings = useCallback(async (settings: any) => {
+    try {
+      const response = await authAPI.updateProfile(settings);
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to update settings');
+    } catch (error) {
+      console.error('Error updating settings:', error);
+      throw error;
+    }
+  }, []);
   
   // Additional API functions for compatibility with old system
   const getProfileAPI = async () => {
@@ -291,7 +301,7 @@ const Profile = () => {
   // Refresh user profile data
   const refreshUserProfile = async () => {
     try {
-      const response = await AuthService.getProfile(user?.id || '');
+      const response = await authAPI.getProfile();
       if (response.success) {
         // Use token from context or user object
         const currentToken = token || user?.token;
@@ -379,7 +389,7 @@ const Profile = () => {
     setError('');
     
     try {
-      const response = await AuthService.updateProfile(user?.id || '', formData);
+      const response = await authAPI.updateProfile(formData);
       
       if (response.success) {
         // Refresh user profile to get updated data from backend
@@ -464,7 +474,7 @@ const Profile = () => {
         
         // Also update the backend user profile
         try {
-          const profileUpdateResult = await AuthService.updateProfile(user?.id || '', {
+          const profileUpdateResult = await authAPI.updateProfile({
             profile_picture: uploadResult.url
           });
           console.log('✅ Backend profile updated:', profileUpdateResult);
@@ -520,7 +530,7 @@ const Profile = () => {
     try {
       if (user?.auth_provider === 'google' && !hasPassword) {
         // Google user - setup password (first time)
-        const response = await AuthService.syncPassword(user?.email || '', passwordData.newPassword);
+        const response = await authAPI.updatePassword(user?.email || '', passwordData.newPassword);
         
         if (response.success) {
           // Update Firebase password as well
@@ -563,7 +573,7 @@ const Profile = () => {
             return;
           }
           
-          const response = await AuthService.syncPassword(user?.email || '', passwordData.newPassword);
+          const response = await authAPI.updatePassword(user?.email || '', passwordData.newPassword);
           if (response.success) {
             // Update Firebase password as well (this will auto-sync with database)
             const firebaseResult = await updateUserPassword(passwordData.newPassword);
@@ -595,7 +605,7 @@ const Profile = () => {
           }
         } else if (hasPassword) {
           // User has password - change password
-          const response = await AuthService.syncPassword(user?.email || '', passwordData.newPassword);
+          const response = await authAPI.updatePassword(user?.email || '', passwordData.newPassword);
           
           if (response.success) {
             // Update Firebase password as well
@@ -628,7 +638,7 @@ const Profile = () => {
           }
         } else {
           // User doesn't have password - setup new password
-          const response = await AuthService.syncPassword(user?.email || '', passwordData.newPassword);
+          const response = await authAPI.updatePassword(user?.email || '', passwordData.newPassword);
           
           if (response.success) {
             // Update Firebase password as well

@@ -10,7 +10,7 @@
 
 import { useEffect, useRef } from 'react';
 import { onAuthStateChange, getCurrentUser } from '@/lib/firebase';
-import AuthService from '@/lib/authService';
+import { authAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
 export const usePasswordSync = () => {
@@ -50,7 +50,7 @@ export const usePasswordSync = () => {
   // Function to manually sync password (can be called after password reset)
   const syncPasswordAfterReset = async (email: string, newPassword: string) => {
     try {
-      const response = await AuthService.syncPassword(email, newPassword);
+      const response = await authAPI.updatePassword(email, newPassword);
       
       if (response.success) {
         toast({

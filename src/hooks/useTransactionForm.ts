@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { SupabaseService } from '@/lib/supabaseService';
+import { partyLedgerAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { useCompanyName } from '@/hooks/useCompanyName';
 import { Party, LedgerEntry } from '@/types';
@@ -489,8 +489,9 @@ export const useTransactionForm = ({
           ti: `${Date.now()}::`
       };
 
-      // Add main entry using direct Supabase
-      const newEntry = await SupabaseService.createLedgerEntry(userId, entryData);
+      // Add main entry using API
+      const response = await partyLedgerAPI.addEntry(entryData);
+      const newEntry = response.success ? response.data : null;
       
       if (newEntry) {
         let successMessage = `Transaction added successfully`;
@@ -512,7 +513,7 @@ export const useTransactionForm = ({
           };
 
           try {
-            await SupabaseService.createLedgerEntry(userId, otherPartyEntry);
+            await partyLedgerAPI.addEntry(otherPartyEntry);
             successMessage += `\n📤 ${newEntry.partyName.trim()} party entry saved`;
             successCount++;
           } catch (error) {
@@ -535,7 +536,7 @@ export const useTransactionForm = ({
           };
 
           try {
-            await SupabaseService.createLedgerEntry(userId, commissionEntry);
+            await partyLedgerAPI.addEntry(commissionEntry);
             successMessage += `\n💰 Commission entry saved (${commissionRate}%)`;
           } catch (error) {
             console.error('Failed to add commission entry:', error);
@@ -556,7 +557,7 @@ export const useTransactionForm = ({
           };
 
           try {
-            await SupabaseService.createLedgerEntry(userId, companyEntry);
+            await partyLedgerAPI.addEntry(companyEntry);
             successMessage += `\n🏢 ${companyName} party entry saved`;
           } catch (error) {
             console.error('Failed to add company entry:', error);

@@ -17,10 +17,9 @@
  * @version 1.0.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useSupabaseParties } from '../hooks/useSupabase';
 import { useToast } from '../hooks/use-toast';
 import { NewPartyData } from '../types';
 import { useCompanyName } from '../hooks/useCompanyName';
@@ -38,8 +37,34 @@ const NewParty = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editPartyId, setEditPartyId] = useState<string | null>(null);
   
-  // Use direct Supabase hooks
-  const { createParty, updateParty, parties } = useSupabaseParties(user?.id || '');
+  // Use API calls instead of direct Supabase hooks
+  const [parties, setParties] = useState<any[]>([]);
+
+  const createParty = useCallback(async (partyData: any) => {
+    try {
+      const response = await newPartyAPI.create(partyData);
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to create party');
+    } catch (error) {
+      console.error('Error creating party:', error);
+      throw error;
+    }
+  }, []);
+
+  const updateParty = useCallback(async (partyId: string, partyData: any) => {
+    try {
+      const response = await newPartyAPI.update(partyId, partyData);
+      if (response.success) {
+        return response.data;
+      }
+      throw new Error(response.message || 'Failed to update party');
+    } catch (error) {
+      console.error('Error updating party:', error);
+      throw error;
+    }
+  }, []);
 
   // Additional API functions for compatibility with old system
   const createPartyAPI = async (partyData: NewPartyData) => {

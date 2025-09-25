@@ -228,12 +228,13 @@ const Login = () => {
         return;
       }
 
-      // Use direct Supabase authentication
-      const response = await AuthService.googleLogin({
+      // Use API authentication instead of direct Supabase
+      const { authAPI } = await import('@/lib/api');
+      const response = await authAPI.googleLogin({
         email: userEmail,
-        uid: googleUser.uid,
-        displayName: googleUser.displayName || '',
-        photoURL: googleUser.photoURL || ''
+        googleId: googleUser.uid,
+        fullname: googleUser.displayName || '',
+        profilePicture: googleUser.photoURL || ''
       });
       
       if (response.success) {
@@ -302,12 +303,13 @@ const Login = () => {
         return;
       }
 
-      // Step 3: Use direct Supabase authentication
-      const response = await AuthService.googleLogin({
+      // Step 3: Use API authentication instead of direct Supabase
+      const { authAPI } = await import('@/lib/api');
+      const response = await authAPI.googleLogin({
         email: userEmail,
-        uid: googleResult.user.uid,
-        displayName: googleResult.user.displayName || '',
-        photoURL: googleResult.user.photoURL || ''
+        googleId: googleResult.user.uid,
+        fullname: googleResult.user.displayName || '',
+        profilePicture: googleResult.user.photoURL || ''
       });
       
       if (response.success) {
@@ -422,8 +424,9 @@ const Login = () => {
       // We use backend API for image uploads, so no direct Supabase session needed
       console.log('ℹ️ Skipping Supabase session creation - using backend API for storage');
 
-      // Step 3: Use direct Supabase authentication
-      const response = await AuthService.login({
+      // Step 3: Use API authentication instead of direct Supabase
+      const { authAPI } = await import('@/lib/api');
+      const response = await authAPI.login({
         email: email,
         password: password
       });
@@ -555,8 +558,9 @@ const Login = () => {
       
       await sendPasswordResetEmail(auth, email.trim());
       
-      // Step 2: Update password in database using direct Supabase
-      const response = await AuthService.syncPassword(email.trim(), newPassword);
+      // Step 2: Update password in database using API
+      const { authAPI } = await import('@/lib/api');
+      const response = await authAPI.updatePassword(email.trim(), newPassword);
       
       if (response.success) {
         setForgotPasswordSuccess(true);

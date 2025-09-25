@@ -5,8 +5,6 @@ import TopNavigation from '@/components/TopNavigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { useSupabaseLedgerEntries } from '@/hooks/useSupabase';
-import { SupabaseService } from '@/lib/supabaseService';
 import { LedgerEntry } from '@/types';
 import { useCompanyName } from '@/hooks/useCompanyName';
 import { useAuth } from '@/contexts/AuthContext';
@@ -24,7 +22,6 @@ import {
 } from '@/lib/companyPartyUtils';
 
 // Import our new hooks and components
-import { useSupabaseParties } from '@/hooks/useSupabase';
 import { useTransactionForm } from '@/hooks/useTransactionForm';
 import { useAutoComplete } from '@/hooks/useAutoComplete';
 import { useActionButtons } from '@/hooks/useActionButtons';
@@ -105,9 +102,11 @@ const AccountLedgerComponent = () => {
     setState(prev => ({ ...prev, ...updates }));
   }, []);
 
-  // Custom hooks - Direct Supabase
-  const { parties: availableParties, loading: partiesLoading } = useSupabaseParties(user?.id || '');
-  const { entries: ledgerData, loading, refetch: loadLedgerData } = useSupabaseLedgerEntries(user?.id || '', selectedPartyName);
+  // Use API calls instead of direct Supabase hooks
+  const [availableParties, setAvailableParties] = useState<any[]>([]);
+  const [ledgerData, setLedgerData] = useState<any>(null);
+  const [partiesLoading, setPartiesLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   
   // Transform parties for transaction form
   const allPartiesForTransaction = useMemo(() => {
@@ -132,22 +131,63 @@ const AccountLedgerComponent = () => {
     return () => clearTimeout(timeoutId);
   }, [loadLedgerData]);
 
-  // Note: Balance management is handled automatically by Supabase
-  // No need for manual refresh/recalculate functions
+  // Load data when component mounts or user changes
+  useEffect(() => {
+    if (user?.id) {
+      loadParties();
+    }
+  }, [user?.id, loadParties]);
 
-  // Additional API functions for compatibility with old system
+  // Load ledger data when party changes
+  useEffect(() => {
+    if (selectedPartyName && user?.id) {
+      loadLedgerData();
+    }
+  }, [selectedPartyName, user?.id, loadLedgerData]);
+
+  // Load parties via API
   const loadParties = useCallback(async () => {
+    if (!user?.id) return;
+    
+    setPartiesLoading(true);
     try {
       const response = await partyLedgerAPI.getAllParties();
       if (response.success) {
-        return response.data;
+        setAvailableParties(response.data || []);
       }
-      return [];
     } catch (error) {
       console.error('Error loading parties:', error);
-      return [];
+      toast({
+        title: "Error",
+        description: "Failed to load parties",
+        variant: "destructive"
+      });
+    } finally {
+      setPartiesLoading(false);
     }
-  }, []);
+  }, [user?.id, toast]);
+
+  // Load ledger data via API
+  const loadLedgerData = useCallback(async () => {
+    if (!selectedPartyName || !user?.id) return;
+    
+    setLoading(true);
+    try {
+      const response = await partyLedgerAPI.getPartyLedger(selectedPartyName);
+      if (response.success) {
+        setLedgerData(response.data);
+      }
+    } catch (error) {
+      console.error('Error loading ledger data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load ledger data",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedPartyName, user?.id, toast]);
 
   const refreshBalanceColumn = useCallback(async () => {
     // Refresh balance calculation

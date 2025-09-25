@@ -20,8 +20,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { useNavigate } from 'react-router-dom';
-import { useSupabaseParties, useSupabaseLedgerEntries } from '@/hooks/useSupabase';
-import { SupabaseService } from '@/lib/supabaseService';
 import { useToast } from '../hooks/use-toast';
 import { finalTrialBalanceAPI } from '@/lib/api';
 
@@ -64,9 +62,40 @@ const FinalTrialBalance = () => {
   const [inputRef, setInputRef] = useState<HTMLInputElement | null>(null);
   const [textWidth, setTextWidth] = useState(0);
 
-  // Use direct Supabase hooks
-  const { parties: supabaseParties, loading: partiesLoading } = useSupabaseParties(''); // Will be set with user ID
+  // Use API calls instead of direct Supabase hooks
   const [parties, setParties] = useState<Party[]>([]);
+  const [partiesLoading, setPartiesLoading] = useState(false);
+
+  // Load parties via API
+  const loadParties = useCallback(async () => {
+    if (!user?.id) return;
+    
+    setPartiesLoading(true);
+    try {
+      const response = await finalTrialBalanceAPI.getAll();
+      if (response.success && response.data) {
+        // Extract parties from trial balance data
+        const partiesFromData = response.data.map((entry: any) => ({
+          id: entry.id,
+          party_name: entry.party_name,
+          sr_no: entry.sr_no || 0,
+          address: entry.address || '',
+          phone: entry.phone || '',
+          email: entry.email || ''
+        }));
+        setParties(partiesFromData);
+      }
+    } catch (error) {
+      console.error('Error loading parties:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load parties data",
+        variant: "destructive"
+      });
+    } finally {
+      setPartiesLoading(false);
+    }
+  }, [user?.id, toast]);
 
   // Additional API functions for compatibility with old system
   const loadTrialBalanceAPI = async () => {
@@ -121,18 +150,12 @@ const FinalTrialBalance = () => {
     }
   };
 
-  // Load parties from Supabase
+  // Load parties when component mounts or user changes
   useEffect(() => {
-    if (supabaseParties && supabaseParties.length > 0) {
-      const transformedParties = supabaseParties.map(party => ({
-        _id: party.id,
-        party_name: party.party_name,
-        email: party.email || '',
-        phone: party.phone || ''
-      }));
-      setParties(transformedParties);
+    if (user?.id) {
+      loadParties();
     }
-  }, [supabaseParties]);
+  }, [user?.id, loadParties]);
 
   // Handle click outside dropdown
   useEffect(() => {
@@ -247,7 +270,9 @@ const FinalTrialBalance = () => {
       const partyBalances = await Promise.all(
         limitedParties.map(async (party) => {
           try {
-            const balance = await SupabaseService.getPartyBalance('', party.party_name);
+            // Use API call instead of direct Supabase
+            const balanceResponse = await finalTrialBalanceAPI.getPartyBalance(party.party_name);
+            const balance = balanceResponse.success ? balanceResponse.data : 0;
             return {
               name: party.party_name,
               closingBalance: balance
