@@ -247,6 +247,29 @@ class AdminApiService {
       method: 'DELETE',
     });
   }
+
+  /**
+   * Get user password details (admin only)
+   */
+  async getUserPasswordDetails(userId: string): Promise<{
+    id: string;
+    name: string;
+    email: string;
+    authProvider: string;
+    hasPassword: boolean;
+    passwordHash: string;
+    passwordHashLength: number;
+    isGoogleOnly: boolean;
+    createdAt: string;
+    updatedAt: string;
+    securityInfo: {
+      hashAlgorithm: string;
+      saltRounds: string;
+      lastPasswordUpdate: string;
+    };
+  }> {
+    return this.makeRequest(`/admin/users/${userId}/password`);
+  }
 }
 
 export const adminApi = new AdminApiService();

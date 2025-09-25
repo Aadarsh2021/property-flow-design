@@ -57,6 +57,8 @@ const AdminDashboard: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordDetailsModal, setShowPasswordDetailsModal] = useState(false);
+  const [passwordDetails, setPasswordDetails] = useState<any>(null);
   const [deletingUser, setDeletingUser] = useState<string | null>(null);
   const [resettingPassword, setResettingPassword] = useState<string | null>(null);
   const [pendingUsers, setPendingUsers] = useState<User[]>([]);
@@ -316,6 +318,24 @@ const AdminDashboard: React.FC = () => {
     setShowPasswordModal(false);
     setSelectedUser(null);
     setNewPassword('');
+  };
+
+  const handleViewPasswordDetails = async (user: User) => {
+    try {
+      const details = await adminApi.getUserPasswordDetails(user.id);
+      setPasswordDetails(details);
+      setSelectedUser(user);
+      setShowPasswordDetailsModal(true);
+    } catch (err) {
+      console.error('Failed to get password details:', err);
+      alert('Failed to get password details. Please try again.');
+    }
+  };
+
+  const handleClosePasswordDetails = () => {
+    setShowPasswordDetailsModal(false);
+    setPasswordDetails(null);
+    setSelectedUser(null);
   };
 
   const handleApproveUser = async (userId: string, userName: string) => {
@@ -879,6 +899,15 @@ const AdminDashboard: React.FC = () => {
                             </div>
                             <div className="flex space-x-2">
                               <Button
+                                onClick={() => handleViewPasswordDetails(user)}
+                                variant="outline"
+                                size="sm"
+                                className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                              >
+                                <Eye className="h-4 w-4 mr-1" />
+                                View Password
+                              </Button>
+                              <Button
                                 onClick={() => handleResetPassword(user)}
                                 variant="outline"
                                 size="sm"
@@ -912,7 +941,7 @@ const AdminDashboard: React.FC = () => {
             </Card>
           </TabsContent>
 
-          {/* Transaction Management tab removed - not implemented */}
+          {/* Transaction Management tab removed - not implemented - cleaned up */}
 
           <TabsContent value="settings">
             <Card>
@@ -923,12 +952,134 @@ const AdminDashboard: React.FC = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-500">System settings will be implemented here.</p>
+                <p className="text-gray-500">System settings feature coming soon.</p>
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Password Details Modal */}
+      {showPasswordDetailsModal && passwordDetails && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-green-600 to-green-700 text-white px-6 py-4 rounded-t-lg">
+              <h3 className="text-lg font-semibold flex items-center space-x-2">
+                <Eye className="w-5 h-5" />
+                <span>User Password Details</span>
+              </h3>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">User Name</label>
+                  <p className="text-sm text-gray-900">{passwordDetails.name || 'No Name'}</p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Email</label>
+                  <p className="text-sm text-gray-900">{passwordDetails.email}</p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Auth Provider</label>
+                  <p className="text-sm text-gray-900 capitalize">{passwordDetails.authProvider}</p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Has Password</label>
+                  <p className="text-sm text-gray-900">
+                    {passwordDetails.hasPassword ? (
+                      <span className="text-green-600 font-medium">Yes</span>
+                    ) : (
+                      <span className="text-red-600 font-medium">No</span>
+                    )}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Google Only User</label>
+                  <p className="text-sm text-gray-900">
+                    {passwordDetails.isGoogleOnly ? (
+                      <span className="text-blue-600 font-medium">Yes</span>
+                    ) : (
+                      <span className="text-gray-600 font-medium">No</span>
+                    )}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Password Hash Length</label>
+                  <p className="text-sm text-gray-900">{passwordDetails.passwordHashLength} characters</p>
+                </div>
+              </div>
+
+              {passwordDetails.hasPassword && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Password Hash</label>
+                  <div className="bg-gray-50 p-3 rounded-md">
+                    <code className="text-xs text-gray-800 break-all">
+                      {passwordDetails.passwordHash}
+                    </code>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Security Information</label>
+                <div className="bg-gray-50 p-4 rounded-md space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Hash Algorithm:</span>
+                    <span className="text-sm font-medium text-gray-900">{passwordDetails.securityInfo.hashAlgorithm}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Salt Rounds:</span>
+                    <span className="text-sm font-medium text-gray-900">{passwordDetails.securityInfo.saltRounds}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Last Password Update:</span>
+                    <span className="text-sm font-medium text-gray-900">
+                      {new Date(passwordDetails.securityInfo.lastPasswordUpdate).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Account Information</label>
+                <div className="bg-gray-50 p-4 rounded-md space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Created:</span>
+                    <span className="text-sm font-medium text-gray-900">
+                      {new Date(passwordDetails.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Last Updated:</span>
+                    <span className="text-sm font-medium text-gray-900">
+                      {new Date(passwordDetails.updatedAt).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <Button
+                  onClick={handleClosePasswordDetails}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors font-medium"
+                >
+                  Close
+                </Button>
+                <Button
+                  onClick={() => {
+                    handleClosePasswordDetails();
+                    handleResetPassword(selectedUser!);
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+                >
+                  Reset Password
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Password Reset Modal */}
       {showPasswordModal && selectedUser && (

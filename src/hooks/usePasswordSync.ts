@@ -37,15 +37,8 @@ export const usePasswordSync = () => {
         // We can detect this by checking if the user was recently authenticated
         // and if we have a stored password hash that's different
         
-        // For now, we'll implement a simple approach:
-        // If user is authenticated and we detect a password change,
-        // we'll sync with the database
-        
-        // This is a simplified implementation
-        // In a real scenario, you might want to store the password hash
-        // and compare it to detect changes
-        
-        
+        // Password sync functionality is handled by the auth system
+        // No additional sync needed as passwords are managed by Firebase
       } catch (error) {
         console.error('Password sync error:', error);
       }

@@ -30,7 +30,7 @@ const AccountLedger = lazy(() => {
 
 const FinalTrialBalance = lazy(() => import("./pages/FinalTrialBalance"));
 const PartyReport = lazy(() => import("./pages/PartyReport"));
-const FirebaseTest = lazy(() => import("./pages/FirebaseTest"));
+// FirebaseTest removed - not being used
 const AdminLogin = lazy(() => import("./pages/AdminLogin"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -98,7 +98,7 @@ const App = () => {
                       <Route path="/" element={<Index />} />
                         <Route path="/login" element={<Login />} />
                         <Route path="/register" element={<Register />} />
-                        <Route path="/firebase-test" element={<FirebaseTest />} />
+                        {/* FirebaseTest route removed - not being used */}
                         
                         {/* Admin Routes */}
                         <Route path="/admin" element={<AdminLogin />} />

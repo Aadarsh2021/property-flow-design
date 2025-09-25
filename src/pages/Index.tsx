@@ -47,7 +47,7 @@ interface DashboardStats {
     businessActivity?: number;
     autoCalculated?: boolean;
   };
-  // Recent activity feature removed
+  // Recent activity feature removed - cleaned up
   parties: Array<{
     id: string;
     name: string;
@@ -64,7 +64,7 @@ const Index = () => {
   const { isAuthenticated, user } = useAuth();
   const { toast } = useToast();
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  // Recent activity state removed
+  // Recent activity state removed - cleaned up
   const [loading, setLoading] = useState(false);
   
   // Use direct Supabase hooks
@@ -81,7 +81,7 @@ const Index = () => {
       endPerfLog();
     };
   }, []);
-  // Pagination removed - recent activity feature removed
+  // Pagination removed - recent activity feature removed - cleaned up
   const { companyName } = useCompanyName(user?.id);
 
   // Calculate dashboard statistics from direct Supabase data

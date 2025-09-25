@@ -130,40 +130,8 @@ const AccountLedgerComponent = () => {
     return () => clearTimeout(timeoutId);
   }, [loadLedgerData]);
 
-  // Refresh balance column function (placeholder for compatibility)
-  const refreshBalanceColumn = useCallback(() => {
-    // This function is called but not needed with direct Supabase
-    // Data is automatically refreshed when entries change
-    console.log('Balance column refresh requested (handled automatically)');
-  }, []);
-
-  // Recalculate balances function (placeholder for compatibility)
-  const recalculateBalances = useCallback(() => {
-    // This function is called but not needed with direct Supabase
-    // Balances are calculated automatically
-    console.log('Balance recalculation requested (handled automatically)');
-  }, []);
-
-  // Force update function (placeholder for compatibility)
-  const forceUpdate = useCallback(() => {
-    // This function is called but not needed with direct Supabase
-    // Data is automatically updated
-    console.log('Force update requested (handled automatically)');
-  }, []);
-
-  // Clear ledger data function (placeholder for compatibility)
-  const clearLedgerData = useCallback(() => {
-    // This function is called but not needed with direct Supabase
-    // Data is managed automatically
-    console.log('Clear ledger data requested (handled automatically)');
-  }, []);
-
-  // Set ledger data function (placeholder for compatibility)
-  const setLedgerData = useCallback(() => {
-    // This function is called but not needed with direct Supabase
-    // Data is managed automatically
-    console.log('Set ledger data requested (handled automatically)');
-  }, []);
+  // Note: Balance management is handled automatically by Supabase
+  // No need for manual refresh/recalculate functions
 
   // Transaction form hook will be defined after other hooks to avoid circular dependencies
 
