@@ -289,13 +289,17 @@ const Profile = () => {
       });
       
       // Debug auth provider
+      const hasGoogleId = user.googleId || user.google_id;
+      const detectedProvider = user.auth_provider || (hasGoogleId ? 'google' : 'email');
+      
       console.log('🔐 Auth provider debug:', {
         auth_provider: user.auth_provider,
-        authProvider: user.auth_provider || 'email', // Default to email if undefined
+        authProvider: detectedProvider,
         password_hash: user.password_hash ? 'Set' : 'Not Set',
         hasBothAuth: false, // auth_provider can only be 'google' or 'email'
-        isGoogleUser: user?.auth_provider === 'google',
-        isEmailUser: user?.auth_provider === 'email' || !user?.auth_provider, // Default to email user if no provider
+        isGoogleUser: user?.auth_provider === 'google' || !!hasGoogleId,
+        isEmailUser: user?.auth_provider === 'email' || (!user?.auth_provider && !hasGoogleId),
+        googleId: hasGoogleId,
         userKeys: Object.keys(user) // Show all available keys for debugging
       });
     }
@@ -699,9 +703,10 @@ const Profile = () => {
   };
 
   // Check if user is Google user or email user
-  const isGoogleUser = user?.auth_provider === 'google';
+  const hasGoogleId = user?.googleId || user?.google_id;
+  const isGoogleUser = user?.auth_provider === 'google' || !!hasGoogleId;
   const hasBothAuth = false; // auth_provider can only be 'google' or 'email'
-  const isEmailUser = user?.auth_provider === 'email';
+  const isEmailUser = user?.auth_provider === 'email' || (!user?.auth_provider && !hasGoogleId);
   
   // Check if user has password set (for email users)
   const hasPassword = user?.password_hash && user.password_hash !== '' && user.password_hash !== null && user.password_hash !== undefined;
@@ -1110,6 +1115,16 @@ const Profile = () => {
                 
                 <CardContent className="space-y-4">
                   <form onSubmit={(e) => { e.preventDefault(); handlePasswordChangeSubmit(); }}>
+                    {/* Hidden username field for accessibility */}
+                    <input
+                      type="text"
+                      name="username"
+                      value={user?.email || ''}
+                      autoComplete="username"
+                      style={{ display: 'none' }}
+                      readOnly
+                    />
+                    
                     {showCurrentPassword && (
                       <div className="space-y-2">
                         <Label htmlFor="currentPassword" className="text-sm font-medium text-gray-700">
