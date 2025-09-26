@@ -465,8 +465,8 @@ const AdminDashboard: React.FC = () => {
       // Simple cache clear and refresh
       adminApi.clearCache();
       
-      // Add longer delay to ensure backend cache is cleared
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Add short delay to ensure backend cache is cleared
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       // Force refresh by adding timestamp to bypass cache
       const timestamp = Date.now();
@@ -523,8 +523,8 @@ const AdminDashboard: React.FC = () => {
       // Simple cache clear and refresh
       adminApi.clearCache();
       
-      // Add longer delay to ensure backend cache is cleared
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Add short delay to ensure backend cache is cleared
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       // Force refresh by adding timestamp to bypass cache
       const timestamp = Date.now();
