@@ -159,12 +159,12 @@ const PartyReport = () => {
   const parties = useMemo(() => {
     return partiesData.map((party: any) => ({
       _id: party.id,
-      name: party.party_name,
+      name: party.name || party.party_name || party.partyName, // Use API name field first, fallback to party_name
       srNo: party.sr_no,
       status: party.status,
-      balanceLimit: parseFloat(party.balance_limit) || 0,
-      mCommission: party.m_commission || 'No Commission',
-      commiSystem: party.commi_system,
+      balanceLimit: parseFloat(party.balanceLimit) || 0, // Use balanceLimit (API field) instead of balance_limit
+      mCommission: party.mCommission || 'No Commission', // Use mCommission (API field) instead of m_commission
+      commiSystem: party.commiSystem, // Use commiSystem (API field) instead of commi_system
       rate: party.rate,
       mondayFinal: 'No' as const, // Will be updated by status check
     }));

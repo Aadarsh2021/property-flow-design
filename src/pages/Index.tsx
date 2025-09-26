@@ -255,7 +255,7 @@ const Index = () => {
         },
         parties: parties.map(party => ({
           id: party.id,
-          name: party.party_name,
+          name: party.name || party.party_name || party.partyName, // Use API name field first, fallback to party_name
           srNo: party.sr_no,
           address: party.address || '',
           phone: party.phone || '',

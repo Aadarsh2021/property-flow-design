@@ -130,6 +130,7 @@ export interface Party {
   _id?: string; // Backend compatibility
   name: string;
   party_name?: string; // Backend field
+  partyName?: string; // Frontend compatibility field
   srNo?: string | number; // Accept both string and number
   status?: string;
   mondayFinal: 'Yes' | 'No';

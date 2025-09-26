@@ -1,8 +1,7 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { partyLedgerAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
-import { useCompanyName } from '@/hooks/useCompanyName';
-import { Party, LedgerEntry } from '@/types';
+import { Party } from '@/types';
 import { clearCacheByPattern } from '@/lib/apiCache';
 
 interface ValidationResult {

@@ -67,7 +67,7 @@ const PartyLedger = () => {
   // Load parties when component mounts or user changes
   useEffect(() => {
     if (user?.id) {
-      refreshParties();
+      refreshParties(); // Use cache for normal loading - faster performance
     }
   }, [user?.id]); // Remove refreshParties from dependency array to avoid circular dependency
   
@@ -89,16 +89,14 @@ const PartyLedger = () => {
   const [partiesError, setPartiesError] = useState<string | null>(null);
 
   // Load parties via API
-  const refreshParties = useCallback(async () => {
+  const refreshParties = useCallback(async (forceRefresh = false) => {
     if (!user?.id) return;
     
     setPartiesLoading(true);
     setPartiesError(null);
     try {
-      const response = await partyLedgerAPI.getAllParties();
+      const response = await partyLedgerAPI.getAllParties(forceRefresh);
       if (response.success) {
-        console.log('🔍 Party data received:', response.data);
-        console.log('🔍 First party structure:', response.data?.[0]);
         setPartiesData(response.data || []);
       } else {
         setPartiesError(response.message || 'Failed to load parties');
@@ -201,7 +199,7 @@ const PartyLedger = () => {
   const parties = useMemo(() => {
     return partiesData.map((party: any) => ({
       _id: party.id,
-      name: party.party_name,
+      name: party.name || party.party_name || party.partyName, // Use API name field first, fallback to party_name
       srNo: party.sr_no,
       status: party.status,
       balanceLimit: parseFloat(party.balance_limit) || 0,
@@ -222,7 +220,7 @@ const PartyLedger = () => {
     
     if (searchTerm) {
       filtered = parties.filter(party => 
-        party.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (party.name || (party as any).partyName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (party.srNo && party.srNo.toString().includes(searchTerm))
       );
     }
@@ -253,7 +251,7 @@ const PartyLedger = () => {
       
       try {
         const statusPromises = parties.map(async (party) => {
-          const status = await checkMondayFinalStatus(party.name);
+          const status = await checkMondayFinalStatus(party.name || (party as any).partyName);
           return { ...party, mondayFinalStatus: status };
         });
         
@@ -363,7 +361,7 @@ const PartyLedger = () => {
 
   // Handle suggestion click
   const handleSuggestionClick = (party: any) => {
-    setSearchTerm(party.name);
+    setSearchTerm(party.name || (party as any).partyName || '');
     setShowSuggestions(false);
     setSelectedSuggestionIndex(-1);
     setCurrentPage(1);
@@ -376,12 +374,12 @@ const PartyLedger = () => {
       if (searchTerm.trim()) {
         // Find exact match or first suggestion
         const exactMatch = filteredParties.find(party => 
-          party.name.toLowerCase() === searchTerm.toLowerCase()
+          (party.name || (party as any).partyName || '').toLowerCase() === searchTerm.toLowerCase()
         );
         const partyToOpen = exactMatch || filteredParties[0];
         
         if (partyToOpen) {
-          handleViewLedger(partyToOpen.name);
+          handleViewLedger(partyToOpen.name || (partyToOpen as any).partyName);
         }
       }
     }
@@ -428,7 +426,7 @@ const PartyLedger = () => {
 
   // Handle refresh
   const handleRefresh = () => {
-    refreshParties();
+    refreshParties(true); // Force refresh to bypass cache
     toast({
       title: "Refreshing...",
       description: "Party data is being refreshed",
@@ -507,7 +505,7 @@ const PartyLedger = () => {
           <div className="text-center">
             <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Parties</h2>
             <p className="text-gray-600 mb-4">Failed to load party data</p>
-            <Button onClick={() => refetchParties()}>
+            <Button onClick={() => refreshParties()}>
               <RefreshCw className="w-4 h-4 mr-2" />
               Retry
             </Button>
@@ -581,7 +579,7 @@ const PartyLedger = () => {
                          }`}
                          onClick={() => handleSuggestionClick(party)}
                        >
-                         <div className="font-medium text-gray-900">{party.name}</div>
+                         <div className="font-medium text-gray-900">{party.name || (party as any).partyName || 'No Name'}</div>
                          {party.srNo && (
                            <div className="text-sm text-gray-500">Sr. No: {party.srNo}</div>
                          )}
@@ -674,7 +672,7 @@ const PartyLedger = () => {
                         />
                       </TableCell>
                       <TableCell className="font-medium">{party.srNo || index + 1}</TableCell>
-                      <TableCell className="font-medium">{party.name}</TableCell>
+                      <TableCell className="font-medium">{party.name || (party as any).partyName || 'No Name'}</TableCell>
                       <TableCell>
                         <Badge variant={party.status === 'Active' ? 'default' : 'secondary'}>
                           {party.status}
@@ -693,7 +691,7 @@ const PartyLedger = () => {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={party.mondayFinalStatus === 'Yes' ? 'destructive' : 'secondary'}>
+                        <Badge variant={(party.mondayFinalStatus as string) === 'Yes' ? 'destructive' : 'secondary'}>
                           {party.mondayFinalStatus}
                         </Badge>
                       </TableCell>
@@ -701,7 +699,7 @@ const PartyLedger = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleViewLedger(party.name)}
+                          onClick={() => handleViewLedger(party.name || (party as any).partyName)}
                         >
                           <Eye className="w-4 h-4 mr-1" />
                           View

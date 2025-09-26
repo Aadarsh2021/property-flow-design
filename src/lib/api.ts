@@ -10,9 +10,15 @@ import { cachedApiCall } from './apiCache';
 
 // API Configuration
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software.vercel.app/api';
-const API_TIMEOUT = parseInt(import.meta.env.VITE_API_TIMEOUT || '15000');
-const API_RETRY_ATTEMPTS = parseInt(import.meta.env.VITE_API_RETRY_ATTEMPTS || '3');
-const API_RETRY_DELAY = parseInt(import.meta.env.VITE_API_RETRY_DELAY || '1000');
+const API_TIMEOUT = parseInt(import.meta.env.VITE_API_TIMEOUT || '8000'); // Increased to 8s for backend stability
+const API_RETRY_ATTEMPTS = parseInt(import.meta.env.VITE_API_RETRY_ATTEMPTS || '3'); // Increased to 3 for better reliability
+const API_RETRY_DELAY = parseInt(import.meta.env.VITE_API_RETRY_DELAY || '1000'); // Increased to 1s for stability
+
+// Ultra-aggressive connection pooling
+const activeRequests = new Set<string>();
+const MAX_CONCURRENT_REQUESTS = 2; // Reduced from 3 to 2
+const requestQueue = new Map<string, Promise<any>>();
+const requestDeduplication = new Map<string, Promise<any>>(); // Prevent duplicate requests
 
 // Validate API configuration
 if (!API_BASE_URL) {
@@ -26,10 +32,7 @@ console.log('🔧 API Configuration:', {
   retryDelay: API_RETRY_DELAY
 });
 
-// Request queue to prevent concurrent API calls
-const requestQueue = new Map<string, Promise<any>>();
-const activeRequests = new Set<string>();
-const MAX_CONCURRENT_REQUESTS = 3;
+// Request throttling
 const REQUEST_THROTTLE_MS = 100; // 100ms between requests
 
 const getAuthToken = (): string | null => {
@@ -64,6 +67,12 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
   
   // Create a unique key for this request
   const requestKey = `${endpoint}-${JSON.stringify(options)}`;
+  
+  // ULTRA-AGGRESSIVE DEDUPLICATION: Check if identical request is already in progress
+  if (requestDeduplication.has(requestKey)) {
+    console.log('⚡ [DEDUP] Reusing identical request:', requestKey);
+    return requestDeduplication.get(requestKey);
+  }
   
   // Check if this exact request is already in progress
   if (requestQueue.has(requestKey)) {
@@ -202,10 +211,11 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
           throw error;
         }
         
-        // For other errors, retry if attempts remain
+        // For other errors, retry if attempts remain with exponential backoff
         if (attempt < API_RETRY_ATTEMPTS) {
-          console.log(`🔄 Error occurred, retrying in ${API_RETRY_DELAY}ms...`, error.message);
-          await new Promise(resolve => setTimeout(resolve, API_RETRY_DELAY));
+          const backoffDelay = API_RETRY_DELAY * Math.pow(2, attempt); // Exponential backoff
+          console.log(`🔄 Error occurred, retrying in ${backoffDelay}ms... (attempt ${attempt + 1}/${API_RETRY_ATTEMPTS})`, error.message);
+          await new Promise(resolve => setTimeout(resolve, backoffDelay));
           continue;
         }
         
@@ -223,8 +233,9 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
     throw lastError || new Error('All retry attempts failed');
   })();
   
-  // Store the request in the queue
+  // Store the request in both queues for deduplication
   requestQueue.set(requestKey, requestPromise);
+  requestDeduplication.set(requestKey, requestPromise);
   
   return requestPromise;
 };
@@ -378,13 +389,17 @@ export const newPartyAPI = {
 };
 
 export const partyLedgerAPI = {
-  getAllParties: () => {
+  getAllParties: (forceRefresh = false) => {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     const userId = user.id || 'anonymous';
+    
+    // Add cache-busting parameter if force refresh is requested
+    const cacheKey = forceRefresh ? `all-parties-${userId}-${Date.now()}` : `all-parties-${userId}`;
+    
     return cachedApiCall(
-      `all-parties-${userId}`,
+      cacheKey,
       () => apiCall<Party[]>('/parties'),
-      15 * 60 * 1000 // 15 minutes cache - parties don't change frequently
+      forceRefresh ? 0 : 5 * 60 * 1000 // No cache if force refresh, otherwise 5 minutes for better performance
     );
   },
   getPartyLedger: (partyName: string) => {

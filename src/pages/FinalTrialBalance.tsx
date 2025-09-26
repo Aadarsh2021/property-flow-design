@@ -274,7 +274,7 @@ const FinalTrialBalance = () => {
             const balanceResponse = await finalTrialBalanceAPI.getPartyBalance(party.party_name);
             const balance = balanceResponse.success ? balanceResponse.data : 0;
             return {
-              name: party.party_name,
+              name: party.name || party.party_name || party.partyName, // Use API name field first, fallback to party_name
               closingBalance: balance
             };
           } catch (error) {

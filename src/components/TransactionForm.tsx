@@ -1,11 +1,9 @@
-import React, { memo, useCallback, Profiler } from 'react';
+import React, { memo, useState, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Plus, Loader2 } from 'lucide-react';
 import { Party } from '@/types';
-import { PartySelector } from './PartySelector';
-import { usePerformance } from '@/hooks/usePerformance';
 
 interface TransactionFormProps {
   newEntry: {
@@ -14,197 +12,189 @@ interface TransactionFormProps {
     remarks: string;
   };
   loading: boolean;
-  allPartiesForTransaction: Party[];
+  availableParties: Party[];
   selectedPartyName: string;
   onPartyNameChange: (value: string) => void;
   onAmountChange: (value: string) => void;
   onRemarksChange: (value: string) => void;
   onAddEntry: () => void;
-  onReset: () => void;
-  validationErrors?: string[];
-  validationWarnings?: string[];
+  onTransactionKeyDown: (e: React.KeyboardEvent) => void;
+  onTransactionPartyKeyDown: (e: React.KeyboardEvent) => void;
+  onTransactionSuggestionClick: (party: Party) => void;
+  onFilterTransactionParties: (searchTerm: string) => void;
+  showTransactionPartyDropdown: boolean;
+  filteredTransactionParties: Party[];
+  highlightedTransactionIndex: number;
+  showTransactionInlineSuggestion: boolean;
+  transactionAutoCompleteText: string;
+  transactionTextWidth: number;
+  setTransactionInputRef: (ref: HTMLInputElement | null) => void;
 }
 
-const TransactionFormComponent: React.FC<TransactionFormProps> = ({
+const TransactionForm = memo(({
   newEntry,
   loading,
-  allPartiesForTransaction,
+  availableParties,
   selectedPartyName,
   onPartyNameChange,
   onAmountChange,
   onRemarksChange,
   onAddEntry,
-  onReset,
-  validationErrors = [],
-  validationWarnings = []
-}) => {
-  // Performance monitoring
-  const { measureRender } = usePerformance('TransactionForm');
-  
-  // React Profiler callback for performance tracking
-  const onRenderCallback = useCallback((id: string, phase: string, actualDuration: number, baseDuration: number, startTime: number, commitTime: number) => {
-    // Only log significant renders (> 3ms for form)
-    if (actualDuration > 3) {
-      // Performance tracking
-    }
-  }, []);
-  
-  const handleSubmit = useCallback((e: React.FormEvent) => {
-    e.preventDefault();
-    onAddEntry();
-  }, [onAddEntry]);
-
-  // Handle keyboard navigation - ENHANCED like old system
-  const handlePartyNameKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      // Ctrl+Enter submits form, Enter moves to next field
-      if (e.ctrlKey) {
-        onAddEntry();
-      } else {
-        // Move to amount field after party name auto-fill
-        setTimeout(() => {
-          const amountField = document.querySelector('input[placeholder*="+10000 for Credit"]') as HTMLInputElement;
-          if (amountField) {
-            amountField.focus();
-          }
-        }, 100); // Small delay to ensure party name is filled
+  onTransactionKeyDown,
+  onTransactionPartyKeyDown,
+  onTransactionSuggestionClick,
+  onFilterTransactionParties,
+  showTransactionPartyDropdown,
+  filteredTransactionParties,
+  highlightedTransactionIndex,
+  showTransactionInlineSuggestion,
+  transactionAutoCompleteText,
+  transactionTextWidth,
+  setTransactionInputRef
+}: TransactionFormProps) => {
+  const handlePartyNameChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    onPartyNameChange(value);
+    
+    // Calculate text width for proper positioning
+    if (setTransactionInputRef) {
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      if (context) {
+        context.font = window.getComputedStyle(e.target).font;
+        const width = context.measureText(value).width;
+        // This would need to be passed as a callback to update text width
       }
     }
-  }, [onAddEntry]);
-
-  const handleAmountKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      // Ctrl+Enter submits form, Enter moves to next field
-      if (e.ctrlKey) {
-        onAddEntry();
-      } else {
-        // Move to remarks field after amount is filled
-        setTimeout(() => {
-          const remarksField = document.querySelector('input[placeholder*="Additional remarks"]') as HTMLInputElement;
-          if (remarksField) {
-            remarksField.focus();
-          }
-        }, 50); // Small delay to ensure amount is processed
-      }
+    
+    // Show dropdown and filter parties when typing
+    if (value.trim()) {
+      onFilterTransactionParties(value);
+    } else {
+      onFilterTransactionParties('');
     }
-  }, [onAddEntry]);
+  }, [onPartyNameChange, onFilterTransactionParties, setTransactionInputRef]);
 
-  const handleRemarksKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      // Enter submits form (like old system)
-      if (newEntry.amount && newEntry.partyName) {
-        onAddEntry();
-      }
+  const handleFocus = useCallback(() => {
+    console.log('🔍 [FOCUS] Input focused, current party name:', newEntry.partyName);
+    if (newEntry.partyName.trim()) {
+      console.log('🔍 [FOCUS] Filtering with existing party name');
+      onFilterTransactionParties(newEntry.partyName);
+    } else {
+      console.log('🔍 [FOCUS] Showing all parties (empty input)');
+      // Show all parties when focused and empty
+      onFilterTransactionParties('');
     }
-  }, [onAddEntry, newEntry.amount, newEntry.partyName]);
+  }, [newEntry.partyName, onFilterTransactionParties]);
 
   return (
-    <Profiler id="TransactionForm" onRender={onRenderCallback}>
-      <div className="space-y-4">
-      {/* Validation Messages */}
-      {(validationErrors.length > 0 || validationWarnings.length > 0) && (
-        <div className="space-y-2">
-          {validationErrors.map((error, index) => (
-            <div key={index} className="p-3 bg-red-50 border border-red-200 rounded-md">
-              <div className="flex items-center">
-                <div className="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
-                <span className="text-sm text-red-700">{error}</span>
-              </div>
-            </div>
-          ))}
-          {validationWarnings.map((warning, index) => (
-            <div key={index} className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-              <div className="flex items-center">
-                <div className="w-2 h-2 bg-yellow-500 rounded-full mr-2"></div>
-                <span className="text-sm text-yellow-700">{warning}</span>
-              </div>
-            </div>
-          ))}
+    <div className="mt-6 bg-white rounded-xl shadow-lg border border-gray-200 px-6 py-4">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-gray-800">Add New Entry</h3>
+        <div className="text-xs text-gray-500">
+          <strong>Format:</strong> Party Name(Remarks) | <strong>Type:</strong> + for Credit, - for Debit
         </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">
-            Party Name 
-            <span className="text-red-500 ml-1">*</span>
-            <span className="text-xs text-gray-500 ml-1">(Required - other party name for transaction)</span>
-          </label>
-          <PartySelector
-            parties={allPartiesForTransaction}
-            selectedPartyName={newEntry.partyName}
-            onPartySelect={onPartyNameChange}
-            placeholder="Search other party name"
-            className="w-full"
-            onKeyDown={handlePartyNameKeyDown}
-            excludeCurrentParty={false}
-            currentPartyName=""
+          <Label className="text-sm font-medium text-gray-700">Party Name</Label>
+          <div className="relative transaction-party-dropdown-container">
+            <Input
+              ref={setTransactionInputRef}
+              type="text"
+              value={newEntry.partyName}
+              onChange={handlePartyNameChange}
+              onFocus={handleFocus}
+              onKeyDown={onTransactionPartyKeyDown}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+              placeholder="Search party name"
+            />
+            
+            {/* Inline suggestion */}
+            {showTransactionInlineSuggestion && transactionAutoCompleteText && (
+              <div 
+                className="absolute top-0 left-0 px-3 py-2 text-gray-400 pointer-events-none"
+                style={{ 
+                  left: `${transactionTextWidth + 12}px`,
+                  top: '8px',
+                  fontSize: '14px',
+                  fontFamily: 'inherit'
+                }}
+              >
+                {transactionAutoCompleteText}
+              </div>
+            )}
+            
+            {/* Dropdown suggestions */}
+            {showTransactionPartyDropdown && filteredTransactionParties.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                {filteredTransactionParties.map((party: any, index: number) => (
+                  <div
+                    key={party._id || party.id}
+                    onClick={() => onTransactionSuggestionClick(party)}
+                    className={`px-3 py-2 cursor-pointer text-sm hover:bg-blue-50 ${
+                      index === highlightedTransactionIndex ? 'bg-blue-100' : ''
+                    }`}
+                  >
+                    <div className="font-medium text-gray-900">
+                      {party.party_name || party.name}
+                    </div>
+                    {party.sr_no && (
+                      <div className="text-xs text-gray-500">
+                        SR: {party.sr_no}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label className="text-sm font-medium text-gray-700">Amount (+ for Credit, - for Debit)</Label>
+          <Input
+            type="number"
+            step="1"
+            value={newEntry.amount}
+            onChange={(e) => onAmountChange(e.target.value)}
+            onKeyDown={onTransactionKeyDown}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+            placeholder="+10000 for Credit, -5000 for Debit"
           />
         </div>
-      
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">Amount (+ for Credit, - for Debit)</label>
-        <Input
-          type="text"
-          value={newEntry.amount}
-          onChange={(e) => onAmountChange(e.target.value)}
-          onKeyDown={handleAmountKeyDown}
-          placeholder="+10000 for Credit, -5000 for Debit"
-          className="w-full"
-        />
-      </div>
-      
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">Remarks</label>
-        <Input
-          type="text"
-          value={newEntry.remarks}
-          onChange={(e) => onRemarksChange(e.target.value)}
-          onKeyDown={handleRemarksKeyDown}
-          placeholder="Additional remarks (optional - will show as Party Name(Remarks) if provided)"
-          className="w-full"
-        />
-      </div>
-      
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">&nbsp;</label>
-        <div className="flex space-x-2">
+        <div className="space-y-2">
+          <Label className="text-sm font-medium text-gray-700">Remarks</Label>
+          <Input
+            type="text"
+            value={newEntry.remarks}
+            onChange={(e) => onRemarksChange(e.target.value)}
+            onKeyDown={onTransactionKeyDown}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+            placeholder="Additional remarks"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label className="text-sm font-medium text-gray-700">&nbsp;</Label>
           <Button
-            type="button"
-            variant="outline"
-            onClick={onReset}
-            disabled={loading}
-            className="flex-1"
-          >
-            Reset
-          </Button>
-          <Button
-            type="submit"
-            disabled={loading || !newEntry.amount || !newEntry.partyName}
-            className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white"
+            onClick={onAddEntry}
+            disabled={loading || !newEntry.amount}
+            className="w-full px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white"
           >
             {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Adding...
-              </>
+              <div className="flex items-center justify-center space-x-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <span>Adding...</span>
+              </div>
             ) : (
-              <>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Entry (Enter)
-              </>
+              'Add Entry'
             )}
           </Button>
         </div>
       </div>
-    </form>
-      </div>
-    </Profiler>
+    </div>
   );
-};
+});
 
-// Memoize the component to prevent unnecessary re-renders
-export const TransactionForm = memo(TransactionFormComponent);
+TransactionForm.displayName = 'TransactionForm';
+
+export default TransactionForm;
