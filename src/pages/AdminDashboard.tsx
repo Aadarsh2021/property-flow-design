@@ -483,6 +483,40 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  const handleReapproveUser = async (userId: string, userName: string) => {
+    if (!window.confirm(`Are you sure you want to re-approve user "${userName}"? This will move them back to approved users.`)) {
+      return;
+    }
+
+    try {
+      setRevokingUser(userId); // Reuse the same loading state
+      
+      // Call the re-approve user API
+      await adminApi.reapproveUser(userId);
+      
+      // Clear cache for users data to ensure fresh data
+      console.log('💾 CACHE: Clearing users cache after re-approval');
+      clearCacheByPattern('.*admin.*');
+      adminApi.clearCache();
+      adminApi.clearCacheByPattern('.*rejected.*');
+      
+      // Refresh the data immediately but maintain current tab
+      await loadDashboardData(false);
+      setLastRefresh(new Date());
+      
+      // Switch to users tab to show the re-approved user
+      setActiveTab('user-management');
+      setActiveSubTab('users');
+      
+      alert('User re-approved successfully and moved back to approved users');
+    } catch (err) {
+      console.error('Failed to re-approve user:', err);
+      alert('Failed to re-approve user. Please try again.');
+    } finally {
+      setRevokingUser(null);
+    }
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -1023,16 +1057,16 @@ const AdminDashboard: React.FC = () => {
                 >
                   Pending Approval ({pendingUsers.length})
                 </button>
-                <button
-                  onClick={() => setActiveSubTab('users')}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                    activeSubTab === 'users' 
-                      ? 'bg-background text-foreground shadow-sm' 
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Users ({users.length})
-                </button>
+      <button
+        onClick={() => setActiveSubTab('users')}
+        className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+          activeSubTab === 'users'
+            ? 'bg-background text-foreground shadow-sm'
+            : 'text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        Approved Users ({users.length})
+      </button>
                 <button
                   onClick={() => setActiveSubTab('rejected')}
                   className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -1309,12 +1343,11 @@ const AdminDashboard: React.FC = () => {
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      onClick={() => {
-                                        // TODO: Implement re-approve functionality
-                                        console.log('Re-approve user:', user.id);
-                                      }}
+                                      onClick={() => handleReapproveUser(user.id, user.name || user.email)}
+                                      disabled={revokingUser === user.id}
+                                      className="text-green-600 hover:text-green-700 hover:bg-green-50"
                                     >
-                                      Re-approve
+                                      {revokingUser === user.id ? 'Re-approving...' : 'Re-approve'}
                                     </Button>
                                   </div>
                                 </div>

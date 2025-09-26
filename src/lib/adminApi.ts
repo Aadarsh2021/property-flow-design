@@ -276,6 +276,12 @@ class AdminApiService {
     });
   }
 
+  async reapproveUser(userId: string): Promise<{ reapprovedUserId: string }> {
+    return this.makeRequest<{ reapprovedUserId: string }>(`/admin/users/${userId}/reapprove`, {
+      method: 'PUT',
+    });
+  }
+
   /**
    * Get user password details (admin only)
    */
