@@ -291,7 +291,7 @@ const PartyLedger = () => {
         e.preventDefault();
         if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < filteredParties.length) {
           const selectedParty = filteredParties[selectedSuggestionIndex];
-          setSearchTerm(selectedParty.name);
+          setSearchTerm(selectedParty.name || selectedParty.party_name || selectedParty.partyName);
           setShowSuggestions(false);
           setSelectedSuggestionIndex(-1);
         }
@@ -341,10 +341,11 @@ const PartyLedger = () => {
     if (!firstMatch) return '';
     
     const searchLower = searchTerm.toLowerCase();
-    const partyNameLower = firstMatch.name.toLowerCase();
+    const partyName = firstMatch.name || firstMatch.party_name || firstMatch.partyName || '';
+    const partyNameLower = partyName.toLowerCase();
     
     if (partyNameLower.startsWith(searchLower)) {
-      return firstMatch.name.substring(searchTerm.length);
+      return partyName.substring(searchTerm.length);
     }
     
     return '';
@@ -354,14 +355,14 @@ const PartyLedger = () => {
   const handleAutoComplete = () => {
     const autoCompleteText = getAutoCompleteText();
     if (autoCompleteText) {
-      setSearchTerm(filteredParties[0].name);
+      setSearchTerm(filteredParties[0].name || filteredParties[0].party_name || filteredParties[0].partyName);
       setShowSuggestions(false);
     }
   };
 
   // Handle suggestion click
   const handleSuggestionClick = (party: any) => {
-    setSearchTerm(party.name || (party as any).partyName || '');
+    setSearchTerm(party.name || party.party_name || party.partyName || '');
     setShowSuggestions(false);
     setSelectedSuggestionIndex(-1);
     setCurrentPage(1);

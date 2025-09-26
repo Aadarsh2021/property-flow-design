@@ -21,6 +21,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { finalTrialBalanceAPI } from '@/lib/api';
 
 interface TrialBalanceEntry {
@@ -50,6 +51,7 @@ interface Party {
 const FinalTrialBalance = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [trialBalanceData, setTrialBalanceData] = useState<TrialBalanceData | null>(null);
   const [partyName, setPartyName] = useState('');
@@ -179,12 +181,12 @@ const FinalTrialBalance = () => {
     
     // Extract party names from credit entries
     trialBalanceData.creditEntries.forEach(entry => {
-      partyNames.add(entry.name);
+      partyNames.add(entry.name || entry.party_name || entry.partyName);
     });
     
     // Extract party names from debit entries
     trialBalanceData.debitEntries.forEach(entry => {
-      partyNames.add(entry.name);
+      partyNames.add(entry.name || entry.party_name || entry.partyName);
     });
     
     // Convert to party objects
@@ -382,13 +384,13 @@ const FinalTrialBalance = () => {
   // Filter entries based on selected party
   const creditEntries = partyName.trim() 
     ? allCreditEntries.filter(entry => 
-        entry.name.toLowerCase().includes(partyName.toLowerCase())
+        (entry.name || entry.party_name || entry.partyName).toLowerCase().includes(partyName.toLowerCase())
       )
     : allCreditEntries;
 
   const debitEntries = partyName.trim()
     ? allDebitEntries.filter(entry => 
-        entry.name.toLowerCase().includes(partyName.toLowerCase())
+        (entry.name || entry.party_name || entry.partyName).toLowerCase().includes(partyName.toLowerCase())
       )
     : allDebitEntries;
 
@@ -690,7 +692,7 @@ const FinalTrialBalance = () => {
                         trialBalanceData?.creditEntries.map((entry, index) => (
                           <tr key={`credit-${entry.id}-${index}`} className="hover:bg-green-50 transition-colors">
                             <td className="border border-gray-300 px-3 py-2 font-medium text-gray-800">
-                              {entry.name}
+                              {entry.name || entry.party_name || entry.partyName}
                             </td>
                             <td className="border border-gray-300 px-3 py-2 text-center font-semibold text-green-600">
                               ₹{entry.amount.toLocaleString()}
@@ -744,7 +746,7 @@ const FinalTrialBalance = () => {
                         trialBalanceData?.debitEntries.map((entry, index) => (
                           <tr key={`debit-${entry.id}-${index}`} className="hover:bg-red-50 transition-colors">
                             <td className="border border-gray-300 px-3 py-2 font-medium text-gray-800">
-                              {entry.name}
+                              {entry.name || entry.party_name || entry.partyName}
                             </td>
                             <td className="border border-gray-300 px-3 py-2 text-center font-semibold text-red-600">
                               ₹{entry.amount.toLocaleString()}

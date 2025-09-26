@@ -175,7 +175,7 @@ const PartyReport = () => {
     if (!searchTerm) return parties;
     
     return parties.filter(party => 
-      party.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (party.name || party.party_name || party.partyName).toLowerCase().includes(searchTerm.toLowerCase()) ||
       (party.srNo && party.srNo.toString().includes(searchTerm))
     );
   }, [parties, searchTerm]);
@@ -236,10 +236,11 @@ const PartyReport = () => {
     if (!firstMatch) return '';
     
     const searchLower = searchTerm.toLowerCase();
-    const partyNameLower = firstMatch.name.toLowerCase();
+    const partyName = firstMatch.name || firstMatch.party_name || firstMatch.partyName || '';
+    const partyNameLower = partyName.toLowerCase();
     
     if (partyNameLower.startsWith(searchLower)) {
-      return firstMatch.name.substring(searchTerm.length);
+      return partyName.substring(searchTerm.length);
     }
     
     return '';
@@ -249,7 +250,7 @@ const PartyReport = () => {
   const handleAutoComplete = () => {
     const autoCompleteText = getAutoCompleteText();
     if (autoCompleteText) {
-      setSearchTerm(filteredParties[0].name);
+      setSearchTerm(filteredParties[0].name || filteredParties[0].party_name || filteredParties[0].partyName);
       setShowSuggestions(false);
     }
   };
@@ -279,7 +280,7 @@ const PartyReport = () => {
         e.preventDefault();
         if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < filteredParties.length) {
           const selectedParty = filteredParties[selectedSuggestionIndex];
-          setSearchTerm(selectedParty.name);
+          setSearchTerm(selectedParty.name || selectedParty.party_name || selectedParty.partyName);
           setShowSuggestions(false);
           setSelectedSuggestionIndex(-1);
         }
@@ -293,7 +294,7 @@ const PartyReport = () => {
 
   // Handle suggestion click
   const handleSuggestionClick = (party: any) => {
-    setSearchTerm(party.name);
+    setSearchTerm(party.name || party.party_name || party.partyName);
     setShowSuggestions(false);
     setSelectedSuggestionIndex(-1);
     setCurrentPage(1);
@@ -365,7 +366,7 @@ const PartyReport = () => {
       
       toast({
         title: "✅ Success",
-        description: `Party "${selectedParty.name}" deleted successfully`,
+        description: `Party "${selectedParty.name || selectedParty.party_name || selectedParty.partyName}" deleted successfully`,
       });
       
       setSelectedParty(null);
@@ -397,7 +398,7 @@ const PartyReport = () => {
         navigate(`/new-party?edit=true&id=${selectedParty._id}`);
         toast({
           title: "Modify Party",
-          description: `Opening ${selectedParty.name} for editing`,
+          description: `Opening ${selectedParty.name || selectedParty.party_name || selectedParty.partyName} for editing`,
         });
         const endTime = performance.now();
         const duration = endTime - startTime;
@@ -537,7 +538,7 @@ const PartyReport = () => {
                         }`}
                         onClick={() => handleSuggestionClick(party)}
                       >
-                        <div className="font-medium text-gray-900">{party.name}</div>
+                        <div className="font-medium text-gray-900">{party.name || party.party_name || party.partyName}</div>
                         {party.srNo && (
                           <div className="text-sm text-gray-500">Sr. No: {party.srNo}</div>
                         )}
@@ -658,7 +659,7 @@ const PartyReport = () => {
                         {startIndex + index + 1}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        {party.name}
+                        {party.name || party.party_name || party.partyName}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                         {formatNumber(Number(party.balanceLimit) || 0)}
@@ -802,7 +803,7 @@ const PartyReport = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Party</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete party "{selectedParty?.name}"?
+              Are you sure you want to delete party "{selectedParty?.name || selectedParty?.party_name || selectedParty?.partyName}"?
               This action cannot be undone and will permanently delete:
               • The party from the database
               • ALL transactions for this party
