@@ -237,7 +237,8 @@ const Profile = () => {
     address: '',
     city: '',
     state: '',
-    pincode: ''
+    pincode: '',
+    profile_picture: ''
   });
   
   // Profile photo states
@@ -270,7 +271,8 @@ const Profile = () => {
         address: user.address || '',
         city: user.city || '',
         state: user.state || '',
-        pincode: user.pincode || ''
+        pincode: user.pincode || '',
+        profile_picture: user.profilePicture || ''
       });
       
       // Set profile photo
@@ -289,11 +291,11 @@ const Profile = () => {
       // Debug auth provider
       console.log('🔐 Auth provider debug:', {
         auth_provider: user.auth_provider,
-        authProvider: user.authProvider,
+        authProvider: user.auth_provider || 'both',
         password_hash: user.password_hash ? 'Set' : 'Not Set',
-        hasBothAuth: user?.auth_provider === 'both' || user?.authProvider === 'both',
-        isGoogleUser: user?.auth_provider === 'google' || user?.authProvider === 'google',
-        isEmailUser: user?.auth_provider === 'email' || user?.authProvider === 'email'
+        hasBothAuth: false, // auth_provider can only be 'google' or 'email'
+        isGoogleUser: user?.auth_provider === 'google',
+        isEmailUser: user?.auth_provider === 'email'
       });
     }
   }, [user]);
@@ -316,7 +318,8 @@ const Profile = () => {
             address: response.data.user.address || '',
             city: response.data.user.city || '',
             state: response.data.user.state || '',
-            pincode: response.data.user.pincode || ''
+            pincode: response.data.user.pincode || '',
+            profile_picture: response.data.user.profilePicture || ''
           });
         } else {
           console.error('No token available for profile refresh');
@@ -530,7 +533,7 @@ const Profile = () => {
     try {
       if (user?.auth_provider === 'google' && !hasPassword) {
         // Google user - setup password (first time)
-        const response = await authAPI.updatePassword(user?.email || '', passwordData.newPassword);
+        const response = await authAPI.setupPassword({ password: passwordData.newPassword });
         
         if (response.success) {
           // Update Firebase password as well
@@ -573,7 +576,7 @@ const Profile = () => {
             return;
           }
           
-          const response = await authAPI.updatePassword(user?.email || '', passwordData.newPassword);
+          const response = await authAPI.setupPassword({ password: passwordData.newPassword });
           if (response.success) {
             // Update Firebase password as well (this will auto-sync with database)
             const firebaseResult = await updateUserPassword(passwordData.newPassword);
@@ -605,7 +608,7 @@ const Profile = () => {
           }
         } else if (hasPassword) {
           // User has password - change password
-          const response = await authAPI.updatePassword(user?.email || '', passwordData.newPassword);
+          const response = await authAPI.setupPassword({ password: passwordData.newPassword });
           
           if (response.success) {
             // Update Firebase password as well
@@ -638,7 +641,7 @@ const Profile = () => {
           }
         } else {
           // User doesn't have password - setup new password
-          const response = await authAPI.updatePassword(user?.email || '', passwordData.newPassword);
+          const response = await authAPI.setupPassword({ password: passwordData.newPassword });
           
           if (response.success) {
             // Update Firebase password as well
@@ -684,10 +687,10 @@ const Profile = () => {
     }
   };
 
-  // Check if user is Google user or has both auth methods (handle both auth_provider and authProvider)
-  const isGoogleUser = user?.auth_provider === 'google' || user?.authProvider === 'google';
-  const hasBothAuth = user?.auth_provider === 'both' || user?.authProvider === 'both';
-  const isEmailUser = user?.auth_provider === 'email' || user?.authProvider === 'email';
+  // Check if user is Google user or email user
+  const isGoogleUser = user?.auth_provider === 'google';
+  const hasBothAuth = false; // auth_provider can only be 'google' or 'email'
+  const isEmailUser = user?.auth_provider === 'email';
   
   // Check if user has password set (for email users)
   const hasPassword = user?.password_hash && user.password_hash !== '' && user.password_hash !== null && user.password_hash !== undefined;
@@ -757,7 +760,7 @@ const Profile = () => {
       } else {
         toast({
           title: "❌ Failed to Delete Account",
-          description: result.message || "Please try again later",
+          description: (result as any)?.message || "Please try again later",
           variant: "destructive"
         });
       }
