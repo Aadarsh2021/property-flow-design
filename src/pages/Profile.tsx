@@ -289,7 +289,7 @@ const Profile = () => {
       });
       
       // Debug auth provider
-      const hasGoogleId = user.googleId || user.google_id;
+      const hasGoogleId = user.googleId;
       const detectedProvider = user.auth_provider || (hasGoogleId ? 'google' : 'email');
       
       console.log('🔐 Auth provider debug:', {
@@ -703,7 +703,7 @@ const Profile = () => {
   };
 
   // Check if user is Google user or email user
-  const hasGoogleId = user?.googleId || user?.google_id;
+  const hasGoogleId = user?.googleId;
   const isGoogleUser = user?.auth_provider === 'google' || !!hasGoogleId;
   const hasBothAuth = false; // auth_provider can only be 'google' or 'email'
   const isEmailUser = user?.auth_provider === 'email' || (!user?.auth_provider && !hasGoogleId);
