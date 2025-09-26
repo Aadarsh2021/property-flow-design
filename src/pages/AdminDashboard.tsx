@@ -490,9 +490,11 @@ const AdminDashboard: React.FC = () => {
 
     try {
       setRevokingUser(userId); // Reuse the same loading state
+      console.log('🔄 Re-approving user:', userId, userName);
       
       // Call the re-approve user API
-      await adminApi.reapproveUser(userId);
+      const result = await adminApi.reapproveUser(userId);
+      console.log('✅ Re-approve API result:', result);
       
       // Clear cache for users data to ensure fresh data
       console.log('💾 CACHE: Clearing users cache after re-approval');
@@ -501,16 +503,19 @@ const AdminDashboard: React.FC = () => {
       adminApi.clearCacheByPattern('.*rejected.*');
       
       // Refresh the data immediately but maintain current tab
+      console.log('🔄 Refreshing dashboard data after re-approval');
       await loadDashboardData(false);
       setLastRefresh(new Date());
       
       // Switch to users tab to show the re-approved user
+      console.log('🔄 Switching to users tab');
       setActiveTab('user-management');
       setActiveSubTab('users');
       
+      console.log('✅ Re-approval completed, users count:', users.length);
       alert('User re-approved successfully and moved back to approved users');
     } catch (err) {
-      console.error('Failed to re-approve user:', err);
+      console.error('❌ Failed to re-approve user:', err);
       alert('Failed to re-approve user. Please try again.');
     } finally {
       setRevokingUser(null);
