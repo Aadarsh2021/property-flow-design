@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AdminLayout } from '@/components/AdminLayout';
 import { 
   Users, 
   FileText, 
@@ -21,7 +22,10 @@ import {
   Trash2,
   Key,
   Eye,
-  EyeOff
+  EyeOff,
+  UserCheck,
+  Edit,
+  Timer
 } from 'lucide-react';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { adminApi, type DashboardStats, type User, type SystemHealth } from '@/lib/adminApi';
@@ -50,6 +54,7 @@ const AdminDashboard: React.FC = () => {
   const [loadingStates, setLoadingStates] = useState({
     stats: false,
     pendingUsers: false,
+    rejectedUsers: false,
     health: false,
     users: false
   });
@@ -62,29 +67,33 @@ const AdminDashboard: React.FC = () => {
   const [deletingUser, setDeletingUser] = useState<string | null>(null);
   const [resettingPassword, setResettingPassword] = useState<string | null>(null);
   const [pendingUsers, setPendingUsers] = useState<User[]>([]);
+  const [rejectedUsers, setRejectedUsers] = useState<User[]>([]);
   const [approvingUser, setApprovingUser] = useState<string | null>(null);
   const [disapprovingUser, setDisapprovingUser] = useState<string | null>(null);
+  const [revokingUser, setRevokingUser] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [autoRefreshInterval, setAutoRefreshInterval] = useState<NodeJS.Timeout | null>(null);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeSubTab, setActiveSubTab] = useState('pending');
   const navigate = useNavigate();
   const { isLoggedIn, logout, checkSession } = useAdminAuth();
 
   // Handle tab change with better UX
   const handleTabChange = (newTab: string) => {
     console.log(`📊 ADMIN: Tab changed from ${activeTab} to ${newTab}`);
+    setActiveTab(newTab);
     if (newTab === 'user-management') {
-      // When switching to user-management, default to pending tab
-      setActiveTab('pending');
-    } else {
-      setActiveTab(newTab);
+      setActiveSubTab('pending'); // Default to pending sub-tab
     }
   };
 
   // Handle sub-tab change for user management
   const handleSubTabChange = (newTab: string) => {
     console.log(`📊 ADMIN: Sub-tab changed to ${newTab}`);
-    setActiveTab(newTab);
+    // Keep the main tab as user-management but set the sub-tab
+    if (newTab === 'pending' || newTab === 'users') {
+      setActiveTab(newTab);
+    }
   };
 
   useEffect(() => {
@@ -147,6 +156,7 @@ const AdminDashboard: React.FC = () => {
       setLoadingStates({
         stats: true,
         pendingUsers: true,
+        rejectedUsers: true,
         health: true,
         users: true
       });
@@ -160,13 +170,28 @@ const AdminDashboard: React.FC = () => {
         // Set all data at once
         setStats(dashboardData.stats);
         setSystemHealth(dashboardData.health);
-        setUsers(dashboardData.users.users);
+        
+        // Debug: Log the users data structure
+        console.log('📊 Full dashboard data:', dashboardData);
+        console.log('📊 Users data structure:', dashboardData.users);
+        console.log('📊 Users array:', dashboardData.users?.users || []);
+        console.log('📊 Pending users:', dashboardData.pendingUsers);
+        console.log('📊 Users length:', (dashboardData.users?.users || []).length);
+        console.log('📊 Pending users length:', dashboardData.pendingUsers?.length || 0);
+        
+        // Handle both possible data structures
+        const usersData = dashboardData.users;
+        const usersArray = usersData?.users || usersData || [];
+        console.log('📊 Final users array:', usersArray);
+        setUsers(usersArray);
         setPendingUsers(dashboardData.pendingUsers);
+        setRejectedUsers(dashboardData.rejectedUsers || []);
         
         // Clear all loading states
         setLoadingStates({
           stats: false,
           pendingUsers: false,
+          rejectedUsers: false,
           health: false,
           users: false
         });
@@ -180,11 +205,12 @@ const AdminDashboard: React.FC = () => {
         console.log('📊 ADMIN: Starting individual API calls...');
         const individualStartTime = performance.now();
         
-        const [statsResult, healthResult, usersResult, pendingUsersResult] = await Promise.allSettled([
+        const [statsResult, healthResult, usersResult, pendingUsersResult, rejectedUsersResult] = await Promise.allSettled([
           adminApi.getDashboardStats(),
           adminApi.getSystemHealth(),
           adminApi.getAllUsers(1, 10),
-          adminApi.getPendingUsers()
+          adminApi.getPendingUsers(),
+          adminApi.getRejectedUsers()
         ]);
         
         const individualEndTime = performance.now();
@@ -223,6 +249,14 @@ const AdminDashboard: React.FC = () => {
           console.log(`✅ ADMIN: Pending users loaded (${pendingUsersResult.value.length} pending)`);
         } else {
           console.error('❌ ADMIN: Failed to load pending users:', pendingUsersResult.reason);
+        }
+
+        if (rejectedUsersResult.status === 'fulfilled') {
+          setRejectedUsers(rejectedUsersResult.value);
+          setLoadingStates(prev => ({ ...prev, rejectedUsers: false }));
+          console.log(`✅ ADMIN: Rejected users loaded (${rejectedUsersResult.value.length} rejected)`);
+        } else {
+          console.error('❌ ADMIN: Failed to load rejected users:', rejectedUsersResult.reason);
         }
 
         console.log(`⚡ Fallback data loaded in ${(performance.now() - startTime).toFixed(2)}ms`);
@@ -415,6 +449,40 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  const handleRevokeUser = async (userId: string, userName: string) => {
+    if (!window.confirm(`Are you sure you want to revoke user "${userName}"? This will move them to rejected users.`)) {
+      return;
+    }
+
+    try {
+      setRevokingUser(userId);
+      
+      // Call the revoke user API
+      await adminApi.revokeUser(userId);
+      
+      // Clear cache for users data to ensure fresh data
+      console.log('💾 CACHE: Clearing users cache after revocation');
+      clearCacheByPattern('.*admin.*');
+      adminApi.clearCache();
+      adminApi.clearCacheByPattern('.*rejected.*');
+      
+      // Refresh the data immediately but maintain current tab
+      await loadDashboardData(false);
+      setLastRefresh(new Date());
+      
+      // Switch to rejected users tab to show the revoked user
+      setActiveTab('user-management');
+      setActiveSubTab('rejected');
+      
+      alert('User revoked successfully and moved to rejected users');
+    } catch (err) {
+      console.error('Failed to revoke user:', err);
+      alert('Failed to revoke user. Please try again.');
+    } finally {
+      setRevokingUser(null);
+    }
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -436,211 +504,350 @@ const AdminDashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-       {/* Header */}
-       <header className="bg-white shadow-sm border-b">
-         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-           <div className="flex justify-between items-center h-16">
-             <div className="flex items-center">
-               {/* Logo and Company Name - Clickable to Home */}
-               <Link to="/" className="flex items-center space-x-3 hover:opacity-80 transition-opacity">
-                 <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-                   <span className="text-white font-bold text-lg">EL</span>
-                 </div>
-                 <div>
-                   <h1 className="text-xl font-semibold text-gray-900">Escrow Ledger</h1>
-                   <p className="text-sm text-gray-500">Admin Dashboard</p>
-                 </div>
-               </Link>
-             </div>
-             <div className="flex items-center space-x-4">
-               <div className="text-right">
-                 <p className="text-sm text-gray-500">
-                   Last updated: {lastRefresh.toLocaleTimeString()}
-                 </p>
-                 <div className="text-xs text-gray-400">
-                   Auto-refresh every 30s | {loadingStates.stats ? 'Loading...' : 'Ready'}
-                 </div>
-               </div>
-             </div>
-            <div className="flex items-center space-x-3">
-              <Button 
-                onClick={handleRefresh} 
-                variant="outline" 
-                size="sm"
-                disabled={refreshing}
-              >
-                <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                {refreshing ? 'Refreshing...' : 'Refresh'}
-              </Button>
-              <Button onClick={handleLogout} variant="outline" size="sm">
-                <LogOut className="h-4 w-4 mr-2" />
-                Logout
-              </Button>
+    <>
+      <AdminLayout>
+        <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center shadow-elegant">
+              {activeTab === 'dashboard' ? (
+                <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+              ) : (
+                <Users className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+              )}
+            </div>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold">
+                {activeTab === 'dashboard' ? 'Admin Dashboard' : 'User Management'}
+              </h1>
+              <p className="text-sm sm:text-base text-muted-foreground">
+                {activeTab === 'dashboard' 
+                  ? 'Overview and system statistics' 
+                  : 'Manage users and their permissions'
+                }
+              </p>
             </div>
           </div>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Button onClick={handleRefresh} variant="outline" size="sm" className="flex-1 sm:flex-none" disabled={refreshing}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Refresh</span>
+              <span className="sm:hidden">Refresh</span>
+            </Button>
+          </div>
         </div>
-      </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Error Display */}
         {error && (
-          <div className="mb-6">
-            <Card className="border-red-200 bg-red-50">
-              <CardContent className="pt-6">
-                <div className="flex items-center">
-                  <AlertCircle className="h-5 w-5 text-red-500 mr-2" />
-                  <p className="text-red-700">{error}</p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <Card className="border-red-200 bg-red-50">
+            <CardContent className="pt-6">
+              <div className="flex items-center">
+                <AlertCircle className="h-5 w-5 text-red-500 mr-2" />
+                <p className="text-red-700">{error}</p>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
-        {/* Main Content Tabs - Moved to Top */}
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-          <TabsList className="w-full max-w-md mx-auto mb-8">
-            <TabsTrigger value="dashboard" className="flex-1">Dashboard</TabsTrigger>
-            <TabsTrigger value="user-management" className="flex-1">User Management</TabsTrigger>
+        {/* Main Content Tabs */}
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6" id="admin-main-tabs">
+          <TabsList className="w-full max-w-md mx-auto mb-8 bg-muted p-1 rounded-lg">
+            <TabsTrigger value="dashboard" className="flex-1 data-[state=active]:bg-background data-[state=active]:shadow-sm">Dashboard</TabsTrigger>
+            <TabsTrigger value="user-management" className="flex-1 data-[state=active]:bg-background data-[state=active]:shadow-sm">User Management</TabsTrigger>
           </TabsList>
 
-        {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              {loadingStates.stats ? (
-                <div className="space-y-2">
-                  <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
-                  <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
-                </div>
-              ) : (
-                <>
-                  <div className="text-2xl font-bold">{stats.totalUsers}</div>
-                  <p className="text-xs text-muted-foreground">
-                    +12% from last month
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Parties</CardTitle>
-              <FileText className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              {loadingStates.stats ? (
-                <div className="space-y-2">
-                  <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
-                  <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
-                </div>
-              ) : (
-                <>
-                  <div className="text-2xl font-bold">{stats.totalParties}</div>
-                  <p className="text-xs text-muted-foreground">
-                    +8% from last month
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Transactions</CardTitle>
-              <BarChart3 className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              {loadingStates.stats ? (
-                <div className="space-y-2">
-                  <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
-                  <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
-                </div>
-              ) : (
-                <>
-                  <div className="text-2xl font-bold">{stats.totalTransactions.toLocaleString()}</div>
-                  <p className="text-xs text-muted-foreground">
-                    +23% from last month
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              {loadingStates.stats ? (
-                <div className="space-y-2">
-                  <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
-                  <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
-                </div>
-              ) : (
-                <>
-                  <div className="text-2xl font-bold">{formatCurrency(stats.totalRevenue)}</div>
-                  <p className="text-xs text-muted-foreground">
-                    +15% from last month
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Users</CardTitle>
-              <Activity className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              {loadingStates.stats ? (
-                <div className="space-y-2">
-                  <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
-                  <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
-                </div>
-              ) : (
-                <>
-                  <div className="text-2xl font-bold">{stats.activeUsers}</div>
-                  <p className="text-xs text-muted-foreground">
-                    Currently online
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending Transactions</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              {loadingStates.stats ? (
-                <div className="space-y-2">
-                  <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
-                  <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
-                </div>
-              ) : (
-                <>
-                  <div className="text-2xl font-bold">{stats.pendingTransactions}</div>
-                  <p className="text-xs text-muted-foreground">
-                    Require attention
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
           <TabsContent value="dashboard" className="space-y-6">
-            {/* Dashboard Content - No sub-tabs */}
+            {/* Stats Overview - Only in Dashboard tab */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+              {/* Total Users */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  {loadingStates.stats ? (
+                    <div className="space-y-2">
+                      <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
+                      <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-2xl font-bold">{stats.totalUsers}</div>
+                      <p className="text-xs text-muted-foreground">
+                        Registered users in system
+                      </p>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Active Users */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Active Users</CardTitle>
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                </CardHeader>
+                <CardContent>
+                  {loadingStates.stats ? (
+                    <div className="space-y-2">
+                      <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
+                      <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-2xl font-bold text-green-600">{stats.activeUsers}</div>
+                      <p className="text-xs text-muted-foreground">
+                        Currently active and online
+                      </p>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Pending Users */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Pending Approval</CardTitle>
+                  <Clock className="h-4 w-4 text-yellow-600" />
+                </CardHeader>
+                <CardContent>
+                  {loadingStates.pendingUsers ? (
+                    <div className="space-y-2">
+                      <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
+                      <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-2xl font-bold text-yellow-600">{pendingUsers.length}</div>
+                      <p className="text-xs text-muted-foreground">
+                        Awaiting admin approval
+                      </p>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Total Transactions */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Transactions</CardTitle>
+                  <BarChart3 className="h-4 w-4 text-blue-600" />
+                </CardHeader>
+                <CardContent>
+                  {loadingStates.stats ? (
+                    <div className="space-y-2">
+                      <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
+                      <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-2xl font-bold text-blue-600">{stats.totalTransactions.toLocaleString()}</div>
+                      <p className="text-xs text-muted-foreground">
+                        Ledger entries in system
+                      </p>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Additional Stats Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              {/* Total Parties */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Parties</CardTitle>
+                  <FileText className="h-4 w-4 text-purple-600" />
+                </CardHeader>
+                <CardContent>
+                  {loadingStates.stats ? (
+                    <div className="space-y-2">
+                      <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
+                      <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-2xl font-bold text-purple-600">{stats.totalParties}</div>
+                      <p className="text-xs text-muted-foreground">
+                        Business parties registered
+                      </p>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Total Revenue */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-green-600" />
+                </CardHeader>
+                <CardContent>
+                  {loadingStates.stats ? (
+                    <div className="space-y-2">
+                      <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
+                      <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-2xl font-bold text-green-600">{formatCurrency(stats.totalRevenue)}</div>
+                      <p className="text-xs text-muted-foreground">
+                        Total system revenue
+                      </p>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Pending Transactions */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Pending Transactions</CardTitle>
+                  <AlertCircle className="h-4 w-4 text-red-600" />
+                </CardHeader>
+                <CardContent>
+                  {loadingStates.stats ? (
+                    <div className="space-y-2">
+                      <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
+                      <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-2xl font-bold text-red-600">{stats.pendingTransactions}</div>
+                      <p className="text-xs text-muted-foreground">
+                        Require attention
+                      </p>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Quick Actions and Recent Users */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+              {/* Quick Actions Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings className="w-5 h-5" />
+                    Quick Actions
+                  </CardTitle>
+                  <CardDescription>
+                    Common administrative tasks
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Button 
+                    onClick={() => {
+                      setActiveTab('user-management');
+                      setActiveSubTab('users');
+                    }}
+                    className="w-full justify-start" 
+                    variant="outline"
+                  >
+                    <Users className="w-4 h-4 mr-2" />
+                    Manage Users ({stats.totalUsers})
+                  </Button>
+                  
+                  {pendingUsers.length > 0 && (
+                    <Button 
+                      onClick={() => {
+                        setActiveTab('user-management');
+                        setActiveSubTab('pending');
+                      }}
+                      className="w-full justify-start" 
+                      variant="outline"
+                    >
+                      <Clock className="w-4 h-4 mr-2" />
+                      Review Pending Users ({pendingUsers.length})
+                    </Button>
+                  )}
+                  
+                  <Button 
+                    onClick={handleRefresh} 
+                    className="w-full justify-start" 
+                    variant="outline"
+                    disabled={refreshing}
+                  >
+                    <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+                    Refresh Data
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Recent Users */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Activity className="w-5 h-5" />
+                    Recent Users
+                  </CardTitle>
+                  <CardDescription>
+                    Latest user registrations
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingStates.users ? (
+                    <div className="space-y-3">
+                      {[...Array(3)].map((_, i) => (
+                        <div key={i} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse"></div>
+                            <div className="space-y-1">
+                              <div className="h-4 bg-gray-200 rounded w-24 animate-pulse"></div>
+                              <div className="h-3 bg-gray-200 rounded w-32 animate-pulse"></div>
+                            </div>
+                          </div>
+                          <div className="h-6 bg-gray-200 rounded w-16 animate-pulse"></div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : users.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No users found
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {users.slice(0, 5).map(user => (
+                        <div key={user.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div>
+                            <h4 className="font-medium text-sm">{user.name || 'No Name'}</h4>
+                            <p className="text-xs text-muted-foreground">{user.email}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(user.created_at || '').toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={
+                              user.is_approved ? "default" : 
+                              user.rejected_at ? "destructive" : 
+                              "secondary"
+                            } className="text-xs">
+                              {user.is_approved ? 'Active' : 
+                               user.rejected_at ? 'Rejected' : 
+                               'Pending'}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                      
+                      <Button 
+                        onClick={() => setActiveTab('users')}
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full"
+                      >
+                        View All Users
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* System Status - Only in Dashboard tab */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* System Status */}
               <Card>
@@ -756,17 +963,89 @@ const AdminDashboard: React.FC = () => {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Alerts & Notifications */}
+            {(pendingUsers.length > 0 || stats.pendingTransactions > 0) && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-orange-600" />
+                    Attention Required
+                  </CardTitle>
+                  <CardDescription>
+                    Items that need your immediate attention
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {pendingUsers.length > 0 && (
+                    <div className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-yellow-600" />
+                        <span className="text-sm font-medium">{pendingUsers.length} users awaiting approval</span>
+                      </div>
+                      <Button 
+                        onClick={() => setActiveTab('pending')}
+                        size="sm" 
+                        variant="outline"
+                      >
+                        Review Now
+                      </Button>
+                    </div>
+                  )}
+                  
+                  {stats.pendingTransactions > 0 && (
+                    <div className="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-red-600" />
+                        <span className="text-sm font-medium">{stats.pendingTransactions} transactions require attention</span>
+                      </div>
+                      <Button size="sm" variant="outline">
+                        Review Transactions
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="user-management" className="space-y-6">
             {/* User Management with sub-tabs */}
-            <Tabs value={activeTab === 'pending' || activeTab === 'users' ? activeTab : 'pending'} onValueChange={handleSubTabChange}>
-              <TabsList>
-                <TabsTrigger value="pending">Pending Approval ({pendingUsers.length})</TabsTrigger>
-                <TabsTrigger value="users">Users</TabsTrigger>
-              </TabsList>
+            <div className="space-y-6">
+              <div className="flex space-x-1 bg-muted p-1 rounded-lg w-fit">
+                <button
+                  onClick={() => setActiveSubTab('pending')}
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                    activeSubTab === 'pending' 
+                      ? 'bg-background text-foreground shadow-sm' 
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Pending Approval ({pendingUsers.length})
+                </button>
+                <button
+                  onClick={() => setActiveSubTab('users')}
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                    activeSubTab === 'users' 
+                      ? 'bg-background text-foreground shadow-sm' 
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Users ({users.length})
+                </button>
+                <button
+                  onClick={() => setActiveSubTab('rejected')}
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                    activeSubTab === 'rejected' 
+                      ? 'bg-background text-foreground shadow-sm' 
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Rejected Users ({rejectedUsers.length})
+                </button>
+              </div>
 
-              <TabsContent value="pending">
+              {activeTab === 'user-management' && activeSubTab === 'pending' && (
                 <Card>
                   <CardHeader>
                     <CardTitle>Pending User Approvals</CardTitle>
@@ -816,7 +1095,7 @@ const AdminDashboard: React.FC = () => {
                                   </p>
                                 </div>
                               </div>
-                              <div className="flex space-x-2">
+                              <div className="flex flex-col space-y-2">
                                 <Button
                                   onClick={() => handleApproveUser(user.id, user.name || user.email)}
                                   variant="outline"
@@ -852,9 +1131,9 @@ const AdminDashboard: React.FC = () => {
                     )}
                   </CardContent>
                 </Card>
-              </TabsContent>
+              )}
 
-              <TabsContent value="users">
+              {activeTab === 'user-management' && activeSubTab === 'users' && (
                 <Card>
                   <CardHeader>
                     <CardTitle>User Management</CardTitle>
@@ -890,6 +1169,7 @@ const AdminDashboard: React.FC = () => {
                       </div>
                     ) : (
                       <div className="space-y-4">
+                        {console.log('🔍 Users tab - users array:', users, 'length:', users.length)}
                         {users.length > 0 ? (
                           <div className="space-y-3">
                             {users.map((user) => (
@@ -909,14 +1189,14 @@ const AdminDashboard: React.FC = () => {
                               <div className="flex items-center space-x-4">
                                 <div className="text-right">
                                   <div className="flex space-x-4 text-sm text-gray-500">
-                                    <span>{user.partyCount} parties</span>
-                                    <span>{user.transactionCount} transactions</span>
+                                    <span>{user.partyCount || 0} parties</span>
+                                    <span>{user.transactionCount || 0} transactions</span>
                                   </div>
                                   <p className="text-xs text-gray-400">
                                     Joined {new Date(user.created_at).toLocaleDateString()}
                                   </p>
                                 </div>
-                                <div className="flex space-x-2">
+                                <div className="flex flex-col space-y-2">
                                   <Button
                                     onClick={() => handleViewPasswordDetails(user)}
                                     variant="outline"
@@ -935,6 +1215,16 @@ const AdminDashboard: React.FC = () => {
                                   >
                                     <Key className="h-4 w-4 mr-1" />
                                     {resettingPassword === user.id ? 'Resetting...' : 'Reset Password'}
+                                  </Button>
+                                  <Button
+                                    onClick={() => handleRevokeUser(user.id, user.name || user.email)}
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={revokingUser === user.id}
+                                    className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                  >
+                                    <AlertCircle className="h-4 w-4 mr-1" />
+                                    {revokingUser === user.id ? 'Revoking...' : 'Revoke'}
                                   </Button>
                                   <Button
                                     onClick={() => handleDeleteUser(user.id, user.name || user.email)}
@@ -958,13 +1248,98 @@ const AdminDashboard: React.FC = () => {
                     )}
                   </CardContent>
                 </Card>
-              </TabsContent>
-            </Tabs>
+              )}
+
+              {activeTab === 'user-management' && activeSubTab === 'rejected' && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Rejected Users</CardTitle>
+                    <CardDescription>
+                      Users who were disapproved by admin
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingStates.rejectedUsers ? (
+                      <div className="space-y-4">
+                        {[...Array(3)].map((_, i) => (
+                          <div key={i} className="flex items-center justify-between p-4 border rounded-lg bg-gray-50">
+                            <div className="flex items-center space-x-4">
+                              <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse"></div>
+                              <div className="space-y-2">
+                                <div className="h-4 bg-gray-200 rounded w-32 animate-pulse"></div>
+                                <div className="h-3 bg-gray-200 rounded w-48 animate-pulse"></div>
+                                <div className="h-3 bg-gray-200 rounded w-24 animate-pulse"></div>
+                                <div className="h-3 bg-gray-200 rounded w-28 animate-pulse"></div>
+                              </div>
+                            </div>
+                            <div className="flex space-x-2">
+                              <div className="h-8 bg-gray-200 rounded w-16 animate-pulse"></div>
+                              <div className="h-8 bg-gray-200 rounded w-20 animate-pulse"></div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {rejectedUsers.length > 0 ? (
+                          <div className="space-y-3">
+                            {rejectedUsers.map((user) => (
+                              <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg bg-red-50 border-red-200">
+                                <div className="flex items-center space-x-4">
+                                  <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                                    <Users className="h-5 w-5 text-red-600" />
+                                  </div>
+                                  <div>
+                                    <p className="font-medium text-gray-900">{user.name || 'No Name'}</p>
+                                    <p className="text-sm text-gray-500">{user.email}</p>
+                                    <p className="text-xs text-gray-400">
+                                      {user.city && user.state ? `${user.city}, ${user.state}` : 'Location not set'}
+                                    </p>
+                                    <p className="text-xs text-red-500">
+                                      Rejected on {new Date(user.updated_at).toLocaleDateString()}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center space-x-4">
+                                  <div className="text-right">
+                                    <p className="text-sm text-gray-500">Status</p>
+                                    <Badge variant="destructive">Rejected</Badge>
+                                  </div>
+                                  <div className="flex flex-col space-y-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        // TODO: Implement re-approve functionality
+                                        console.log('Re-approve user:', user.id);
+                                      }}
+                                    >
+                                      Re-approve
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-8">
+                            <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                            <p className="text-lg font-semibold text-gray-700">No rejected users</p>
+                            <p className="text-sm text-gray-500">All users have been approved</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
       </div>
+    </AdminLayout>
 
-      {/* Password Details Modal */}
+    {/* Password Details Modal */}
       {showPasswordDetailsModal && passwordDetails && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
@@ -1150,7 +1525,7 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 

@@ -243,6 +243,13 @@ class AdminApiService {
   }
 
   /**
+   * Get rejected users
+   */
+  async getRejectedUsers(): Promise<User[]> {
+    return this.makeRequest<User[]>('/admin/rejected-users');
+  }
+
+  /**
    * Approve a user
    */
   async approveUser(userId: string): Promise<{ approvedUserId: string; approvedUser: User }> {
@@ -257,6 +264,15 @@ class AdminApiService {
   async disapproveUser(userId: string): Promise<{ disapprovedUserId: string }> {
     return this.makeRequest<{ disapprovedUserId: string }>(`/admin/users/${userId}/disapprove`, {
       method: 'DELETE',
+    });
+  }
+
+  /**
+   * Revoke a user (move to rejected users)
+   */
+  async revokeUser(userId: string): Promise<{ revokedUserId: string }> {
+    return this.makeRequest<{ revokedUserId: string }>(`/admin/users/${userId}/revoke`, {
+      method: 'PUT',
     });
   }
 
