@@ -464,6 +464,10 @@ const AdminDashboard: React.FC = () => {
       
       // Simple cache clear and refresh
       adminApi.clearCache();
+      
+      // Add small delay to ensure backend cache is cleared
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
       await loadDashboardData(false);
       
       // Switch to rejected users tab
@@ -495,6 +499,10 @@ const AdminDashboard: React.FC = () => {
       
       // Simple cache clear and refresh
       adminApi.clearCache();
+      
+      // Add small delay to ensure backend cache is cleared
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
       await loadDashboardData(false);
       
       // Switch to users tab
