@@ -302,7 +302,7 @@ const Profile = () => {
   const refreshUserProfile = async () => {
     try {
       const response = await authAPI.getProfile();
-      if (response.success) {
+      if (response.success && response.data && response.data.user) {
         // Use token from context or user object
         const currentToken = token || user?.token;
         if (currentToken) {
@@ -322,7 +322,7 @@ const Profile = () => {
           console.error('No token available for profile refresh');
         }
       } else {
-        console.error('Profile refresh failed:', response.message);
+        console.error('Profile refresh failed:', response.message || 'Invalid response data');
       }
     } catch (error) {
       console.error('Profile refresh error:', error);
@@ -1095,88 +1095,89 @@ const Profile = () => {
                 </CardHeader>
                 
                 <CardContent className="space-y-4">
-                  {showCurrentPassword && (
+                  <form onSubmit={(e) => { e.preventDefault(); handlePasswordChangeSubmit(); }}>
+                    {showCurrentPassword && (
+                      <div className="space-y-2">
+                        <Label htmlFor="currentPassword" className="text-sm font-medium text-gray-700">
+                          Current Password
+                        </Label>
+                        <div className="relative">
+                          <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                          <Input
+                            id="currentPassword"
+                            name="currentPassword"
+                            type={showPasswords.current ? 'text' : 'password'}
+                            value={passwordData.currentPassword}
+                            onChange={handlePasswordChange}
+                            className="pl-10 pr-10"
+                            placeholder="Enter current password"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => togglePasswordVisibility('current')}
+                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          >
+                            {showPasswords.current ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="space-y-2">
-                      <Label htmlFor="currentPassword" className="text-sm font-medium text-gray-700">
-                        Current Password
+                      <Label htmlFor="newPassword" className="text-sm font-medium text-gray-700">
+                        {isGoogleUser ? 'New Password' : 'New Password'}
                       </Label>
                       <div className="relative">
                         <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                         <Input
-                          id="currentPassword"
-                          name="currentPassword"
-                          type={showPasswords.current ? 'text' : 'password'}
-                          value={passwordData.currentPassword}
+                          id="newPassword"
+                          name="newPassword"
+                          type={showPasswords.new ? 'text' : 'password'}
+                          value={passwordData.newPassword}
                           onChange={handlePasswordChange}
                           className="pl-10 pr-10"
-                          placeholder="Enter current password"
+                          placeholder="Enter new password"
                         />
                         <button
                           type="button"
-                          onClick={() => togglePasswordVisibility('current')}
+                          onClick={() => togglePasswordVisibility('new')}
                           className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
                         >
-                          {showPasswords.current ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          {showPasswords.new ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
                     </div>
-                  )}
 
-                  <div className="space-y-2">
-                    <Label htmlFor="newPassword" className="text-sm font-medium text-gray-700">
-                      {isGoogleUser ? 'New Password' : 'New Password'}
-                    </Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                      <Input
-                        id="newPassword"
-                        name="newPassword"
-                        type={showPasswords.new ? 'text' : 'password'}
-                        value={passwordData.newPassword}
-                        onChange={handlePasswordChange}
-                        className="pl-10 pr-10"
-                        placeholder="Enter new password"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => togglePasswordVisibility('new')}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      >
-                        {showPasswords.new ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700">
+                        Confirm Password
+                      </Label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                        <Input
+                          id="confirmPassword"
+                          name="confirmPassword"
+                          type={showPasswords.confirm ? 'text' : 'password'}
+                          value={passwordData.confirmPassword}
+                          onChange={handlePasswordChange}
+                          className="pl-10 pr-10"
+                          placeholder="Confirm new password"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => togglePasswordVisibility('confirm')}
+                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          {showPasswords.confirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700">
-                      Confirm Password
-                    </Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                      <Input
-                        id="confirmPassword"
-                        name="confirmPassword"
-                        type={showPasswords.confirm ? 'text' : 'password'}
-                        value={passwordData.confirmPassword}
-                        onChange={handlePasswordChange}
-                        className="pl-10 pr-10"
-                        placeholder="Confirm new password"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => togglePasswordVisibility('confirm')}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      >
-                        {showPasswords.confirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <Button
-                    onClick={handlePasswordChangeSubmit}
-                    disabled={passwordLoading || !passwordData.newPassword || !passwordData.confirmPassword}
-                    className="w-full bg-green-600 hover:bg-green-700"
-                  >
+                    <Button
+                      type="submit"
+                      disabled={passwordLoading || !passwordData.newPassword || !passwordData.confirmPassword}
+                      className="w-full bg-green-600 hover:bg-green-700"
+                    >
                     {passwordLoading ? (
                       <>
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
@@ -1189,6 +1190,7 @@ const Profile = () => {
                       </>
                     )}
                   </Button>
+                  </form>
 
                   {isGoogleUser && (
                     <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
