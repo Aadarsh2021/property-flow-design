@@ -291,11 +291,12 @@ const Profile = () => {
       // Debug auth provider
       console.log('🔐 Auth provider debug:', {
         auth_provider: user.auth_provider,
-        authProvider: user.auth_provider || 'both',
+        authProvider: user.auth_provider || 'email', // Default to email if undefined
         password_hash: user.password_hash ? 'Set' : 'Not Set',
         hasBothAuth: false, // auth_provider can only be 'google' or 'email'
         isGoogleUser: user?.auth_provider === 'google',
-        isEmailUser: user?.auth_provider === 'email'
+        isEmailUser: user?.auth_provider === 'email' || !user?.auth_provider, // Default to email user if no provider
+        userKeys: Object.keys(user) // Show all available keys for debugging
       });
     }
   }, [user]);
@@ -304,25 +305,35 @@ const Profile = () => {
   const refreshUserProfile = async () => {
     try {
       const response = await authAPI.getProfile();
-      if (response.success && response.data && response.data.user) {
-        // Use token from context or user object
-        const currentToken = token || user?.token;
-        if (currentToken) {
-          login(currentToken, response.data.user);
-          
-          // Update form data with fresh data
-          setFormData({
-            fullname: response.data.user.name || '',
-            email: response.data.user.email || '',
-            phone: response.data.user.phone || '',
-            address: response.data.user.address || '',
-            city: response.data.user.city || '',
-            state: response.data.user.state || '',
-            pincode: response.data.user.pincode || '',
-            profile_picture: response.data.user.profilePicture || ''
-          });
+      console.log('🔍 Profile API response:', response);
+      
+      if (response.success && response.data) {
+        // Check if user data is directly in response.data or in response.data.user
+        const userData = response.data.user || response.data;
+        console.log('🔍 User data:', userData);
+        
+        if (userData) {
+          // Use token from context or user object
+          const currentToken = token || user?.token;
+          if (currentToken) {
+            login(currentToken, userData);
+            
+            // Update form data with fresh data
+            setFormData({
+              fullname: userData.name || userData.fullname || '',
+              email: userData.email || '',
+              phone: userData.phone || '',
+              address: userData.address || '',
+              city: userData.city || '',
+              state: userData.state || '',
+              pincode: userData.pincode || '',
+              profile_picture: userData.profilePicture || userData.profile_picture || ''
+            });
+          } else {
+            console.error('No token available for profile refresh');
+          }
         } else {
-          console.error('No token available for profile refresh');
+          console.error('Profile refresh failed: No user data found');
         }
       } else {
         console.error('Profile refresh failed:', response.message || 'Invalid response data');
@@ -1106,15 +1117,16 @@ const Profile = () => {
                         </Label>
                         <div className="relative">
                           <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                          <Input
-                            id="currentPassword"
-                            name="currentPassword"
-                            type={showPasswords.current ? 'text' : 'password'}
-                            value={passwordData.currentPassword}
-                            onChange={handlePasswordChange}
-                            className="pl-10 pr-10"
-                            placeholder="Enter current password"
-                          />
+                        <Input
+                          id="currentPassword"
+                          name="currentPassword"
+                          type={showPasswords.current ? 'text' : 'password'}
+                          value={passwordData.currentPassword}
+                          onChange={handlePasswordChange}
+                          className="pl-10 pr-10"
+                          placeholder="Enter current password"
+                          autoComplete="current-password"
+                        />
                           <button
                             type="button"
                             onClick={() => togglePasswordVisibility('current')}
@@ -1132,15 +1144,16 @@ const Profile = () => {
                       </Label>
                       <div className="relative">
                         <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                        <Input
-                          id="newPassword"
-                          name="newPassword"
-                          type={showPasswords.new ? 'text' : 'password'}
-                          value={passwordData.newPassword}
-                          onChange={handlePasswordChange}
-                          className="pl-10 pr-10"
-                          placeholder="Enter new password"
-                        />
+                          <Input
+                            id="newPassword"
+                            name="newPassword"
+                            type={showPasswords.new ? 'text' : 'password'}
+                            value={passwordData.newPassword}
+                            onChange={handlePasswordChange}
+                            className="pl-10 pr-10"
+                            placeholder="Enter new password"
+                            autoComplete="new-password"
+                          />
                         <button
                           type="button"
                           onClick={() => togglePasswordVisibility('new')}
@@ -1165,6 +1178,7 @@ const Profile = () => {
                           onChange={handlePasswordChange}
                           className="pl-10 pr-10"
                           placeholder="Confirm new password"
+                          autoComplete="new-password"
                         />
                         <button
                           type="button"
