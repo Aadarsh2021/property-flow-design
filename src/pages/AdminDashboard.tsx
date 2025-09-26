@@ -497,6 +497,13 @@ const AdminDashboard: React.FC = () => {
           </div>
         )}
 
+        {/* Main Content Tabs - Moved to Top */}
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
+          <TabsList className="w-full max-w-md mx-auto mb-8">
+            <TabsTrigger value="dashboard" className="flex-1">Dashboard</TabsTrigger>
+            <TabsTrigger value="user-management" className="flex-1">User Management</TabsTrigger>
+          </TabsList>
+
         {/* Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <Card>
@@ -631,13 +638,6 @@ const AdminDashboard: React.FC = () => {
             </CardContent>
           </Card>
         </div>
-
-        {/* Main Content Tabs */}
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-            <TabsTrigger value="user-management">User Management</TabsTrigger>
-          </TabsList>
 
           <TabsContent value="dashboard" className="space-y-6">
             {/* Dashboard Content - No sub-tabs */}
