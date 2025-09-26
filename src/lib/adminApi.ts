@@ -166,18 +166,22 @@ class AdminApiService {
   /**
    * Get all dashboard data in a single request (BATCH API)
    */
-  async getDashboardData(limit: number = 10): Promise<{
+  async getDashboardData(limit: number = 10, timestamp?: number): Promise<{
     stats: DashboardStats;
     users: UsersResponse;
     health: SystemHealth;
     pendingUsers: User[];
   }> {
+    const url = timestamp 
+      ? `/admin/dashboard-data?limit=${limit}&_t=${timestamp}`
+      : `/admin/dashboard-data?limit=${limit}`;
+    
     return this.makeRequest<{
       stats: DashboardStats;
       users: UsersResponse;
       health: SystemHealth;
       pendingUsers: User[];
-    }>(`/admin/dashboard-data?limit=${limit}`);
+    }>(url);
   }
 
   /**
