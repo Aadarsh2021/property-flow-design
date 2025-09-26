@@ -471,7 +471,10 @@ const AdminDashboard: React.FC = () => {
       // Force refresh by adding timestamp to bypass cache
       const timestamp = Date.now();
       const dashboardData = await adminApi.getDashboardData(10, timestamp);
-      setDashboardData(dashboardData);
+      
+      // Update all state variables
+      setStats(dashboardData.stats);
+      setSystemHealth(dashboardData.health);
       
       // Update users array
       if (dashboardData.users && dashboardData.users.users) {
@@ -526,7 +529,10 @@ const AdminDashboard: React.FC = () => {
       // Force refresh by adding timestamp to bypass cache
       const timestamp = Date.now();
       const dashboardData = await adminApi.getDashboardData(10, timestamp);
-      setDashboardData(dashboardData);
+      
+      // Update all state variables
+      setStats(dashboardData.stats);
+      setSystemHealth(dashboardData.health);
       
       // Update users array
       if (dashboardData.users && dashboardData.users.users) {
