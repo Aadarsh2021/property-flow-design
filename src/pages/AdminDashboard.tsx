@@ -66,13 +66,24 @@ const AdminDashboard: React.FC = () => {
   const [disapprovingUser, setDisapprovingUser] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [autoRefreshInterval, setAutoRefreshInterval] = useState<NodeJS.Timeout | null>(null);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const navigate = useNavigate();
   const { isLoggedIn, logout, checkSession } = useAdminAuth();
 
   // Handle tab change with better UX
   const handleTabChange = (newTab: string) => {
     console.log(`📊 ADMIN: Tab changed from ${activeTab} to ${newTab}`);
+    if (newTab === 'user-management') {
+      // When switching to user-management, default to pending tab
+      setActiveTab('pending');
+    } else {
+      setActiveTab(newTab);
+    }
+  };
+
+  // Handle sub-tab change for user management
+  const handleSubTabChange = (newTab: string) => {
+    console.log(`📊 ADMIN: Sub-tab changed to ${newTab}`);
     setActiveTab(newTab);
   };
 
@@ -624,17 +635,13 @@ const AdminDashboard: React.FC = () => {
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
           <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="pending">Pending Approval ({pendingUsers.length})</TabsTrigger>
-            <TabsTrigger value="users">Users</TabsTrigger>
-            {/* Transactions tab removed - not implemented */}
-            <TabsTrigger value="settings">Settings</TabsTrigger>
+            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="user-management">User Management</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="overview" className="space-y-6">
+          <TabsContent value="dashboard" className="space-y-6">
+            {/* Dashboard Content - No sub-tabs */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Recent Activity feature removed */}
-
               {/* System Status */}
               <Card>
                 <CardHeader>
@@ -751,214 +758,208 @@ const AdminDashboard: React.FC = () => {
             </div>
           </TabsContent>
 
-          <TabsContent value="pending">
-            <Card>
-              <CardHeader>
-                <CardTitle>Pending User Approvals</CardTitle>
-                <CardDescription>
-                  Review and approve new user registrations
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loadingStates.pendingUsers ? (
-                  <div className="space-y-4">
-                    {[...Array(3)].map((_, i) => (
-                      <div key={i} className="flex items-center justify-between p-4 border rounded-lg bg-gray-50">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse"></div>
-                          <div className="space-y-2">
-                            <div className="h-4 bg-gray-200 rounded w-32 animate-pulse"></div>
-                            <div className="h-3 bg-gray-200 rounded w-48 animate-pulse"></div>
-                            <div className="h-3 bg-gray-200 rounded w-24 animate-pulse"></div>
-                            <div className="h-3 bg-gray-200 rounded w-28 animate-pulse"></div>
-                          </div>
-                        </div>
-                        <div className="flex space-x-2">
-                          <div className="h-8 bg-gray-200 rounded w-16 animate-pulse"></div>
-                          <div className="h-8 bg-gray-200 rounded w-20 animate-pulse"></div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {pendingUsers.length > 0 ? (
-                      <div className="space-y-3">
-                        {pendingUsers.map((user) => (
-                        <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg bg-yellow-50">
-                          <div className="flex items-center space-x-4">
-                            <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
-                              <Clock className="h-5 w-5 text-yellow-600" />
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-900">{user.name || 'No Name'}</p>
-                              <p className="text-sm text-gray-500">{user.email}</p>
-                              <p className="text-xs text-gray-400">
-                                {user.city && user.state ? `${user.city}, ${user.state}` : 'Location not set'}
-                              </p>
-                              <p className="text-xs text-yellow-600">
-                                Registered: {new Date(user.created_at).toLocaleDateString()}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex space-x-2">
-                            <Button
-                              onClick={() => handleApproveUser(user.id, user.name || user.email)}
-                              variant="outline"
-                              size="sm"
-                              disabled={approvingUser === user.id}
-                              className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                            >
-                              <CheckCircle className="h-4 w-4 mr-1" />
-                              {approvingUser === user.id ? 'Approving...' : 'Approve'}
-                            </Button>
-                            <Button
-                              onClick={() => handleDisapproveUser(user.id, user.name || user.email)}
-                              variant="outline"
-                              size="sm"
-                              disabled={disapprovingUser === user.id}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <AlertCircle className="h-4 w-4 mr-1" />
-                              {disapprovingUser === user.id ? 'Disapproving...' : 'Disapprove'}
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-                      <p className="text-gray-500">No pending user approvals</p>
-                      <p className="text-sm text-gray-400">All users have been reviewed</p>
-                    </div>
-                  )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+          <TabsContent value="user-management" className="space-y-6">
+            {/* User Management with sub-tabs */}
+            <Tabs value={activeTab === 'pending' || activeTab === 'users' ? activeTab : 'pending'} onValueChange={handleSubTabChange}>
+              <TabsList>
+                <TabsTrigger value="pending">Pending Approval ({pendingUsers.length})</TabsTrigger>
+                <TabsTrigger value="users">Users</TabsTrigger>
+              </TabsList>
 
-          <TabsContent value="users">
-            <Card>
-              <CardHeader>
-                <CardTitle>User Management</CardTitle>
-                <CardDescription>
-                  Manage users and their permissions
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loadingStates.users ? (
-                  <div className="space-y-4">
-                    {[...Array(5)].map((_, i) => (
-                      <div key={i} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse"></div>
-                          <div className="space-y-2">
-                            <div className="h-4 bg-gray-200 rounded w-32 animate-pulse"></div>
-                            <div className="h-3 bg-gray-200 rounded w-48 animate-pulse"></div>
-                            <div className="h-3 bg-gray-200 rounded w-24 animate-pulse"></div>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-4">
-                          <div className="text-right space-y-2">
-                            <div className="h-3 bg-gray-200 rounded w-20 animate-pulse"></div>
-                            <div className="h-3 bg-gray-200 rounded w-16 animate-pulse"></div>
-                          </div>
-                          <div className="flex space-x-2">
-                            <div className="h-8 bg-gray-200 rounded w-16 animate-pulse"></div>
-                            <div className="h-8 bg-gray-200 rounded w-20 animate-pulse"></div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {users.length > 0 ? (
-                      <div className="space-y-3">
-                        {users.map((user) => (
-                        <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
-                          <div className="flex items-center space-x-4">
-                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                              <Users className="h-5 w-5 text-blue-600" />
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-900">{user.name || 'No Name'}</p>
-                              <p className="text-sm text-gray-500">{user.email}</p>
-                              <p className="text-xs text-gray-400">
-                                {user.city && user.state ? `${user.city}, ${user.state}` : 'Location not set'}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-4">
-                            <div className="text-right">
-                              <div className="flex space-x-4 text-sm text-gray-500">
-                                <span>{user.partyCount} parties</span>
-                                <span>{user.transactionCount} transactions</span>
+              <TabsContent value="pending">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Pending User Approvals</CardTitle>
+                    <CardDescription>
+                      Review and approve new user registrations
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingStates.pendingUsers ? (
+                      <div className="space-y-4">
+                        {[...Array(3)].map((_, i) => (
+                          <div key={i} className="flex items-center justify-between p-4 border rounded-lg bg-gray-50">
+                            <div className="flex items-center space-x-4">
+                              <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse"></div>
+                              <div className="space-y-2">
+                                <div className="h-4 bg-gray-200 rounded w-32 animate-pulse"></div>
+                                <div className="h-3 bg-gray-200 rounded w-48 animate-pulse"></div>
+                                <div className="h-3 bg-gray-200 rounded w-24 animate-pulse"></div>
+                                <div className="h-3 bg-gray-200 rounded w-28 animate-pulse"></div>
                               </div>
-                              <p className="text-xs text-gray-400">
-                                Joined {new Date(user.created_at).toLocaleDateString()}
-                              </p>
                             </div>
                             <div className="flex space-x-2">
-                              <Button
-                                onClick={() => handleViewPasswordDetails(user)}
-                                variant="outline"
-                                size="sm"
-                                className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                              >
-                                <Eye className="h-4 w-4 mr-1" />
-                                View Password
-                              </Button>
-                              <Button
-                                onClick={() => handleResetPassword(user)}
-                                variant="outline"
-                                size="sm"
-                                disabled={resettingPassword === user.id}
-                                className="text-blue-600 hover:text-blue-700"
-                              >
-                                <Key className="h-4 w-4 mr-1" />
-                                {resettingPassword === user.id ? 'Resetting...' : 'Reset Password'}
-                              </Button>
-                              <Button
-                                onClick={() => handleDeleteUser(user.id, user.name || user.email)}
-                                variant="outline"
-                                size="sm"
-                                disabled={deletingUser === user.id}
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                              >
-                                <Trash2 className="h-4 w-4 mr-1" />
-                                {deletingUser === user.id ? 'Deleting...' : 'Delete'}
-                              </Button>
+                              <div className="h-8 bg-gray-200 rounded w-16 animate-pulse"></div>
+                              <div className="h-8 bg-gray-200 rounded w-20 animate-pulse"></div>
                             </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
                     ) : (
-                      <p className="text-gray-500 text-center py-8">No users found</p>
+                      <div className="space-y-4">
+                        {pendingUsers.length > 0 ? (
+                          <div className="space-y-3">
+                            {pendingUsers.map((user) => (
+                            <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg bg-yellow-50">
+                              <div className="flex items-center space-x-4">
+                                <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
+                                  <Clock className="h-5 w-5 text-yellow-600" />
+                                </div>
+                                <div>
+                                  <p className="font-medium text-gray-900">{user.name || 'No Name'}</p>
+                                  <p className="text-sm text-gray-500">{user.email}</p>
+                                  <p className="text-xs text-gray-400">
+                                    {user.city && user.state ? `${user.city}, ${user.state}` : 'Location not set'}
+                                  </p>
+                                  <p className="text-xs text-yellow-600">
+                                    Registered: {new Date(user.created_at).toLocaleDateString()}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex space-x-2">
+                                <Button
+                                  onClick={() => handleApproveUser(user.id, user.name || user.email)}
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={approvingUser === user.id}
+                                  className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                >
+                                  <CheckCircle className="h-4 w-4 mr-1" />
+                                  {approvingUser === user.id ? 'Approving...' : 'Approve'}
+                                </Button>
+                                <Button
+                                  onClick={() => handleDisapproveUser(user.id, user.name || user.email)}
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={disapprovingUser === user.id}
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  <AlertCircle className="h-4 w-4 mr-1" />
+                                  {disapprovingUser === user.id ? 'Disapproving...' : 'Disapprove'}
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8">
+                          <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                          <p className="text-gray-500">No pending user approvals</p>
+                          <p className="text-sm text-gray-400">All users have been reviewed</p>
+                        </div>
+                      )}
+                      </div>
                     )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
-          {/* Transaction Management tab removed - not implemented - cleaned up */}
-
-          <TabsContent value="settings">
-            <Card>
-              <CardHeader>
-                <CardTitle>System Settings</CardTitle>
-                <CardDescription>
-                  Configure system-wide settings and preferences
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-500">System settings feature coming soon.</p>
-              </CardContent>
-            </Card>
+              <TabsContent value="users">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>User Management</CardTitle>
+                    <CardDescription>
+                      Manage users and their permissions
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingStates.users ? (
+                      <div className="space-y-4">
+                        {[...Array(5)].map((_, i) => (
+                          <div key={i} className="flex items-center justify-between p-4 border rounded-lg">
+                            <div className="flex items-center space-x-4">
+                              <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse"></div>
+                              <div className="space-y-2">
+                                <div className="h-4 bg-gray-200 rounded w-32 animate-pulse"></div>
+                                <div className="h-3 bg-gray-200 rounded w-48 animate-pulse"></div>
+                                <div className="h-3 bg-gray-200 rounded w-24 animate-pulse"></div>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-4">
+                              <div className="text-right space-y-2">
+                                <div className="h-3 bg-gray-200 rounded w-20 animate-pulse"></div>
+                                <div className="h-3 bg-gray-200 rounded w-16 animate-pulse"></div>
+                              </div>
+                              <div className="flex space-x-2">
+                                <div className="h-8 bg-gray-200 rounded w-16 animate-pulse"></div>
+                                <div className="h-8 bg-gray-200 rounded w-20 animate-pulse"></div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {users.length > 0 ? (
+                          <div className="space-y-3">
+                            {users.map((user) => (
+                            <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
+                              <div className="flex items-center space-x-4">
+                                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                                  <Users className="h-5 w-5 text-blue-600" />
+                                </div>
+                                <div>
+                                  <p className="font-medium text-gray-900">{user.name || 'No Name'}</p>
+                                  <p className="text-sm text-gray-500">{user.email}</p>
+                                  <p className="text-xs text-gray-400">
+                                    {user.city && user.state ? `${user.city}, ${user.state}` : 'Location not set'}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-4">
+                                <div className="text-right">
+                                  <div className="flex space-x-4 text-sm text-gray-500">
+                                    <span>{user.partyCount} parties</span>
+                                    <span>{user.transactionCount} transactions</span>
+                                  </div>
+                                  <p className="text-xs text-gray-400">
+                                    Joined {new Date(user.created_at).toLocaleDateString()}
+                                  </p>
+                                </div>
+                                <div className="flex space-x-2">
+                                  <Button
+                                    onClick={() => handleViewPasswordDetails(user)}
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                  >
+                                    <Eye className="h-4 w-4 mr-1" />
+                                    View Password
+                                  </Button>
+                                  <Button
+                                    onClick={() => handleResetPassword(user)}
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={resettingPassword === user.id}
+                                    className="text-blue-600 hover:text-blue-700"
+                                  >
+                                    <Key className="h-4 w-4 mr-1" />
+                                    {resettingPassword === user.id ? 'Resetting...' : 'Reset Password'}
+                                  </Button>
+                                  <Button
+                                    onClick={() => handleDeleteUser(user.id, user.name || user.email)}
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={deletingUser === user.id}
+                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-1" />
+                                    {deletingUser === user.id ? 'Deleting...' : 'Delete'}
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        ) : (
+                          <p className="text-gray-500 text-center py-8">No users found</p>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
           </TabsContent>
         </Tabs>
       </div>
