@@ -462,23 +462,15 @@ const AdminDashboard: React.FC = () => {
       const result = await adminApi.revokeUser(userId);
       console.log('✅ Revoke API result:', result);
       
-      // Clear cache for users data to ensure fresh data
-      console.log('💾 CACHE: Clearing users cache after revocation');
-      clearCacheByPattern('.*admin.*');
+      // Simple cache clear and refresh
       adminApi.clearCache();
-      adminApi.clearCacheByPattern('.*rejected.*');
-      
-      // Refresh the data immediately but maintain current tab
-      console.log('🔄 Refreshing dashboard data after revocation');
       await loadDashboardData(false);
-      setLastRefresh(new Date());
       
-      // Switch to rejected users tab to show the revoked user
-      console.log('🔄 Switching to rejected users tab');
+      // Switch to rejected users tab
       setActiveTab('user-management');
       setActiveSubTab('rejected');
       
-      console.log('✅ Revocation completed, rejected users count:', rejectedUsers.length);
+      console.log('✅ Revocation completed');
       alert('User revoked successfully and moved to rejected users');
     } catch (err) {
       console.error('❌ Failed to revoke user:', err);
@@ -501,23 +493,15 @@ const AdminDashboard: React.FC = () => {
       const result = await adminApi.reapproveUser(userId);
       console.log('✅ Re-approve API result:', result);
       
-      // Clear cache for users data to ensure fresh data
-      console.log('💾 CACHE: Clearing users cache after re-approval');
-      clearCacheByPattern('.*admin.*');
+      // Simple cache clear and refresh
       adminApi.clearCache();
-      adminApi.clearCacheByPattern('.*rejected.*');
-      
-      // Refresh the data immediately but maintain current tab
-      console.log('🔄 Refreshing dashboard data after re-approval');
       await loadDashboardData(false);
-      setLastRefresh(new Date());
       
-      // Switch to users tab to show the re-approved user
-      console.log('🔄 Switching to users tab');
+      // Switch to users tab
       setActiveTab('user-management');
       setActiveSubTab('users');
       
-      console.log('✅ Re-approval completed, users count:', users.length);
+      console.log('✅ Re-approval completed');
       alert('User re-approved successfully and moved back to approved users');
     } catch (err) {
       console.error('❌ Failed to re-approve user:', err);
