@@ -456,9 +456,11 @@ const AdminDashboard: React.FC = () => {
 
     try {
       setRevokingUser(userId);
+      console.log('🔄 Revoking user:', userId, userName);
       
       // Call the revoke user API
-      await adminApi.revokeUser(userId);
+      const result = await adminApi.revokeUser(userId);
+      console.log('✅ Revoke API result:', result);
       
       // Clear cache for users data to ensure fresh data
       console.log('💾 CACHE: Clearing users cache after revocation');
@@ -467,16 +469,19 @@ const AdminDashboard: React.FC = () => {
       adminApi.clearCacheByPattern('.*rejected.*');
       
       // Refresh the data immediately but maintain current tab
+      console.log('🔄 Refreshing dashboard data after revocation');
       await loadDashboardData(false);
       setLastRefresh(new Date());
       
       // Switch to rejected users tab to show the revoked user
+      console.log('🔄 Switching to rejected users tab');
       setActiveTab('user-management');
       setActiveSubTab('rejected');
       
+      console.log('✅ Revocation completed, rejected users count:', rejectedUsers.length);
       alert('User revoked successfully and moved to rejected users');
     } catch (err) {
-      console.error('Failed to revoke user:', err);
+      console.error('❌ Failed to revoke user:', err);
       alert('Failed to revoke user. Please try again.');
     } finally {
       setRevokingUser(null);
