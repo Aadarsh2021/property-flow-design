@@ -465,10 +465,30 @@ const AdminDashboard: React.FC = () => {
       // Simple cache clear and refresh
       adminApi.clearCache();
       
-      // Add small delay to ensure backend cache is cleared
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Add longer delay to ensure backend cache is cleared
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
-      await loadDashboardData(false);
+      // Force refresh by adding timestamp to bypass cache
+      const timestamp = Date.now();
+      const dashboardData = await adminApi.getDashboardData(10, timestamp);
+      setDashboardData(dashboardData);
+      
+      // Update users array
+      if (dashboardData.users && dashboardData.users.users) {
+        setUsers(dashboardData.users.users);
+      } else if (dashboardData.users && Array.isArray(dashboardData.users)) {
+        setUsers(dashboardData.users);
+      }
+      
+      // Update pending users
+      if (dashboardData.pendingUsers) {
+        setPendingUsers(dashboardData.pendingUsers);
+      }
+      
+      // Update rejected users
+      if (dashboardData.rejectedUsers) {
+        setRejectedUsers(dashboardData.rejectedUsers);
+      }
       
       // Switch to rejected users tab
       setActiveTab('user-management');
