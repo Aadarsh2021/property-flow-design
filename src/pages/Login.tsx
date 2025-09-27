@@ -265,6 +265,13 @@ const Login = () => {
           variant: "destructive"
         });
         return;
+      } else if (response.message && response.message.includes('revoked by the admin')) {
+        toast({
+          title: "🚫 Account Revoked",
+          description: "Your account has been revoked by the admin. Please contact support for assistance.",
+          variant: "destructive"
+        });
+        return;
       } else {
         setError(response.message || 'Google login failed');
       }
@@ -343,6 +350,14 @@ const Login = () => {
         toast({
           title: "⏳ Account Pending Approval",
           description: "Your account is pending admin approval. Please wait for approval before logging in.",
+          variant: "destructive"
+        });
+        return;
+      } else if (response.message && response.message.includes('revoked by the admin')) {
+        // Show revoked account message
+        toast({
+          title: "🚫 Account Revoked",
+          description: "Your account has been revoked by the admin. Please contact support for assistance.",
           variant: "destructive"
         });
         return;
@@ -470,6 +485,13 @@ const Login = () => {
           toast({
             title: "⏳ Account Pending Approval",
             description: "Your account is pending admin approval. Please wait for approval before logging in.",
+            variant: "destructive"
+          });
+        } else if (response.message && response.message.includes('revoked by the admin')) {
+          // Show revoked account message
+          toast({
+            title: "🚫 Account Revoked",
+            description: "Your account has been revoked by the admin. Please contact support for assistance.",
             variant: "destructive"
           });
         }
