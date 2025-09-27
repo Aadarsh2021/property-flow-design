@@ -149,16 +149,24 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
             throw new Error('Authentication failed. Please login again.');
           }
           
-          // For 403, check if user is revoked
+          // For 403, check if user is revoked or pending approval
           if (response.status === 403) {
+            console.log('🔍 403 Error Response:', errorData);
             // Check if this is a revoked user response
             if (errorData && errorData.isRevoked) {
+              console.log('🚫 User is revoked, clearing auth and redirecting');
               // User is revoked, clear auth and redirect to login
               localStorage.removeItem('token');
               localStorage.removeItem('user');
               window.location.href = '/login';
               throw new Error('Your account has been revoked by the admin. Please contact support for assistance.');
             }
+            // Check if this is a pending approval response
+            if (errorData && errorData.requiresApproval) {
+              console.log('⏳ User is pending approval');
+              throw new Error('Your account is pending admin approval. Please wait for approval before logging in.');
+            }
+            console.log('❌ 403 Error - Access denied');
             throw new Error('Access denied. You do not have permission to perform this action.');
           }
           
@@ -539,6 +547,28 @@ export const finalTrialBalanceAPI = {
     }>('/final-trial-balance/refresh', {
       method: 'GET',
     });
+  },
+  // Get balance for a specific party
+  getPartyBalance: (partyName: string) => {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = user.id || 'anonymous';
+    const cacheKey = `party-balance-${userId}-${partyName}`;
+    
+    return cachedApiCall(
+      cacheKey,
+      () => {
+        console.log('📊 Fetching party balance for:', partyName);
+        return apiCall<{
+          partyName: string;
+          balance: number;
+          creditTotal: number;
+          debitTotal: number;
+        }>(`/final-trial-balance/party/${encodeURIComponent(partyName)}`, {
+          method: 'GET',
+        });
+      },
+      2 * 60 * 1000 // 2 minutes cache - party balances change moderately
+    );
   },
   // Optimized batch API for getting multiple party balances at once
   getBatchBalances: (partyNames: string[]) => {

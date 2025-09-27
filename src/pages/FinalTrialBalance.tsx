@@ -75,17 +75,21 @@ const FinalTrialBalance = () => {
     setPartiesLoading(true);
     try {
       const response = await finalTrialBalanceAPI.getAll();
-      if (response.success && response.data) {
+      console.log('🔍 Trial balance API response:', response);
+      
+      if (response.success && response.data && response.data.trialBalance) {
         // Extract parties from trial balance data
-        const partiesFromData = response.data.map((entry: any) => ({
-          id: entry.id,
-          party_name: entry.party_name,
-          sr_no: entry.sr_no || 0,
-          address: entry.address || '',
-          phone: entry.phone || '',
-          email: entry.email || ''
+        const partiesFromData = response.data.trialBalance.map((entry: any) => ({
+          _id: entry.partyName, // Use partyName as id since it's unique
+          party_name: entry.partyName,
+          email: '', // Not available in trial balance data
+          phone: '' // Not available in trial balance data
         }));
+        console.log(`📊 Loaded ${partiesFromData.length} parties from trial balance data`);
         setParties(partiesFromData);
+      } else {
+        console.warn('⚠️ No trial balance data found in response:', response);
+        setParties([]);
       }
     } catch (error) {
       console.error('Error loading parties:', error);
@@ -94,6 +98,7 @@ const FinalTrialBalance = () => {
         description: "Failed to load parties data",
         variant: "destructive"
       });
+      setParties([]);
     } finally {
       setPartiesLoading(false);
     }
@@ -261,22 +266,22 @@ const FinalTrialBalance = () => {
     // Loading trial balance
     const startTime = performance.now();
     try {
-      // Get all parties from Supabase
-      const allParties = supabaseParties || [];
+      // Get all parties from state
+      const allParties = parties || [];
       console.log(`📊 Loaded ${allParties.length} parties for trial balance`);
       
       // Limit to first 50 parties for better performance
       const limitedParties = allParties.slice(0, 50);
       
-      // Get balances for all parties using direct Supabase
+      // Get balances for all parties using API
       const partyBalances = await Promise.all(
         limitedParties.map(async (party) => {
           try {
-            // Use API call instead of direct Supabase
+            // Use API call to get party balance
             const balanceResponse = await finalTrialBalanceAPI.getPartyBalance(party.party_name);
-            const balance = balanceResponse.success ? balanceResponse.data : 0;
+            const balance = balanceResponse.success ? balanceResponse.data.balance : 0;
             return {
-              name: party.name || party.party_name || party.partyName, // Use API name field first, fallback to party_name
+              name: party.party_name, // Use party_name from the party object
               closingBalance: balance
             };
           } catch (error) {
@@ -353,12 +358,14 @@ const FinalTrialBalance = () => {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, parties]);
 
-  // Load trial balance data on component mount
+  // Load trial balance data when parties are loaded
   useEffect(() => {
-    loadTrialBalance();
-  }, [loadTrialBalance]);
+    if (parties.length > 0) {
+      loadTrialBalance();
+    }
+  }, [parties, loadTrialBalance]);
 
   // Auto-refresh trial balance every 30 seconds for real-time updates (only in development)
   useEffect(() => {
