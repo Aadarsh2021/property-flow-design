@@ -30,6 +30,7 @@ interface AuthContextType {
   needsInitialSetup: (user: User | null) => boolean;
   isApproved: boolean;
   requiresApproval: boolean;
+  isRevoked: boolean;
   checkAuthStatus: () => Promise<void>;
 }
 
@@ -55,6 +56,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [isApproved, setIsApproved] = useState(false);
   const [requiresApproval, setRequiresApproval] = useState(false);
+  const [isRevoked, setIsRevoked] = useState(false);
 
   // Initialize auth state from localStorage and check for redirect results
   useEffect(() => {
@@ -127,6 +129,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUser(userWithId);
       setIsApproved(userWithId.is_approved || true); // Use Supabase field name
       setRequiresApproval(userWithId.is_approved === false); // Only true if explicitly false
+      setIsRevoked(userWithId.status === 'rejected'); // Check if user is revoked
       localStorage.setItem('token', newToken);
       localStorage.setItem('user', JSON.stringify(userWithId));
       
@@ -157,6 +160,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUser(null);
       setIsApproved(false);
       setRequiresApproval(false);
+      setIsRevoked(false);
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       
@@ -181,6 +185,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setToken(null);
         setIsApproved(false);
         setRequiresApproval(false);
+        setIsRevoked(false);
         return;
       }
 
@@ -208,6 +213,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             setUser(updatedUser);
             setIsApproved(updatedUser.is_approved);
             setRequiresApproval(updatedUser.requiresApproval);
+            setIsRevoked(updatedUser.status === 'rejected');
             return;
           } else {
             // User not found or unauthorized - likely disapproved
@@ -217,6 +223,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             setToken(null);
             setIsApproved(false);
             setRequiresApproval(false);
+            setIsRevoked(false);
             return;
           }
         } catch (apiError) {
@@ -227,6 +234,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Update approval status from cached data
       setIsApproved(userData.is_approved || true);
       setRequiresApproval(userData.is_approved === false);
+      setIsRevoked(userData.status === 'rejected');
       
       // Update user state
       setUser(userData);
@@ -241,6 +249,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setToken(null);
       setIsApproved(false);
       setRequiresApproval(false);
+      setIsRevoked(false);
     }
   };
 
@@ -254,6 +263,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     needsInitialSetup,
     isApproved,
     requiresApproval,
+    isRevoked,
     checkAuthStatus
   };
 
