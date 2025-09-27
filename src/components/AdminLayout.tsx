@@ -57,9 +57,11 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-8">
               <Link to="/admin/dashboard" className="flex items-center gap-2">
-                <div className="w-6 h-6 sm:w-8 sm:h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">EL</span>
-                </div>
+                <img 
+                  src="/image.png" 
+                  alt="Escrow Ledger Logo" 
+                  className="w-6 h-6 sm:w-8 sm:h-8 object-contain"
+                />
                 <span className="text-base sm:text-xl font-bold">Escrow Ledger Admin</span>
               </Link>
 
