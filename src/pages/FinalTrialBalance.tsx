@@ -202,8 +202,17 @@ const FinalTrialBalance = () => {
       phone: ''
     }));
     
-    setParties(extractedParties);
-    setFilteredParties(extractedParties);
+    // Only update if parties have actually changed to prevent loops
+    setParties(prevParties => {
+      const hasChanged = prevParties.length !== extractedParties.length || 
+        prevParties.some((party, index) => party.party_name !== extractedParties[index]?.party_name);
+      
+      if (hasChanged) {
+        setFilteredParties(extractedParties);
+        return extractedParties;
+      }
+      return prevParties;
+    });
   }, [trialBalanceData]);
 
 
@@ -261,13 +270,13 @@ const FinalTrialBalance = () => {
   }, [partyName, parties]);
 
   // Load trial balance data using direct Supabase
-  const loadTrialBalance = useCallback(async (forceRefresh = false) => {
+  const loadTrialBalance = useCallback(async (forceRefresh = false, partiesToProcess?: Party[]) => {
     setLoading(true);
     // Loading trial balance
     const startTime = performance.now();
     try {
-      // Get all parties from state
-      const allParties = parties || [];
+      // Use provided parties or current state
+      const allParties = partiesToProcess || parties || [];
       console.log(`📊 Loaded ${allParties.length} parties for trial balance`);
       
       // Limit to first 50 parties for better performance
@@ -363,9 +372,9 @@ const FinalTrialBalance = () => {
   // Load trial balance data when parties are loaded
   useEffect(() => {
     if (parties.length > 0) {
-      loadTrialBalance();
+      loadTrialBalance(false, parties);
     }
-  }, [parties, loadTrialBalance]);
+  }, [parties.length]); // Only depend on parties.length, not the entire parties array
 
   // Auto-refresh trial balance every 30 seconds for real-time updates (only in development)
   useEffect(() => {
@@ -377,12 +386,14 @@ const FinalTrialBalance = () => {
 
       return () => clearInterval(autoRefreshInterval);
     }
-  }, [loadTrialBalance]);
+  }, []); // Empty dependency array to prevent recreation
 
   // Extract parties from trial balance when data is loaded
   useEffect(() => {
-    extractPartiesFromTrialBalance();
-  }, [extractPartiesFromTrialBalance]);
+    if (trialBalanceData) {
+      extractPartiesFromTrialBalance();
+    }
+  }, [trialBalanceData]); // Only depend on trialBalanceData, not the callback
 
   // Safely extract arrays from the data structure
   const allCreditEntries = trialBalanceData?.creditEntries || [];
@@ -455,7 +466,7 @@ const FinalTrialBalance = () => {
     
     setPartyName('');
     setSelectedEntries([]);
-    await loadTrialBalance(true); // Force refresh for real-time updates
+    await loadTrialBalance(true, parties); // Force refresh for real-time updates
     toast({
       title: "Success",
       description: "Trial balance force refreshed with latest data",
@@ -469,7 +480,7 @@ const FinalTrialBalance = () => {
   const handleForceRefresh = async () => {
     setPartyName('');
     setSelectedEntries([]);
-    await loadTrialBalance(true); // Force refresh bypassing cache
+    await loadTrialBalance(true, parties); // Force refresh bypassing cache
     toast({
       title: "Real-time Update",
       description: "Trial balance updated with latest ledger changes",
