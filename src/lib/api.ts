@@ -8,17 +8,29 @@
 import { ApiResponse, NewPartyData, NewParty, Party, LedgerEntry, LedgerEntryInput, UserSettings, TrialBalanceEntry, GoogleUserData, GoogleAuthResponse } from '../types';
 import { cachedApiCall } from './apiCache';
 
-// API Configuration
+// API Configuration with better error handling
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software.vercel.app/api';
 const API_TIMEOUT = parseInt(import.meta.env.VITE_API_TIMEOUT || '8000'); // Increased to 8s for backend stability
 const API_RETRY_ATTEMPTS = parseInt(import.meta.env.VITE_API_RETRY_ATTEMPTS || '3'); // Increased to 3 for better reliability
 const API_RETRY_DELAY = parseInt(import.meta.env.VITE_API_RETRY_DELAY || '1000'); // Increased to 1s for stability
 
-// Ultra-aggressive connection pooling
+// Add environment detection
+const isProduction = import.meta.env.PROD;
+const isDevelopment = import.meta.env.DEV;
+
+console.log('🔧 Environment Info:', {
+  mode: import.meta.env.MODE,
+  isProduction,
+  isDevelopment,
+  apiBaseUrl: API_BASE_URL
+});
+
+// Optimized connection pooling for better performance
 const activeRequests = new Set<string>();
-const MAX_CONCURRENT_REQUESTS = 2; // Reduced from 3 to 2
+const MAX_CONCURRENT_REQUESTS = 6; // Increased for better throughput
 const requestQueue = new Map<string, Promise<any>>();
 const requestDeduplication = new Map<string, Promise<any>>(); // Prevent duplicate requests
+const requestCache = new Map<string, { data: any; timestamp: number; ttl: number }>(); // In-memory cache
 
 // Validate API configuration
 if (!API_BASE_URL) {
@@ -32,8 +44,8 @@ console.log('🔧 API Configuration:', {
   retryDelay: API_RETRY_DELAY
 });
 
-// Request throttling
-const REQUEST_THROTTLE_MS = 100; // 100ms between requests
+// Request throttling - reduced for better performance
+const REQUEST_THROTTLE_MS = 50; // 50ms between requests
 
 const getAuthToken = (): string | null => {
   return localStorage.getItem('token');
@@ -67,6 +79,15 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
   
   // Create a unique key for this request
   const requestKey = `${endpoint}-${JSON.stringify(options)}`;
+  
+  // Check in-memory cache first for GET requests
+  if (options.method === 'GET' || !options.method) {
+    const cached = requestCache.get(requestKey);
+    if (cached && Date.now() - cached.timestamp < cached.ttl) {
+      console.log('⚡ [CACHE] Returning cached response:', requestKey);
+      return cached.data;
+    }
+  }
   
   // ULTRA-AGGRESSIVE DEDUPLICATION: Check if identical request is already in progress
   if (requestDeduplication.has(requestKey)) {
@@ -197,6 +218,15 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
           requestId: config.headers?.['X-Request-ID']
         });
         
+        // Cache successful GET responses
+        if (options.method === 'GET' || !options.method) {
+          requestCache.set(requestKey, {
+            data: responseData,
+            timestamp: Date.now(),
+            ttl: 30000 // 30 seconds default cache
+          });
+        }
+        
         return responseData;
         
       } catch (error: any) {
@@ -217,7 +247,18 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
             await new Promise(resolve => setTimeout(resolve, API_RETRY_DELAY));
             continue;
           }
-          throw new Error('Network error. Please check your connection and try again.');
+          
+          // Check if this is a CORS error or backend unavailable
+          if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+            throw new Error('Backend server is currently unavailable. Please try again later or contact support.');
+          }
+          
+          // Provide more specific error messages based on the environment
+          if (isProduction) {
+            throw new Error('Unable to connect to the server. Please check your internet connection and try again.');
+          } else {
+            throw new Error(`Network error: ${error.message}. Please check if the backend server is running.`);
+          }
         }
         
         // For non-retryable errors, throw immediately
@@ -567,7 +608,7 @@ export const finalTrialBalanceAPI = {
           method: 'GET',
         });
       },
-      2 * 60 * 1000 // 2 minutes cache - party balances change moderately
+      30 * 1000 // 30 seconds cache - reduced for better real-time updates
     );
   },
   // Optimized batch API for getting multiple party balances at once
@@ -588,7 +629,7 @@ export const finalTrialBalanceAPI = {
           body: JSON.stringify({ partyNames: sortedPartyNames }),
         });
       },
-      3 * 60 * 1000 // 3 minutes cache - batch operations are expensive
+      60 * 1000 // 1 minute cache - reduced for better real-time updates
     );
   },
   generateReport: (reportData: { startDate: string; endDate: string; partyName?: string }) => {

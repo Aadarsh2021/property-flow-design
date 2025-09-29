@@ -17,12 +17,14 @@
  * @version 1.0.0
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import TopNavigation from '../components/TopNavigation';
+import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { finalTrialBalanceAPI } from '@/lib/api';
+
+// Lazy load components
+const TopNavigation = lazy(() => import('../components/TopNavigation'));
 
 interface TrialBalanceEntry {
   id: string;
@@ -68,13 +70,20 @@ const FinalTrialBalance = () => {
   const [parties, setParties] = useState<Party[]>([]);
   const [partiesLoading, setPartiesLoading] = useState(false);
 
-  // Load parties via API
+  // Load parties via API with optimized loading
   const loadParties = useCallback(async () => {
     if (!user?.id) return;
     
     setPartiesLoading(true);
     try {
-      const response = await finalTrialBalanceAPI.getAll();
+      // Use Promise.race to implement timeout for better UX
+      const response = await Promise.race([
+        finalTrialBalanceAPI.getAll(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timeout')), 10000)
+        )
+      ]) as any;
+      
       console.log('🔍 Trial balance API response:', response);
       
       if (response.success && response.data && response.data.trialBalance) {
@@ -160,7 +169,12 @@ const FinalTrialBalance = () => {
   // Load parties when component mounts or user changes
   useEffect(() => {
     if (user?.id) {
-      loadParties();
+      // Add a small delay to prevent blocking the initial render
+      const timeoutId = setTimeout(() => {
+        loadParties();
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
     }
   }, [user?.id, loadParties]);
 
@@ -282,12 +296,23 @@ const FinalTrialBalance = () => {
       // Limit to first 50 parties for better performance
       const limitedParties = allParties.slice(0, 50);
       
-      // Get balances for all parties using API
-      const partyBalances = await Promise.all(
-        limitedParties.map(async (party) => {
+      // Optimized batch processing with better error handling
+      const BATCH_SIZE = 15; // Increased batch size for better performance
+      const partyBalances = [];
+      
+      // Use Promise.allSettled for better error handling
+      for (let i = 0; i < limitedParties.length; i += BATCH_SIZE) {
+        const batch = limitedParties.slice(i, i + BATCH_SIZE);
+        const batchPromises = batch.map(async (party) => {
           try {
-            // Use API call to get party balance
-            const balanceResponse = await finalTrialBalanceAPI.getPartyBalance(party.party_name);
+            // Use API call to get party balance with timeout
+            const balanceResponse = await Promise.race([
+              finalTrialBalanceAPI.getPartyBalance(party.party_name),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Balance request timeout')), 5000)
+              )
+            ]) as any;
+            
             const balance = balanceResponse.success ? balanceResponse.data.balance : 0;
             return {
               name: party.party_name, // Use party_name from the party object
@@ -297,8 +322,16 @@ const FinalTrialBalance = () => {
             console.error(`Error getting balance for ${party.party_name}:`, error);
             return null;
           }
-        })
-      );
+        });
+        
+        const batchResults = await Promise.allSettled(batchPromises);
+        const successfulResults = batchResults
+          .filter((result): result is PromiseFulfilledResult<any> => result.status === 'fulfilled')
+          .map(result => result.value)
+          .filter(result => result !== null);
+        
+        partyBalances.push(...successfulResults);
+      }
 
       // Commission party is now automatically created for all users
       // It will be included in allParties and processed normally
@@ -372,7 +405,12 @@ const FinalTrialBalance = () => {
   // Load trial balance data when parties are loaded
   useEffect(() => {
     if (parties.length > 0) {
-      loadTrialBalance(false, parties);
+      // Add a small delay to prevent blocking the UI
+      const timeoutId = setTimeout(() => {
+        loadTrialBalance(false, parties);
+      }, 200);
+      
+      return () => clearTimeout(timeoutId);
     }
   }, [parties.length]); // Only depend on parties.length, not the entire parties array
 
@@ -386,14 +424,14 @@ const FinalTrialBalance = () => {
 
       return () => clearInterval(autoRefreshInterval);
     }
-  }, []); // Empty dependency array to prevent recreation
+  }, [loadTrialBalance]); // Include loadTrialBalance in dependencies
 
   // Extract parties from trial balance when data is loaded
   useEffect(() => {
     if (trialBalanceData) {
       extractPartiesFromTrialBalance();
     }
-  }, [trialBalanceData]); // Only depend on trialBalanceData, not the callback
+  }, [trialBalanceData, extractPartiesFromTrialBalance]); // Include callback in dependencies
 
   // Safely extract arrays from the data structure
   const allCreditEntries = trialBalanceData?.creditEntries || [];
@@ -502,7 +540,9 @@ const FinalTrialBalance = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <TopNavigation />
+      <Suspense fallback={<div className="h-16 bg-white border-b border-gray-200 animate-pulse" />}>
+        <TopNavigation />
+      </Suspense>
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -665,8 +705,46 @@ const FinalTrialBalance = () => {
             </div>
           )}
 
+          {/* Skeleton Loading for better UX */}
+          {!loading && !trialBalanceData && (
+            <div className="p-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Credit Side Skeleton */}
+                <div className="border border-gray-300 rounded-lg overflow-hidden shadow-lg">
+                  <div className="bg-green-600 text-white px-4 py-3">
+                    <h3 className="text-lg font-semibold">Credit Side - Positive Closing Balances</h3>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="animate-pulse">
+                        <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Debit Side Skeleton */}
+                <div className="border border-gray-300 rounded-lg overflow-hidden shadow-lg">
+                  <div className="bg-red-600 text-white px-4 py-3">
+                    <h3 className="text-lg font-semibold">Debit Side - Negative Closing Balances</h3>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="animate-pulse">
+                        <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Table Section */}
-          <div className="p-4">
+          {trialBalanceData && (
+            <div className="p-4">
             {/* Party Closing Balance Info */}
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="text-sm text-blue-800">
@@ -826,7 +904,8 @@ const FinalTrialBalance = () => {
                 </div>
               </div>
             )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
