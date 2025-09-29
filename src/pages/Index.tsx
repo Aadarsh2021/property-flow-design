@@ -20,7 +20,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { Link } from 'react-router-dom';
-import { Settings, FileText, BarChart3, Users, TrendingUp, DollarSign, LogIn, UserPlus, ArrowRight, Plus, ChartBar, Calculator } from 'lucide-react';
+import { Settings, FileText, BarChart3, Users, TrendingUp, DollarSign, LogIn, UserPlus, ArrowRight, Plus, Calculator } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useCompanyName } from '@/hooks/useCompanyName';
@@ -717,7 +717,7 @@ const Index = () => {
                   <p className="text-gray-600 mb-4">Manage party ledgers, transactions, and financial records</p>
                   <div className="flex items-center text-purple-600 group-hover:text-purple-700 transition-colors">
                     <span className="text-sm font-medium">View Ledger</span>
-                    <ChartBar className="w-4 h-4 ml-2 group-hover:scale-110 transition-transform" />
+                    <BarChart3 className="w-4 h-4 ml-2 group-hover:scale-110 transition-transform" />
                   </div>
           </div>
               </Link>
@@ -777,7 +777,7 @@ const Index = () => {
                 Create New Party
               </Link>
                   <Link to="/party-ledger" className="border border-white text-white px-6 py-2 rounded-md hover:bg-green-600 transition-colors font-medium flex items-center">
-                    <ChartBar className="w-4 h-4 mr-2" />
+                    <BarChart3 className="w-4 h-4 mr-2" />
                     View Party Ledger
               </Link>
             </div>

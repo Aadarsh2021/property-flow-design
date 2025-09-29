@@ -31,6 +31,8 @@ interface TrialBalanceEntry {
   type: 'credit' | 'debit';
   remarks?: string;
   date?: string;
+  party_name?: string;
+  partyName?: string;
 }
 
 interface TrialBalanceData {
@@ -71,21 +73,30 @@ const FinalTrialBalance = () => {
   // Load parties via API
   const loadParties = useCallback(async () => {
     if (!user?.id) return;
-    
+
     setPartiesLoading(true);
     try {
       const response = await finalTrialBalanceAPI.getAll();
       console.log('🔍 Trial balance API response:', response);
-      
+
       if (response.success && response.data && response.data.trialBalance) {
-        // Extract parties from trial balance data
-        const partiesFromData = response.data.trialBalance.map((entry: any) => ({
-          _id: entry.partyName, // Use partyName as id since it's unique
-          party_name: entry.partyName,
+        // Extract unique party names from trial balance data
+        const partyNames = new Set<string>();
+
+        // Add parties from trial balance data
+        response.data.trialBalance.forEach((entry: any) => {
+          partyNames.add(entry.partyName);
+        });
+
+        // Convert to party objects
+        const partiesFromData = Array.from(partyNames).map(name => ({
+          _id: name.toLowerCase().replace(/\s+/g, '-'),
+          party_name: name,
           email: '', // Not available in trial balance data
           phone: '' // Not available in trial balance data
         }));
-        console.log(`📊 Loaded ${partiesFromData.length} parties from trial balance data`);
+
+        // Parties loaded from trial balance data
         setParties(partiesFromData);
       } else {
         console.warn('⚠️ No trial balance data found in response:', response);
@@ -178,7 +189,7 @@ const FinalTrialBalance = () => {
     };
   }, []);
 
-  // Extract parties from trial balance data
+  // Extract parties from trial balance data (without setting parties state to avoid circular dependency)
   const extractPartiesFromTrialBalance = useCallback(() => {
     if (!trialBalanceData) return;
     
@@ -202,7 +213,7 @@ const FinalTrialBalance = () => {
       phone: ''
     }));
     
-    setParties(extractedParties);
+    // Only update filteredParties, not the main parties state to avoid circular dependency
     setFilteredParties(extractedParties);
   }, [trialBalanceData]);
 
@@ -260,88 +271,68 @@ const FinalTrialBalance = () => {
     }
   }, [partyName, parties]);
 
-  // Load trial balance data using direct Supabase
+  // Load trial balance data using API
   const loadTrialBalance = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     // Loading trial balance
     const startTime = performance.now();
     try {
-      // Get all parties from state
-      const allParties = parties || [];
-      console.log(`📊 Loaded ${allParties.length} parties for trial balance`);
-      
-      // Limit to first 50 parties for better performance
-      const limitedParties = allParties.slice(0, 50);
-      
-      // Get balances for all parties using API
-      const partyBalances = await Promise.all(
-        limitedParties.map(async (party) => {
-          try {
-            // Use API call to get party balance
-            const balanceResponse = await finalTrialBalanceAPI.getPartyBalance(party.party_name);
-            const balance = balanceResponse.success ? balanceResponse.data.balance : 0;
-            return {
-              name: party.party_name, // Use party_name from the party object
-              closingBalance: balance
-            };
-          } catch (error) {
-            console.error(`Error getting balance for ${party.party_name}:`, error);
-            return null;
-          }
-        })
-      );
+      // Use the API to get trial balance data directly instead of depending on parties state
+      const response = await finalTrialBalanceAPI.getAll();
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to fetch trial balance');
+      }
 
-      // Commission party is now automatically created for all users
-      // It will be included in allParties and processed normally
+      // Use the trial balance data from the API response
+      const trialBalanceResponse = response.data;
       
-      // Filter out null results and parties with zero balance
-      const validBalances = partyBalances.filter(balance => 
-        balance && balance.closingBalance !== 0
-      );
-      
-      // Valid party balances processed
-      
-      // Separate credit and debit entries
+      // Transform the API response to match our expected format
       const creditEntries: TrialBalanceEntry[] = [];
       const debitEntries: TrialBalanceEntry[] = [];
       
-      validBalances.forEach((balance, index) => {
-        if (balance.closingBalance > 0) {
-          creditEntries.push({
-            id: `credit-${balance.name}-${index}`,
-            name: balance.name,
-            amount: balance.closingBalance,
-            type: 'credit',
-            remarks: `Closing Balance for ${balance.name}`,
-            date: new Date().toISOString()
-          });
-        } else if (balance.closingBalance < 0) {
-          debitEntries.push({
-            id: `debit-${balance.name}-${index}`,
-            name: balance.name,
-            amount: Math.abs(balance.closingBalance),
-            type: 'debit',
-            remarks: `Closing Balance for ${balance.name}`,
-            date: new Date().toISOString()
-          });
-        }
-      });
-      
+      // Process trial balance entries
+      if (trialBalanceResponse && trialBalanceResponse.trialBalance) {
+        trialBalanceResponse.trialBalance.forEach((entry: any, index: number) => {
+          // If balance is positive (credit), add to credit side
+          if (entry.balance > 0) {
+            creditEntries.push({
+              id: `credit-${entry.partyName}-${index}`,
+              name: entry.partyName,
+              amount: entry.balance,
+              type: 'credit',
+              remarks: `Closing Balance for ${entry.partyName}`,
+              date: entry.lastTransactionDate || new Date().toISOString()
+            });
+          }
+          // If balance is negative (debit), add to debit side
+          else if (entry.balance < 0) {
+            debitEntries.push({
+              id: `debit-${entry.partyName}-${index}`,
+              name: entry.partyName,
+              amount: Math.abs(entry.balance), // Make positive for debit side
+              type: 'debit',
+              remarks: `Closing Balance for ${entry.partyName}`,
+              date: entry.lastTransactionDate || new Date().toISOString()
+            });
+          }
+        });
+      }
+
       // Sort by amount (largest first)
       creditEntries.sort((a, b) => b.amount - a.amount);
       debitEntries.sort((a, b) => b.amount - a.amount);
       
-      // Calculate totals
-      const creditTotal = creditEntries.reduce((sum, entry) => sum + entry.amount, 0);
-      const debitTotal = debitEntries.reduce((sum, entry) => sum + entry.amount, 0);
-      const balanceDifference = creditTotal - debitTotal;
+      // Use totals from API response summary
+      const finalCreditTotal = trialBalanceResponse?.summary?.totalCredit || 0;
+      const finalDebitTotal = trialBalanceResponse?.summary?.totalDebit || 0;
+      const finalBalanceDifference = trialBalanceResponse?.summary?.netBalance || 0;
       
       const transformedData: TrialBalanceData = {
         creditEntries,
         debitEntries,
-        creditTotal,
-        debitTotal,
-        balanceDifference
+        creditTotal: finalCreditTotal,
+        debitTotal: finalDebitTotal,
+        balanceDifference: finalBalanceDifference
       };
       
       setTrialBalanceData(transformedData);
@@ -358,14 +349,12 @@ const FinalTrialBalance = () => {
     } finally {
       setLoading(false);
     }
-  }, [toast, parties]);
+  }, [toast]);
 
-  // Load trial balance data when parties are loaded
+  // Load trial balance data when component mounts
   useEffect(() => {
-    if (parties.length > 0) {
-      loadTrialBalance();
-    }
-  }, [parties, loadTrialBalance]);
+    loadTrialBalance();
+  }, [loadTrialBalance]); // Only depend on loadTrialBalance function
 
   // Auto-refresh trial balance every 30 seconds for real-time updates (only in development)
   useEffect(() => {
@@ -381,8 +370,10 @@ const FinalTrialBalance = () => {
 
   // Extract parties from trial balance when data is loaded
   useEffect(() => {
-    extractPartiesFromTrialBalance();
-  }, [extractPartiesFromTrialBalance]);
+    if (trialBalanceData) {
+      extractPartiesFromTrialBalance();
+    }
+  }, [trialBalanceData, extractPartiesFromTrialBalance]);
 
   // Safely extract arrays from the data structure
   const allCreditEntries = trialBalanceData?.creditEntries || [];

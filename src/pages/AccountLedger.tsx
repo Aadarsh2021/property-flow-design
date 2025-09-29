@@ -1,15 +1,17 @@
-import React, { memo, useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { useCompanyName } from '@/hooks/useCompanyName';
+import { useAppDispatch, useAppSelector } from '../hooks/redux';
+import { ledgerSlice } from '../store/slices/ledgerSlice';
+import { partiesSlice } from '../store/slices/partiesSlice';
+import { uiSlice } from '../store/slices/uiSlice';
+import { partyLedgerAPI, unsettleTransactions } from '../lib/api';
+import { hasCommission, getCommissionRate, calculateCommissionAmount } from '../utils/partyUtils';
 import { useToast } from '@/hooks/use-toast';
-import { useTransactionFormNew } from '@/hooks/useTransactionFormNew';
-import { partyLedgerAPI } from '@/lib/api';
 import TopNavigation from '@/components/TopNavigation';
+import LedgerTable from '@/components/LedgerTable';
 import TransactionForm from '@/components/TransactionForm';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
+import ActionButtons from '@/components/ActionButtons';
+import PartySelector from '@/components/PartySelector';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,791 +22,966 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Loader2, RefreshCw, Search, ArrowLeft, Plus, Edit, Trash2, Printer, Download } from 'lucide-react';
-import { debounce } from 'lodash';
-import { clearCacheByPattern } from '@/lib/apiCache';
-import { 
-  isCompanyParty, 
-  isCommissionParty,
-  isMondayFinalAllowed, 
-  isPartyEditingAllowed, 
-  isPartyDeletionAllowed, 
-  isTransactionAdditionAllowed,
-  getCompanyPartyRestrictionMessage,
-  getCommissionPartyRestrictionMessage
-} from '@/lib/companyPartyUtils';
+import { Loader2 } from 'lucide-react';
 
-// Memoized table row component for performance
-const TableRow = memo(({ 
-  entry, 
-  index, 
-  isSelected, 
-  onCheckboxChange 
-}: { 
-  entry: any; 
-  index: number; 
-  isSelected: boolean; 
-  onCheckboxChange: (id: string | number, checked: boolean) => void; 
-}) => {
-  const entryId = entry.id || entry._id || entry.ti || `entry_${index}`;
-  
-  return (
-    <tr 
-      className={`hover:bg-blue-50 cursor-pointer transition-colors duration-150 ${
-        isSelected ? 'bg-blue-100' : ''
-      } ${entry.is_old_record ? 'bg-gray-50 opacity-75' : ''} ${
-        entry.isOptimistic ? 'bg-green-50 border-l-4 border-green-400 animate-pulse' : ''
-      }`}
-      onClick={() => onCheckboxChange(entryId, !isSelected)}
-    >
-      <td className="px-4 py-3 text-gray-700">
-        {new Date(entry.date).toLocaleDateString('en-GB')}
-      </td>
-      <td className="px-4 py-3 text-gray-800 font-medium">
-        <div className="flex items-center space-x-2">
-          <span>{entry.remarks}</span>
-          {entry.is_old_record && (
-            <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full font-medium">
-              Old Record
-            </span>
-          )}
-          {entry.isOptimistic && (
-            <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium animate-pulse">
-              Updating...
-            </span>
-          )}
-        </div>
-      </td>
-      <td className="px-4 py-3 text-center">
-        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-          entry.tnsType === 'CR' 
-            ? 'bg-green-100 text-green-800' 
-            : 'bg-red-100 text-red-800'
-        }`}>
-          {entry.tnsType}
-        </span>
-      </td>
-      <td className="px-4 py-3 text-center font-medium text-green-600">
-        {entry.credit || 0}
-      </td>
-      <td className="px-4 py-3 text-center font-medium text-red-600">
-        {entry.debit || 0}
-      </td>
-      <td className="px-4 py-3 text-center font-semibold">
-        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-          (entry.balance || 0) > 0 
-            ? 'bg-green-100 text-green-800' 
-            : (entry.balance || 0) < 0 
-              ? 'bg-red-100 text-red-800'
-              : 'bg-gray-100 text-gray-800'
-        }`}>
-          ₹{(entry.balance || 0).toLocaleString()}
-        </span>
-      </td>
-      <td className="px-4 py-3 text-center">
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={(e) => onCheckboxChange(entryId, e.target.checked)}
-          onClick={(e) => e.stopPropagation()}
-          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-        />
-      </td>
-      <td className="px-4 py-3 text-center text-gray-500 text-xs">
-        {entry.ti || index}
-      </td>
-    </tr>
-  );
-});
 
-TableRow.displayName = 'TableRow';
 
 const AccountLedgerComponent = () => {
-  
-  // Router hooks
-  const { partyName: initialPartyName } = useParams<{ partyName: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const { companyName } = useCompanyName(user?.id);
+  const { partyName: initialPartyName } = useParams<{ partyName: string }>();
   const { toast } = useToast();
 
-  // Loading states for better user experience
-  const [loading, setLoading] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
-  const [partiesLoading, setPartiesLoading] = useState(false);
-  const [forceUpdate, setForceUpdate] = useState(0);
+  // Redux dispatch
+  const dispatch = useAppDispatch();
 
-  // Party selection state
-  const [selectedPartyName, setSelectedPartyName] = useState(initialPartyName || 'Test Company 1');
-  const [typingPartyName, setTypingPartyName] = useState(initialPartyName || 'Test Company 1');
-  const [availableParties, setAvailableParties] = useState<any[]>([]);
-  const [allPartiesForTransaction, setAllPartiesForTransaction] = useState<any[]>([]);
+  // Redux state - actually connected now!
+  const authState = useAppSelector(state => state.auth) as any;
+  const ledgerState = useAppSelector(state => state.ledger) as any;
+  const partiesState = useAppSelector(state => state.parties) as any;
+  const uiState = useAppSelector(state => state.ui) as any;
 
-  // Handle URL parameter changes
-  useEffect(() => {
-    if (initialPartyName && initialPartyName !== selectedPartyName) {
-      const decodedPartyName = decodeURIComponent(initialPartyName);
-      setSelectedPartyName(decodedPartyName);
-      setTypingPartyName(decodedPartyName);
-    }
-  }, [initialPartyName, selectedPartyName]);
+  // Fallback values for Redux state
+  const { user, companyName } = authState || {};
+  const {
+    data: ledgerData,
+    isLoading: loading = false,
+    selectedPartyName = initialPartyName || '',
+    filters = { showOldRecords: false }
+  } = ledgerState || {};
+  const {
+    availableParties = [],
+    filteredTopParties = [],
+    isLoading: partiesLoading = false
+  } = partiesState || {};
+  const {
+    isActionLoading: actionLoading = false,
+    selectedEntries = [],
+    showTopPartyDropdown = false,
+    typingPartyName = initialPartyName || '',
+    topAutoCompleteText = '',
+    showTopInlineSuggestion = false,
+    topHighlightedIndex = -1,
+    // Transaction form states
+    newEntryPartyName = '',
+    newEntryAmount = '',
+    newEntryRemarks = '',
+    showTransactionPartyDropdown = false,
+    transactionFilteredParties = [],
+    transactionHighlightedIndex = -1,
+    transactionAutoCompleteText = '',
+    showTransactionInlineSuggestion = false,
+    isAddingEntry = false
+  } = uiState || {};
 
-  // Main ledger data state
-  const [ledgerData, setLedgerData] = useState<{
-    ledgerEntries: any[];
-    oldRecords: any[];
-    closingBalance: number;
-    summary: {
-      totalCredit: number;
-      totalDebit: number;
-      calculatedBalance: number;
-      totalEntries: number;
-    };
-    mondayFinalData: {
-      transactionCount: number;
-      totalCredit: number;
-      totalDebit: number;
-      startingBalance: number;
-      finalBalance: number;
-    };
-  } | null>(null);
+  // Show loading if Redux state is not properly initialized - temporarily disabled
+  // if (!ledgerState || !partiesState || !uiState) {
+  //   return (
+  //     <div className="min-h-screen bg-gray-50">
+  //       <div className="bg-blue-800 text-white p-2">
+  //         <h1 className="text-lg font-bold">Account Ledger</h1>
+  //       </div>
+  //       <div className="text-center py-8">
+  //         <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
+  //         <p className="text-gray-600">Initializing application...</p>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
-  // UI State Management
-  const [showOldRecords, setShowOldRecords] = useState(false);
-  const [showMondayFinalModal, setShowMondayFinalModal] = useState(false);
-  const [showModifyModal, setShowModifyModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  // Local state for delete functionality
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  // Immediate table update function for optimistic updates
-  const handleImmediateTableUpdate = useCallback((optimisticEntry: any) => {
-    console.log('⚡ [TABLE] Adding optimistic entry to table immediately');
-    const startTime = performance.now();
-    
-    setLedgerData(prev => {
-      const newLedgerData = { ...prev };
-      newLedgerData.ledgerEntries = [optimisticEntry, ...newLedgerData.ledgerEntries];
-      
-      // Recalculate balance for optimistic entry
-      const previousBalance = newLedgerData.ledgerEntries[1]?.balance || 0;
-      optimisticEntry.balance = previousBalance + (optimisticEntry.credit || 0) - (optimisticEntry.debit || 0);
-      
-      // Update closing balance
-      newLedgerData.closingBalance = optimisticEntry.balance;
-      
-      const endTime = performance.now();
-      console.log(`⚡ [TABLE] Optimistic update completed in ${(endTime - startTime).toFixed(2)}ms`);
-      
-      return newLedgerData;
-    });
-  }, []);
+  // Extract showOldRecords with default
+  const showOldRecords = filters?.showOldRecords || false;
 
-  // Use transaction form hook
-  const transactionForm = useTransactionFormNew({
-    selectedPartyName,
-    availableParties,
-    onRefreshLedger: () => loadLedgerData(selectedPartyName, true, true),
-    onImmediateTableUpdate: handleImmediateTableUpdate
-  });
 
-  // State for parties dropdown (bottom section)
-  const [showPartyDropdown, setShowPartyDropdown] = useState(false);
-  const [filteredParties, setFilteredParties] = useState<any[]>([]);
-  const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const [isTyping, setIsTyping] = useState(false);
-  const [autoCompleteText, setAutoCompleteText] = useState('');
-  const [showInlineSuggestion, setShowInlineSuggestion] = useState(false);
-  const [inputRef, setInputRef] = useState<HTMLInputElement | null>(null);
-  const [textWidth, setTextWidth] = useState(0);
 
-  // State for top section dropdown
-  const [showTopPartyDropdown, setShowTopPartyDropdown] = useState(false);
-  const [filteredTopParties, setFilteredTopParties] = useState<any[]>([]);
-  const [editingEntry, setEditingEntry] = useState<any | null>(null);
-  const [topAutoCompleteText, setTopAutoCompleteText] = useState('');
-  const [showTopInlineSuggestion, setShowTopInlineSuggestion] = useState(false);
-  const [topTextWidth, setTopTextWidth] = useState(0);
-  const [highlightedTopIndex, setHighlightedTopIndex] = useState(-1);
-  const [entryToDelete, setEntryToDelete] = useState<any | null>(null);
 
-  // Selected entries for bulk operations
-  const [selectedEntries, setSelectedEntries] = useState<string[]>([]);
-
-  // Track if user manually entered commission amount
-  const [isManualCommissionAmount, setIsManualCommissionAmount] = useState(false);
-
-  // Refs
-  const topInputRef = useRef<HTMLInputElement>(null);
-
-  // Load available parties for dropdown
+  // Load available parties on component mount
   const loadAvailableParties = useCallback(async () => {
-    setPartiesLoading(true);
+    if (!companyName) return;
+
+    dispatch(partiesSlice.actions.setPartiesLoading(true));
     try {
       const response = await partyLedgerAPI.getAllParties();
       if (response.success) {
-        
-        // Map backend party data to frontend Party type
-        const mappedParties = (response.data || []).map((party: any) => ({
-          _id: party.id || party._id,
-          name: party.name || party.party_name || party.partyName, // Support multiple field names
-          party_name: party.party_name || party.partyName, // Keep original for compatibility
-          srNo: party.sr_no || party.srNo,
-          status: party.status || 'A',
-          mCommission: party.mCommission || party.m_commission || 'No Commission',
-          rate: party.rate || '0',
-          commiSystem: party.commiSystem || party.commi_system || 'Take',
-          mondayFinal: party.mondayFinal || party.monday_final || 'No',
-          companyName: party.companyName || party.company_name || party.party_name || party.partyName
+        // Convert API Party type to Redux Party type
+        const convertedParties = (response.data || []).map(party => ({
+          _id: party._id || party.id || '',
+          name: party.name || '',
+          party_name: party.party_name || party.partyName || party.name || '',
+          srNo: String(party.srNo || ''),
+          status: (party.status as 'A' | 'I') || 'A',
+          mCommission: party.mCommission || '',
+          rate: party.rate || '',
+          commiSystem: (party.commiSystem as 'Take' | 'Give') || 'Give',
+          mondayFinal: (party.mondayFinal as 'Yes' | 'No') || 'No',
+          companyName: party.companyName || '',
         }));
-      
-        // No virtual parties needed - use only real parties from database
-        // All parties (Commission, Company, etc.) are now created as real parties
-        const allPartiesWithVirtual = [...mappedParties];
-        
-        setAvailableParties(mappedParties); // Real parties for top selection
-        setAllPartiesForTransaction(allPartiesWithVirtual); // All real parties for transaction dropdown
-        setFilteredParties(allPartiesWithVirtual); // All real parties for bottom dropdown
-        setFilteredTopParties(mappedParties); // Real parties for top dropdown
-      }
-    } catch (error: any) {
-      console.error('❌ Load parties error:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load parties",
-        variant: "destructive"
-      });
-    } finally {
-      setPartiesLoading(false);
-    }
-  }, [companyName, toast]);
-
-  // Load ledger data for selected party
-  const loadLedgerData = useCallback(async (partyName?: string, showLoading = true, forceRefresh = false) => {
-    const currentPartyName = partyName || selectedPartyName;
-    if (!currentPartyName) return;
-    
-    const startTime = performance.now();
-    console.log(`🔄 [LOADING] Starting to load ledger data for party: ${currentPartyName}`);
-    
-    if (showLoading) {
-      setLoading(true);
-    }
-    
-    try {
-      const apiStartTime = performance.now();
-      console.log(`📡 [LOADING] Calling API for party: ${currentPartyName}`);
-      const response = await partyLedgerAPI.getPartyLedger(currentPartyName);
-      const apiEndTime = performance.now();
-      console.log(`✅ [LOADING] API completed in ${(apiEndTime - apiStartTime).toFixed(2)}ms`);
-      
-      if (response.success) {
-        const responseData = response.data as any;
-        
-        // Transform entry data
-        const transformEntry = (entry: any) => ({
-          id: entry.id || entry._id || entry.ti,
-          _id: entry.id || entry._id || entry.ti,
-          ti: entry.ti || entry.id || entry._id,
-          date: entry.date || entry.created_at || entry.createdAt,
-          remarks: entry.remarks || entry.description || '',
-          tnsType: entry.tnsType || entry.type || entry.transaction_type,
-          credit: entry.credit || entry.credit_amount || 0,
-          debit: entry.debit || entry.debit_amount || 0,
-          balance: entry.balance || entry.running_balance || 0,
-          partyName: entry.partyName || entry.party_name || currentPartyName,
-          is_old_record: entry.is_old_record || false,
-          createdAt: entry.created_at || entry.createdAt || '',
-          updatedAt: entry.updated_at || entry.updatedAt || ''
-        });
-
-        // Optimized data transformation
-        const transformedData = {
-          ledgerEntries: (responseData.ledgerEntries || []).map(transformEntry),
-          oldRecords: (responseData.oldRecords || []).map(transformEntry),
-          closingBalance: responseData.closingBalance || 0,
-          summary: {
-            totalCredit: responseData.summary?.totalCredit || 0,
-            totalDebit: responseData.summary?.totalDebit || 0,
-            calculatedBalance: responseData.summary?.calculatedBalance || 0,
-            totalEntries: responseData.summary?.totalEntries || 0
-          },
-          mondayFinalData: {
-            transactionCount: responseData.mondayFinalData?.transactionCount || 0,
-            totalCredit: responseData.mondayFinalData?.totalCredit || 0,
-            totalDebit: responseData.mondayFinalData?.totalDebit || 0,
-            startingBalance: responseData.mondayFinalData?.startingBalance || 0,
-            finalBalance: responseData.mondayFinalData?.finalBalance || 0
-          }
-        };
-        
-        const transformEndTime = performance.now();
-        console.log(`🔄 [LOADING] Data transformation completed in ${(transformEndTime - apiEndTime).toFixed(2)}ms`);
-        
-        setLedgerData(transformedData);
-        
-        // ULTRA-AGGRESSIVE CACHING: Store data in localStorage with longer TTL
-        if (user?.id) {
-          const cacheKey = `party-ledger-${user.id}-${currentPartyName}`;
-          const cacheData = {
-            data: transformedData,
-            timestamp: Date.now(),
-            ttl: 300000 // 5 minutes cache (increased from 30s)
-          };
-          localStorage.setItem(cacheKey, JSON.stringify(cacheData));
-          console.log(`💾 [CACHE] Stored data for ${currentPartyName} with 5min TTL`);
-        }
-        
-        // Force UI update by triggering a re-render
-        setForceUpdate(prev => prev + 1);
-        
-        // Auto-enable old records view if all transactions are settled
-        if (transformedData.ledgerEntries.length === 0 && transformedData.oldRecords.length > 0) {
-          setShowOldRecords(true);
-        } else if (transformedData.ledgerEntries.length > 0) {
-          // If there are current entries (like settlement transactions), show current records
-          setShowOldRecords(false);
-        }
-        
-        const totalEndTime = performance.now();
-        const totalTime = totalEndTime - startTime;
-        console.log(`🏁 [LOADING] Total loading process completed in ${totalTime.toFixed(2)}ms`);
-        
+        dispatch(partiesSlice.actions.setAvailableParties(convertedParties));
+        dispatch(partiesSlice.actions.setAllPartiesForTransaction(convertedParties));
       } else {
-        console.error('❌ [LOADING] Failed to load ledger data:', response.message);
-      toast({
-          title: "Error",
-          description: response.message || "Failed to load ledger data",
-          variant: "destructive"
-        });
+        dispatch(partiesSlice.actions.setPartiesError(response.message || 'Failed to load parties'));
       }
-    } catch (error: any) {
-      console.error('❌ [LOADING] Load ledger data error:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load ledger data",
-        variant: "destructive"
-      });
+    } catch (error) {
+      dispatch(partiesSlice.actions.setPartiesError('Failed to load parties'));
     } finally {
-      if (showLoading) {
-        setLoading(false);
-      }
+      dispatch(partiesSlice.actions.setPartiesLoading(false));
     }
-  }, [toast, user?.id]);
+  }, [companyName, dispatch]);
 
-  // ULTRA-AGGRESSIVE PRELOADING: Load everything immediately
+
+  // Initialize data on component mount
   useEffect(() => {
-    if (user?.id) {
-      console.log('🚀 [ULTRA] Starting ultra-aggressive preloading...');
-      const startTime = performance.now();
-      
-      // IMMEDIATE CACHE CHECK: Try to load from cache first
-      const cacheKey = `party-ledger-${user.id}-${selectedPartyName}`;
-      const cachedData = localStorage.getItem(cacheKey);
-      
-      if (cachedData) {
-        console.log('⚡ [ULTRA] Found cached data, loading instantly...');
+    if (initialPartyName) {
+      const decodedPartyName = decodeURIComponent(initialPartyName);
+      dispatch(ledgerSlice.actions.setSelectedPartyName(decodedPartyName));
+      dispatch(uiSlice.actions.setTypingPartyName(decodedPartyName));
+    }
+
+    if (companyName) {
+      loadAvailableParties();
+    }
+  }, [initialPartyName, companyName, loadAvailableParties]);
+
+  // Update Redux typing state when selected party changes (only if not currently typing)
+  useEffect(() => {
+    // Only update if we're not currently in typing mode and the selected party changed
+    if (selectedPartyName && selectedPartyName !== typingPartyName && !showTopPartyDropdown) {
+      dispatch(uiSlice.actions.setTypingPartyName(selectedPartyName));
+    }
+  }, [selectedPartyName, typingPartyName, showTopPartyDropdown]);
+
+  // Load ledger data when selected party changes
+  useEffect(() => {
+    if (selectedPartyName && selectedPartyName !== initialPartyName) {
+      // Load ledger data for the new party
+      const loadLedgerData = async () => {
+        dispatch(ledgerSlice.actions.setLoading(true));
         try {
-          const parsedData = JSON.parse(cachedData);
-          const cacheAge = Date.now() - parsedData.timestamp;
-          const cacheTTL = parsedData.ttl || 300000; // 5 minutes
+          const response = await partyLedgerAPI.getPartyLedger(selectedPartyName);
           
-          if (parsedData.timestamp && cacheAge < cacheTTL) {
-            setLedgerData(parsedData.data);
-            const endTime = performance.now();
-            console.log(`⚡ [ULTRA] Cached data loaded in ${(endTime - startTime).toFixed(2)}ms`);
-            return; // Exit early if cache hit
+          if (response.success && response.data) {
+            const data = response.data as any;
+            const ledgerEntries = Array.isArray(data) ? data : (data?.ledgerEntries || []);
+            const oldRecords = data?.oldRecords || [];
+            const ledgerData = {
+              ledgerEntries,
+              oldRecords,
+              totalBalance: data?.totalBalance || 0,
+              totalDebit: data?.totalDebit || 0,
+              totalCredit: data?.totalCredit || 0,
+            };
+            dispatch(ledgerSlice.actions.setLedgerData(ledgerData));
           }
-      } catch (error) {
-          console.log('⚠️ [ULTRA] Cache parse error, loading fresh data');
-        }
-      }
-      
-      // PARALLEL LOADING: Load everything at once
-      const parallelLoad = async () => {
-        try {
-          await Promise.all([
-            loadAvailableParties(),
-            // Preload first party's data if available
-            availableParties.length > 0 ? loadLedgerData(availableParties[0].name, false) : Promise.resolve()
-          ]);
-          
-          const endTime = performance.now();
-          console.log(`🚀 [ULTRA] Parallel load completed in ${(endTime - startTime).toFixed(2)}ms`);
         } catch (error) {
-          console.error('❌ [ULTRA] Parallel load failed:', error);
+          console.error('Error loading ledger data:', error);
+        } finally {
+          dispatch(ledgerSlice.actions.setLoading(false));
         }
       };
       
-      parallelLoad();
+      loadLedgerData();
     }
-  }, [user?.id]);
+  }, [selectedPartyName, initialPartyName]);
 
-  // Load ledger data when party changes
+  // Handle click outside to close dropdowns
   useEffect(() => {
-    if (selectedPartyName && user?.id) {
-      console.log(`🔄 [EFFECT] Party changed to: ${selectedPartyName}, loading ledger data...`);
-      loadLedgerData(selectedPartyName, true);
-    }
-  }, [selectedPartyName, user?.id]);
-
-  // Smart party selection with preloading
-  const handlePartySelect = useCallback(async (partyName: string) => {
-    console.log(`🔄 [PARTY] Party selection started: ${partyName}`);
-    const startTime = performance.now();
-    
-    setSelectedPartyName(partyName);
-    setTypingPartyName(partyName);
-    setShowTopPartyDropdown(false);
-    setShowTopInlineSuggestion(false);
-    setTopAutoCompleteText('');
-    // Update URL
-    navigate(`/account-ledger/${encodeURIComponent(partyName)}`);
-    
-    // SMART PRELOADING: Check cache first, then load if needed
-    if (user?.id) {
-      const cacheKey = `party-ledger-${user.id}-${partyName}`;
-      const cachedData = localStorage.getItem(cacheKey);
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
       
-      if (cachedData) {
-        console.log(`⚡ [PARTY] Using cached data for: ${partyName}`);
-        try {
-          const parsedData = JSON.parse(cachedData);
-          const cacheAge = Date.now() - parsedData.timestamp;
-          const cacheTTL = parsedData.ttl || 300000; // Default 5 minutes
+      // Add small delay to ensure focus events happen first
+      setTimeout(() => {
+        // Handle top section dropdown
+        if (!target.closest('.top-party-dropdown-container')) {
+          dispatch(uiSlice.actions.setShowTopPartyDropdown(false));
+          dispatch(uiSlice.actions.setTopAutoCompleteText(''));
+          dispatch(uiSlice.actions.setShowTopInlineSuggestion(false));
           
-          if (parsedData.timestamp && cacheAge < cacheTTL) {
-            setLedgerData(parsedData.data);
-            const endTime = performance.now();
-            console.log(`⚡ [PARTY] Cached data loaded in ${(endTime - startTime).toFixed(2)}ms (${Math.round(cacheAge/1000)}s old)`);
-            return;
-          } else {
-            console.log(`⚠️ [PARTY] Cache expired (${Math.round(cacheAge/1000)}s old), loading fresh data`);
+          // If input is empty, restore selected party name
+          if (!typingPartyName && selectedPartyName) {
+            dispatch(uiSlice.actions.setTypingPartyName(selectedPartyName));
           }
-        } catch (error) {
-          console.log('⚠️ [PARTY] Cache parse error, loading fresh data');
         }
-      }
-      
-      // DEBOUNCED LOADING: Load fresh data with debounce
-      const debounceTime = 100; // Reduced from 200ms to 100ms
-      setTimeout(async () => {
-        console.log(`📡 [PARTY] Loading fresh data for: ${partyName}`);
-        await loadLedgerData(partyName, true);
-        const endTime = performance.now();
-        console.log(`✅ [PARTY] Party selection completed in ${(endTime - startTime).toFixed(2)}ms`);
-      }, debounceTime);
-    }
-  }, [user?.id, loadLedgerData, navigate]);
+        
+        // Handle transaction form dropdown
+        if (!target.closest('.transaction-party-dropdown-container')) {
+          dispatch(uiSlice.actions.setShowTransactionPartyDropdown(false));
+          dispatch(uiSlice.actions.setTransactionAutoCompleteText(''));
+          dispatch(uiSlice.actions.setShowTransactionInlineSuggestion(false));
+        }
+      }, 10); // Small delay to let focus events complete
+    };
 
-  // Filter top parties function
-  const filterTopParties = (searchTerm: string) => {
-    if (!searchTerm.trim()) {
-      const availablePartiesExcludingCurrent = availableParties.filter((party: any) => 
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [typingPartyName, selectedPartyName]);
+
+  // Redux handlers - now with actual functionality
+  const handleEntrySelect = (id: string | number, checked: boolean) => {
+    if (checked) {
+      dispatch(uiSlice.actions.addSelectedEntry(String(id)));
+      } else {
+      dispatch(uiSlice.actions.removeSelectedEntry(String(id)));
+    }
+  };
+
+  // Party Selection Functions using Redux with Auto-complete
+  const handlePartyNameChange = (value: string) => {
+    // Update Redux typing state for immediate UI feedback
+    dispatch(uiSlice.actions.setTypingPartyName(value));
+
+    // Update Redux search term for filtering
+    dispatch(partiesSlice.actions.setTopSearchTerm(value));
+
+    // Reset highlighted index when typing
+    dispatch(uiSlice.actions.setTopHighlightedIndex(-1));
+
+    // Filter parties based on input
+    if (value.trim()) {
+      const filtered = availableParties.filter(party => {
+        const partyName = party.party_name || party.name;
+        const searchLower = value.toLowerCase();
+        const partyLower = partyName.toLowerCase();
+        
+        // Exclude current party
+        if (partyName === selectedPartyName) return false;
+        
+        // Check if party name starts with search term
+        return partyLower.startsWith(searchLower);
+      });
+
+      // Sort by relevance (exact matches first, then alphabetical)
+      const sortedFiltered = filtered.sort((a, b) => {
+        const aName = (a.party_name || a.name).toLowerCase();
+        const bName = (b.party_name || b.name).toLowerCase();
+        const searchLower = value.toLowerCase();
+        
+        // Exact match gets highest priority
+        if (aName === searchLower && bName !== searchLower) return -1;
+        if (bName === searchLower && aName !== searchLower) return 1;
+        
+        // Then alphabetical order
+        return aName.localeCompare(bName);
+      });
+
+      dispatch(partiesSlice.actions.setFilteredTopParties(sortedFiltered));
+
+      // Auto-complete suggestion logic - find the best match
+      if (sortedFiltered.length > 0) {
+        const bestMatch = sortedFiltered[0];
+        const partyName = bestMatch.party_name || bestMatch.name;
+        const searchLower = value.toLowerCase();
+        const partyLower = partyName.toLowerCase();
+        
+        // Only show suggestion if it's a meaningful completion
+        if (partyLower.startsWith(searchLower) && 
+            partyLower !== searchLower && 
+            partyName.length > value.length) {
+          const autoCompleteText = partyName.substring(value.length);
+          dispatch(uiSlice.actions.setTopAutoCompleteText(autoCompleteText));
+          dispatch(uiSlice.actions.setShowTopInlineSuggestion(true));
+      } else {
+          dispatch(uiSlice.actions.setTopAutoCompleteText(''));
+          dispatch(uiSlice.actions.setShowTopInlineSuggestion(false));
+      }
+    } else {
+        dispatch(uiSlice.actions.setTopAutoCompleteText(''));
+        dispatch(uiSlice.actions.setShowTopInlineSuggestion(false));
+      }
+
+      dispatch(uiSlice.actions.setShowTopPartyDropdown(true));
+    } else {
+      // Show all available parties when input is empty
+      const availablePartiesExcludingCurrent = availableParties.filter(party =>
         (party.party_name || party.name) !== selectedPartyName
       );
-      setFilteredTopParties(availablePartiesExcludingCurrent);
+      dispatch(partiesSlice.actions.setFilteredTopParties(availablePartiesExcludingCurrent));
+      dispatch(uiSlice.actions.setTopAutoCompleteText(''));
+      dispatch(uiSlice.actions.setShowTopInlineSuggestion(false));
+      dispatch(uiSlice.actions.setShowTopPartyDropdown(true));
+    }
+  };
+
+  // Show dropdown when input is focused
+  const handleInputFocus = () => {
+    // Show dropdown when input is focused (don't clear the name)
+    if (availableParties.length > 0) {
+      dispatch(uiSlice.actions.setShowTopPartyDropdown(true));
+      // Filter and show all available parties
+      const filtered = availableParties.filter(party => {
+        const partyName = party.party_name || party.name;
+        return partyName.toLowerCase().includes(typingPartyName.toLowerCase());
+      });
+      dispatch(partiesSlice.actions.setFilteredTopParties(filtered));
+    }
+  };
+
+  // Calculate text width for proper auto-complete positioning
+  const calculateTextWidth = (text: string) => {
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) return 16; // Default padding
+    
+    // Use the same font as the input field
+    context.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    return context.measureText(text).width + 16; // 16px for padding
+  };
+
+  const handlePartySelect = (partyName: string) => {
+    // Navigate to the new party URL
+    navigate(`/account-ledger/${encodeURIComponent(partyName)}`);
+    
+    // Update Redux state for selected party
+    dispatch(ledgerSlice.actions.setSelectedPartyName(partyName));
+
+    // Update Redux typing state
+    dispatch(uiSlice.actions.setTypingPartyName(partyName));
+
+    // Close dropdown and clear search
+    dispatch(uiSlice.actions.setShowTopPartyDropdown(false));
+    dispatch(partiesSlice.actions.setTopSearchTerm(''));
+
+    // Clear autocomplete
+    dispatch(uiSlice.actions.setTopAutoCompleteText(''));
+    dispatch(uiSlice.actions.setShowTopInlineSuggestion(false));
+    dispatch(uiSlice.actions.setTopHighlightedIndex(-1));
+
+    // Show success toast
+      toast({
+      title: "Party Selected",
+      description: `Loading ledger for ${partyName}`,
+      duration: 2000,
+    });
+
+    // Load ledger data for the selected party will be handled by useEffect
+  };
+
+  // Auto-complete functionality - Tab key to accept suggestion
+  const handleAutoComplete = () => {
+    if (filteredTopParties.length > 0) {
+      const selectedParty = filteredTopParties[0];
+      const partyName = selectedParty.party_name || selectedParty.name;
+      handlePartySelect(partyName);
+    }
+  };
+
+  // Tab completion functionality - Tab key to accept suggestion
+  const handleTabComplete = () => {
+    if (showTopInlineSuggestion && topAutoCompleteText) {
+      const currentValue = typingPartyName;
+      const completedValue = currentValue + topAutoCompleteText;
+      
+      // Find the party that matches this completed value
+      const matchingParty = filteredTopParties.find(party => {
+        const partyName = party.party_name || party.name;
+        return partyName.toLowerCase() === completedValue.toLowerCase();
+      });
+      
+      if (matchingParty) {
+        handlePartySelect(matchingParty.party_name || matchingParty.name);
+          } else {
+        // Fallback: just update the input without navigation
+        dispatch(uiSlice.actions.setTypingPartyName(completedValue));
+        dispatch(uiSlice.actions.setTopAutoCompleteText(''));
+        dispatch(uiSlice.actions.setShowTopInlineSuggestion(false));
+        dispatch(uiSlice.actions.setShowTopPartyDropdown(false));
+      }
+    }
+  };
+
+  // Transaction Form Party Selection Functions
+  const handleTransactionPartyNameChange = (value: string) => {
+    // Update Redux state for transaction form
+    dispatch(uiSlice.actions.setNewEntryPartyName(value));
+    
+    // Reset highlighted index when typing
+    dispatch(uiSlice.actions.setTransactionHighlightedIndex(-1));
+
+    // Filter parties based on input (exclude current party)
+    if (value.trim()) {
+      const filtered = availableParties.filter(party => {
+        const partyName = party.party_name || party.name;
+        const searchLower = value.toLowerCase();
+        const partyLower = partyName.toLowerCase();
+        
+        // Exclude current party from transaction form
+        if (partyName === selectedPartyName) {
+          return false;
+        }
+        
+        // Check if party name starts with search term
+        return partyLower.startsWith(searchLower);
+      });
+
+      // Sort by relevance (exact matches first, then alphabetical)
+      const sortedFiltered = filtered.sort((a, b) => {
+        const aName = (a.party_name || a.name).toLowerCase();
+        const bName = (b.party_name || b.name).toLowerCase();
+        const searchLower = value.toLowerCase();
+        
+        // Exact match gets highest priority
+        if (aName === searchLower && bName !== searchLower) return -1;
+        if (bName === searchLower && aName !== searchLower) return 1;
+        
+        // Then alphabetical order
+        return aName.localeCompare(bName);
+      });
+
+      dispatch(uiSlice.actions.setTransactionFilteredParties(sortedFiltered));
+
+      // Auto-complete suggestion logic
+      if (sortedFiltered.length > 0) {
+        const bestMatch = sortedFiltered[0];
+        const partyName = bestMatch.party_name || bestMatch.name;
+        const searchLower = value.toLowerCase();
+        const partyLower = partyName.toLowerCase();
+        
+        if (partyLower.startsWith(searchLower) && 
+            partyLower !== searchLower && 
+            partyName.length > value.length) {
+          const autoCompleteText = partyName.substring(value.length);
+          dispatch(uiSlice.actions.setTransactionAutoCompleteText(autoCompleteText));
+          dispatch(uiSlice.actions.setShowTransactionInlineSuggestion(true));
+      } else {
+          dispatch(uiSlice.actions.setTransactionAutoCompleteText(''));
+          dispatch(uiSlice.actions.setShowTransactionInlineSuggestion(false));
+      }
+    } else {
+        dispatch(uiSlice.actions.setTransactionAutoCompleteText(''));
+        dispatch(uiSlice.actions.setShowTransactionInlineSuggestion(false));
+      }
+
+      dispatch(uiSlice.actions.setShowTransactionPartyDropdown(true));
+    } else {
+      // Show all available parties when input is empty
+      dispatch(uiSlice.actions.setTransactionFilteredParties(availableParties));
+      dispatch(uiSlice.actions.setTransactionAutoCompleteText(''));
+      dispatch(uiSlice.actions.setShowTransactionInlineSuggestion(false));
+      dispatch(uiSlice.actions.setShowTransactionPartyDropdown(true));
+    }
+  };
+
+  const handleTransactionPartySelect = (partyName: string) => {
+    // Update Redux state for transaction form
+    dispatch(uiSlice.actions.setNewEntryPartyName(partyName));
+
+    // Close dropdown and clear search
+    dispatch(uiSlice.actions.setShowTransactionPartyDropdown(false));
+
+    // Clear autocomplete
+    dispatch(uiSlice.actions.setTransactionAutoCompleteText(''));
+    dispatch(uiSlice.actions.setShowTransactionInlineSuggestion(false));
+    dispatch(uiSlice.actions.setTransactionHighlightedIndex(-1));
+
+    // Focus on amount input
+    const amountInput = document.querySelector('input[placeholder*="Credit"], input[placeholder*="Debit"]') as HTMLInputElement;
+    if (amountInput) {
+      amountInput.focus();
+    }
+  };
+
+  // Helper function to calculate cumulative commission amount for same party
+  const calculateCumulativeCommission = (partyName: string, currentAmount: number): number => {
+    if (!ledgerData || !Array.isArray(ledgerData)) return 0;
+    
+    // Filter entries for the same party and same day, excluding commission entries
+    const today = new Date().toISOString().split('T')[0];
+    const samePartyEntries = ledgerData.filter((entry: any) => 
+      entry.partyName === partyName && 
+      entry.date === today &&
+      !entry.remarks?.toLowerCase().includes('commission')
+    );
+    
+    // Calculate total amount for the same party today
+    const totalAmount = samePartyEntries.reduce((sum: number, entry: any) => {
+      return sum + Math.abs(entry.amount || 0);
+    }, 0) + Math.abs(currentAmount);
+    
+    return totalAmount;
+  };
+
+  const handleAddEntry = async () => {
+    // Set loading state
+    dispatch(uiSlice.actions.setIsAddingEntry(true));
+    
+    // Validate required fields
+    if (!newEntryPartyName.trim()) {
+      dispatch(uiSlice.actions.setIsAddingEntry(false));
+      toast({
+        title: "Party Name Required",
+        description: "Please select a party for the transaction.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate that transaction party is different from current party
+    if (newEntryPartyName.trim() === selectedPartyName) {
+      dispatch(uiSlice.actions.setIsAddingEntry(false));
+      toast({
+        title: "Invalid Transaction",
+        description: "A party cannot make transactions with itself. Please select a different party.",
+        variant: "destructive",
+      });
+            return;
+    }
+
+    if (!newEntryAmount.trim()) {
+      dispatch(uiSlice.actions.setIsAddingEntry(false));
+      toast({
+        title: "Amount Required",
+        description: "Please enter an amount for the transaction.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const amount = parseFloat(newEntryAmount);
+    if (isNaN(amount) || amount === 0) {
+      dispatch(uiSlice.actions.setIsAddingEntry(false));
+      toast({
+        title: "Invalid Amount",
+        description: "Please enter a valid non-zero amount.",
+        variant: "destructive",
+      });
       return;
     }
     
-    const filtered = availableParties.filter((party: any) =>
-      (party.party_name || party.name).toLowerCase().includes(searchTerm.toLowerCase())
+    // Find the selected party to check commission
+    const selectedParty = availableParties.find(party => 
+      (party.party_name || party.name) === newEntryPartyName.trim()
     );
-    setFilteredTopParties(filtered);
-    
-    // Auto-complete logic
-    const exactMatch = filtered.find((party: any) =>
-      (party.party_name || party.name).toLowerCase() === searchTerm.toLowerCase()
-    );
-    
-    if (filtered.length > 0 && !exactMatch) {
-      const firstMatch = filtered[0];
-      const matchName = firstMatch.party_name || firstMatch.name;
-      if (matchName.toLowerCase().startsWith(searchTerm.toLowerCase())) {
-        setTopAutoCompleteText(matchName.substring(searchTerm.length));
-        setShowTopInlineSuggestion(true);
+
+    // Create main transaction entry
+    const newEntry = {
+      _id: `temp_${Date.now()}`, // Temporary ID
+      date: new Date().toISOString().split('T')[0], // Today's date
+      partyName: newEntryPartyName.trim(),
+      remarks: newEntryRemarks.trim(),
+      amount: amount,
+      type: amount > 0 ? 'Credit' : 'Debit',
+      balance: 0, // Will be calculated by backend
+    };
+
+    // Calculate commission if party has commission enabled
+    let commissionEntry = null;
+    if (selectedParty && hasCommission(selectedParty) && amount > 0) {
+      const commissionRate = getCommissionRate(selectedParty);
+      
+      // Calculate cumulative amount for commission calculation
+      const cumulativeAmount = calculateCumulativeCommission(newEntryPartyName.trim(), amount);
+      const totalCommissionAmount = calculateCommissionAmount(cumulativeAmount, selectedParty);
+      
+      // Check if commission entry already exists for today
+      const today = new Date().toISOString().split('T')[0];
+      const existingCommissionEntry = ledgerData && Array.isArray(ledgerData) 
+        ? ledgerData.find((entry: any) => 
+            entry.partyName === newEntryPartyName.trim() && 
+            entry.date === today &&
+            entry.remarks?.toLowerCase().includes('commission')
+          )
+        : null;
+      
+      if (totalCommissionAmount > 0) {
+        const commissionType = selectedParty.commiSystem; // 'Take' or 'Give'
+        
+        // Commission amount based on party's commission type
+        let commissionAmountValue;
+        let commissionTypeLabel;
+        
+        if (commissionType === 'Take') {
+          // Take commission = negative amount (debit)
+          commissionAmountValue = -totalCommissionAmount;
+          commissionTypeLabel = 'Debit';
       } else {
-        setTopAutoCompleteText('');
-        setShowTopInlineSuggestion(false);
+          // Give commission = positive amount (credit)
+          commissionAmountValue = totalCommissionAmount;
+          commissionTypeLabel = 'Credit';
+        }
+        
+        // Create or update commission entry
+        if (existingCommissionEntry) {
+          // Update existing commission entry with new total
+          commissionEntry = {
+            ...existingCommissionEntry,
+            remarks: `Commission (${commissionRate}%) - ${commissionType} - Total: ₹${cumulativeAmount.toLocaleString()}`,
+            amount: commissionAmountValue,
+            type: commissionTypeLabel,
+          };
+    } else {
+          // Create new commission entry
+          commissionEntry = {
+            _id: `temp_${Date.now() + 1}`, // Temporary ID
+            date: today,
+            partyName: newEntryPartyName.trim(),
+            remarks: `Commission (${commissionRate}%) - ${commissionType} - Total: ₹${cumulativeAmount.toLocaleString()}`,
+            amount: commissionAmountValue,
+            type: commissionTypeLabel,
+            balance: 0, // Will be calculated by backend
+          };
+        }
       }
-    } else {
-      setTopAutoCompleteText('');
-      setShowTopInlineSuggestion(false);
     }
-  };
 
-
-  // Handle top party dropdown keyboard navigation
-  const handleTopPartyKeyDown = (e: React.KeyboardEvent) => {
-    if (!showTopPartyDropdown) return;
-
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setHighlightedTopIndex(prev => 
-          prev < filteredTopParties.length - 1 ? prev + 1 : prev
-        );
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setHighlightedTopIndex(prev => prev > 0 ? prev - 1 : -1);
-        break;
-      case 'Enter':
-        e.preventDefault();
-        if (highlightedTopIndex >= 0 && filteredTopParties[highlightedTopIndex]) {
-          handlePartySelect(filteredTopParties[highlightedTopIndex].party_name || filteredTopParties[highlightedTopIndex].name);
-        } else if (filteredTopParties.length === 1) {
-          handlePartySelect(filteredTopParties[0].party_name || filteredTopParties[0].name);
-        }
-        break;
-      case 'Escape':
-        setShowTopPartyDropdown(false);
-        setHighlightedTopIndex(-1);
-        break;
-      case 'Tab':
-        if (highlightedTopIndex >= 0 && filteredTopParties[highlightedTopIndex]) {
-          e.preventDefault();
-          handlePartySelect(filteredTopParties[highlightedTopIndex].party_name || filteredTopParties[highlightedTopIndex].name);
-        }
-        break;
-    }
-  };
-
-  // Handle entry selection
-  const handleEntrySelect = (entryId: string) => {
-    setSelectedEntries(prev => 
-      prev.includes(entryId) 
-        ? prev.filter(id => id !== entryId)
-        : [...prev, entryId]
-    );
-  };
-
-  // Handle select all
-  const handleSelectAll = () => {
-    if (!ledgerData) return;
-    const entries = showOldRecords ? ledgerData.oldRecords : ledgerData.ledgerEntries;
-    if (selectedEntries.length === entries?.length) {
-      setSelectedEntries([]);
-    } else {
-      setSelectedEntries(entries?.map((entry: any) => entry.id || entry._id || entry.ti) || []);
-    }
-  };
-
-  // Handle refresh
-  const handleRefresh = useCallback(async () => {
-    if (!selectedPartyName) return;
-    setActionLoading(true);
+    // Call API to add main entry
+    const transactionsCreated = [];
+    
     try {
-      // Clear cache to ensure fresh data on refresh
-      clearCacheByPattern(`.*party-ledger.*${selectedPartyName}.*`);
-      clearCacheByPattern(`.*all-parties.*`);
+      const mainEntryData = {
+        partyName: selectedPartyName,
+        amount: Math.abs(amount),
+        remarks: newEntryRemarks.trim() || `Transaction with ${newEntryPartyName.trim()}`,
+        tnsType: amount > 0 ? 'CR' : 'DR',
+        credit: amount > 0 ? Math.abs(amount) : 0,
+        debit: amount < 0 ? Math.abs(amount) : 0,
+        date: new Date().toISOString().split('T')[0],
+        ti: `GROUP_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, // Transaction group ID
+        involvedParty: newEntryPartyName.trim() // Add involved party for dual transaction
+      };
+
+      const mainResponse = await partyLedgerAPI.addEntry(mainEntryData);
       
-      await loadLedgerData(selectedPartyName, false, true); // Force refresh to bypass loading check
+      if (mainResponse.success) {
+        console.log('✅ Dual party transaction added successfully:', mainResponse.data);
+        transactionsCreated.push(`📤 ${selectedPartyName} ↔ ${newEntryPartyName.trim()}: ${amount > 0 ? 'Credit' : 'Debit'} ₹${Math.abs(amount).toLocaleString()}`);
+        
+        // Add commission transaction if exists (separate transaction group)
+        if (commissionEntry) {
+          const commissionEntryData = {
+            partyName: selectedPartyName,
+            amount: Math.abs(commissionEntry.amount),
+            remarks: commissionEntry.remarks,
+            tnsType: commissionEntry.type === 'Credit' ? 'CR' : 'DR',
+            credit: commissionEntry.type === 'Credit' ? Math.abs(commissionEntry.amount) : 0,
+            debit: commissionEntry.type === 'Debit' ? Math.abs(commissionEntry.amount) : 0,
+            date: commissionEntry.date,
+            ti: `GROUP_${Date.now() + 1}_${Math.random().toString(36).substr(2, 9)}`, // Separate transaction group ID
+            involvedParty: 'Commission' // Commission party as involved party
+          };
+
+          const commissionResponse = await partyLedgerAPI.addEntry(commissionEntryData);
+          
+          if (commissionResponse.success) {
+            console.log('✅ Commission transaction added successfully:', commissionResponse.data);
+            transactionsCreated.push(`💰 Commission: ${commissionEntry.type} ₹${Math.abs(commissionEntry.amount).toLocaleString()}`);
+    } else {
+            console.error('❌ Failed to add commission transaction:', commissionResponse.message);
+          }
+        }
+
+        
+        // Auto-refresh ledger data to show new entries immediately
+        await handleRefresh();
+        
+      } else {
+        console.error('❌ Failed to add main entry:', mainResponse.message);
+        dispatch(uiSlice.actions.setIsAddingEntry(false));
       toast({
-        title: "Success",
-        description: "Ledger data refreshed successfully"
+          title: "Error",
+          description: mainResponse.message || "Failed to add transaction",
+          variant: "destructive",
+        });
+        return;
+      }
+    } catch (error: any) {
+      console.error('❌ Error adding entry:', error);
+      dispatch(uiSlice.actions.setIsAddingEntry(false));
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add transaction",
+        variant: "destructive",
       });
-    } catch (error) {
-      console.error('Refresh error:', error);
-    } finally {
-      setActionLoading(false);
+      return;
     }
-  }, [selectedPartyName, loadLedgerData, toast]);
 
-  // Handle exit
-  const handleExit = () => {
-    navigate('/party-ledger');
+    // Show success message with all transactions created
+    let successMessage = `Dual party transaction: ${selectedPartyName} ↔ ${newEntryPartyName}`;
+    
+    if (commissionEntry) {
+      successMessage += ` | Commission: ${commissionEntry.type} ₹${Math.abs(commissionEntry.amount).toLocaleString()}`;
+    }
+    
+    if (transactionsCreated.length > 0) {
+      successMessage += `\n\n📋 Transactions created:\n${transactionsCreated.join('\n')}`;
+    }
+
+    toast({
+      title: "Transaction Added Successfully",
+      description: successMessage,
+    });
+
+    // Clear form
+    dispatch(uiSlice.actions.setNewEntryPartyName(''));
+    dispatch(uiSlice.actions.setNewEntryAmount(''));
+    dispatch(uiSlice.actions.setNewEntryRemarks(''));
+    dispatch(uiSlice.actions.setIsAddingEntry(false));
+
+    // Focus back to party name input for next entry
+    setTimeout(() => {
+      const partyInput = document.querySelector('input[placeholder*="Search party name"]') as HTMLInputElement;
+      if (partyInput) {
+        partyInput.focus();
+      }
+    }, 100);
   };
 
-  // Handle print
-  const handlePrint = () => {
-    window.print();
-  };
-
-  // Handle delete selected entries
+  // Delete selected entries handler
   const handleDeleteSelected = async () => {
-    if (!selectedPartyName || selectedEntries.length === 0) return;
-    
-    const startTime = performance.now();
-    console.log(`🗑️ [DELETE] Starting delete process for ${selectedEntries.length} entries`);
-    
-    setActionLoading(true);
+    if (selectedEntries.length === 0) {
+      toast({
+        title: "No Selection",
+        description: "Please select entries to delete.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check if any selected entries are old records AND Monday Final exists
+    const entriesToDisplay = ledgerData ? (showOldRecords ? (ledgerData.oldRecords || []) : (ledgerData.ledgerEntries || [])) : [];
+    const selectedOldRecords = selectedEntries.filter(entryId => {
+      const entry = entriesToDisplay.find((e: any) => (e.id || e._id || e.ti) === entryId);
+      return entry?.is_old_record === true;
+    });
+
+    // Only prevent deletion if Monday Final exists AND old records are selected
+    if (selectedOldRecords.length > 0 && ledgerData?.mondayFinalData?.id) {
+      toast({
+        title: "Cannot Delete Old Records",
+        description: `${selectedOldRecords.length} selected entries are old records that were settled in Monday Final. Delete the Monday Final entry first to unsettle these transactions.`,
+        variant: "destructive",
+      });
+      setShowDeleteDialog(false);
+      return;
+    }
+
+    setIsDeleting(true);
+
     try {
-      // Delete each selected entry
-      const deleteStartTime = performance.now();
-      console.log(`📡 [DELETE] Calling delete API for ${selectedEntries.length} entries...`);
-      
       const deletePromises = selectedEntries.map(entryId => 
         partyLedgerAPI.deleteEntry(entryId)
       );
       
       const results = await Promise.all(deletePromises);
-      const deleteEndTime = performance.now();
-      console.log(`✅ [DELETE] All delete APIs completed in ${(deleteEndTime - deleteStartTime).toFixed(2)}ms`);
       
       // Check if all deletions were successful
-      const allSuccessful = results.every(result => result.success);
-      
-      if (allSuccessful) {
-        toast({
-          title: "Success",
-          description: `Successfully deleted ${selectedEntries.length} transaction(s)`,
-        });
-        
-        // IMMEDIATE TABLE UPDATE: Remove entries from table instantly
-        console.log('⚡ [DELETE] Removing entries from table immediately...');
-        const immediateDeleteStart = performance.now();
-        
-        setLedgerData(prev => {
-          const newLedgerData = { ...prev };
-          newLedgerData.ledgerEntries = newLedgerData.ledgerEntries.filter(
-            entry => !selectedEntries.includes(entry.id || entry._id || entry.ti)
-          );
-          
-          // Recalculate closing balance
-          if (newLedgerData.ledgerEntries.length > 0) {
-            newLedgerData.closingBalance = newLedgerData.ledgerEntries[0].balance || 0;
-          } else {
-            newLedgerData.closingBalance = 0;
-          }
-          
-          const immediateDeleteEnd = performance.now();
-          console.log(`⚡ [DELETE] Table updated immediately in ${(immediateDeleteEnd - immediateDeleteStart).toFixed(2)}ms`);
-          
-          return newLedgerData;
-        });
-        
+      const successfulDeletions = results.filter(result => result.success);
+      const failedDeletions = results.filter(result => !result.success);
+
+      if (successfulDeletions.length > 0) {
         // Clear selected entries
-        setSelectedEntries([]);
+        dispatch(uiSlice.actions.clearSelectedEntries());
         
-        // SMART CACHE CLEARING: Clear cache immediately
-        const cacheStartTime = performance.now();
-        console.log(`🗑️ [DELETE] Clearing cache...`);
-        clearCacheByPattern(`.*party-ledger.*${selectedPartyName}.*`);
-        clearCacheByPattern(`.*all-parties.*`);
-        const cacheEndTime = performance.now();
-        console.log(`✅ [DELETE] Cache cleared in ${(cacheEndTime - cacheStartTime).toFixed(2)}ms`);
+        // Auto-refresh ledger data to show updated entries immediately
+        await handleRefresh();
         
-        // BACKGROUND REFRESH: Sync with backend in background
-        console.log(`🔄 [DELETE] Starting background sync...`);
-        loadLedgerData(selectedPartyName, true, true).then(() => {
-          console.log(`✅ [DELETE] Background sync completed`);
-        }).catch((error) => {
-          console.error(`❌ [DELETE] Background sync failed:`, error);
-        });
-      } else {
         toast({
-          title: "Error",
-          description: "Some transactions could not be deleted",
-          variant: "destructive"
+          title: "Entries Deleted",
+          description: `Successfully deleted ${successfulDeletions.length} entries.`,
         });
       }
+
+      if (failedDeletions.length > 0) {
+        toast({
+          title: "Some Deletions Failed",
+          description: `Failed to delete ${failedDeletions.length} entries. They might be old records or have other restrictions.`,
+          variant: "destructive",
+        });
+      }
+
     } catch (error: any) {
-      console.error('❌ [DELETE] Error deleting transactions:', error);
+      console.error('❌ Error deleting entries:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to delete transactions",
-        variant: "destructive"
+        description: error.message || "Failed to delete entries",
+        variant: "destructive",
       });
     } finally {
-      const totalEndTime = performance.now();
-      const totalTime = totalEndTime - startTime;
-      console.log(`🏁 [DELETE] Total delete process completed in ${totalTime.toFixed(2)}ms`);
-      setActionLoading(false);
+      setIsDeleting(false);
+      setShowDeleteDialog(false);
     }
   };
 
-  // Handle Monday Final
-  const handleMondayFinal = async () => {
-    if (!selectedPartyName || selectedEntries.length === 0) return;
+  // Handle delete button click
+  const handleDeleteClick = () => {
+    if (selectedEntries.length === 0) {
+      toast({
+        title: "No Selection",
+        description: "Please select entries to delete.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setShowDeleteDialog(true);
+  };
+
+  // Handle check all button click
+  const handleCheckAll = () => {
+    // Determine which entries to display (same logic as displayEntries)
+    const entriesToDisplay = ledgerData ? (showOldRecords ? (ledgerData.oldRecords || []) : (ledgerData.ledgerEntries || [])) : [];
     
-    setActionLoading(true);
+    if (entriesToDisplay.length === 0) {
+      toast({
+        title: "No Entries",
+        description: "No entries available to select.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Get all entry IDs from display entries
+    const allEntryIds = entriesToDisplay.map((entry: any, index: number) => {
+      const entryId = entry.id || entry._id || entry.ti || `entry_${index}`;
+      return typeof entryId === 'string' ? entryId : String(entryId);
+    });
+
+    // Select all entries
+    dispatch(uiSlice.actions.setSelectedEntries(allEntryIds));
+    
+    toast({
+      title: "All Entries Selected",
+      description: `${allEntryIds.length} entries selected.`,
+    });
+  };
+
+  // Handle Monday Final button click
+  const handleMondayFinal = async () => {
+    if (!selectedPartyName) {
+      toast({
+        title: "No Party Selected",
+        description: "Please select a party first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+
     try {
-      // For now, just show a success message since processMondayFinal doesn't exist
-      const response = { success: true, message: "Monday Final processed successfully" };
+      // Check if Monday Final already exists
+      if (ledgerData?.mondayFinalData?.id) {
+        // Delete existing Monday Final to unsettle transactions
+        const response = await partyLedgerAPI.deleteMondayFinalEntry(ledgerData.mondayFinalData.id);
+        
+        if (response.success) {
+          toast({
+            title: "Monday Final Deleted",
+            description: `Monday Final entry deleted. ${response.data.unsettledTransactions} transactions unsettled and moved to current records.`,
+          });
+          
+          // Auto-refresh ledger data to show unsettled transactions immediately
+          await handleRefresh();
+      } else {
+        toast({
+          title: "Error",
+            description: response.message || "Failed to delete Monday Final entry",
+            variant: "destructive",
+          });
+        }
+      } else {
+        // Create new Monday Final
+        const currentEntries = ledgerData?.ledgerEntries || [];
+        
+        if (currentEntries.length === 0) {
+      toast({
+            title: "No Current Entries",
+            description: "No current transactions to settle. Add some transactions first.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        const response = await unsettleTransactions([selectedPartyName]);
       
       if (response.success) {
         toast({
-          title: "Success",
-          description: "Monday Final processed successfully"
-        });
-        setSelectedEntries([]);
-        setShowOldRecords(true);
-        await loadLedgerData(selectedPartyName, true);
+            title: "Monday Final Created",
+            description: `${currentEntries.length} transactions settled and moved to old records.`,
+          });
+          
+          // Auto-refresh ledger data to show settled transactions immediately
+          await handleRefresh();
       } else {
         toast({
           title: "Error",
-          description: response.message || "Failed to process Monday Final",
-          variant: "destructive"
+            description: response.message || "Failed to create Monday Final",
+            variant: "destructive",
         });
       }
-    } catch (error) {
-      console.error('Monday Final error:', error);
+      }
+    } catch (error: any) {
+      console.error('❌ Error with Monday Final:', error);
       toast({
         title: "Error",
-        description: "Failed to process Monday Final",
-        variant: "destructive"
+        description: error.message || "Failed to process Monday Final",
+        variant: "destructive",
       });
+    }
+  };
+
+  const handleRefresh = async () => {
+    if (selectedPartyName) {
+      dispatch(ledgerSlice.actions.setLoading(true));
+      try {
+        const response = await partyLedgerAPI.getPartyLedger(selectedPartyName);
+      if (response.success) {
+          // Convert API response to LedgerData format
+          const data = response.data as any;
+          const ledgerEntries = Array.isArray(data) ? data : (data?.ledgerEntries || []);
+          const oldRecords = data?.oldRecords || [];
+
+          const ledgerData = {
+            ledgerEntries,
+            oldRecords,
+            totalBalance: data?.totalBalance || 0,
+            totalDebit: data?.totalDebit || 0,
+            totalCredit: data?.totalCredit || 0,
+          };
+          dispatch(ledgerSlice.actions.setLedgerData(ledgerData));
+      } else {
+          dispatch(ledgerSlice.actions.setError(response.message || 'Failed to refresh ledger data'));
+      }
+    } catch (error) {
+        dispatch(ledgerSlice.actions.setError('Failed to refresh ledger data'));
     } finally {
-      setActionLoading(false);
+        dispatch(ledgerSlice.actions.setLoading(false));
+      }
+    }
+
+    // Also refresh parties
+    if (companyName) {
+      loadAvailableParties();
     }
   };
 
 
-  // Click outside handler
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Element;
-      if (!target.closest('.party-dropdown-container')) {
-        setShowPartyDropdown(false);
-      }
-      if (!target.closest('.top-party-dropdown-container')) {
-        setShowTopPartyDropdown(false);
-        setHighlightedTopIndex(-1);
-      }
-      if (!target.closest('.transaction-party-dropdown-container')) {
-        transactionForm.setShowTransactionPartyDropdown(false);
-        transactionForm.setHighlightedTransactionIndex(-1);
-      }
-    };
+  const handleShowOldRecords = (checked: boolean) => {
+    dispatch(ledgerSlice.actions.setFilters({ showOldRecords: checked }));
+  };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
+  const handleExit = () => {
+    navigate('/');
+  };
 
-  // Loading state
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-100">
-        <TopNavigation />
-        <div className="bg-blue-800 text-white p-2">
-          <h1 className="text-lg font-bold">Account Ledger</h1>
-          </div>
-        <div className="text-center py-8">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
-          <p className="text-gray-600">Loading ledger data...</p>
-              </div>
-            </div>
-    );
-  }
-
-  // No data state
-  if (!ledgerData) {
-    return (
-      <div className="min-h-screen bg-gray-100">
-        <TopNavigation />
-        <div className="bg-blue-800 text-white p-2">
-          <h1 className="text-lg font-bold">Account Ledger</h1>
-                </div>
-        <div className="text-center py-8">
-          <p className="text-gray-600">No ledger data available</p>
-        </div>
-      </div>
-    );
-  }
+  // Loading state - temporarily disabled for debugging
+  // if (loading) {
+  //   return (
+  //     <div className="min-h-screen bg-gray-100">
+  //       <TopNavigation />
+  //       <div className="bg-blue-800 text-white p-2">
+  //         <h1 className="text-lg font-bold">Account Ledger</h1>
+  //         </div>
+  //       <div className="text-center py-8">
+  //         <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
+  //         <p className="text-gray-600">Loading ledger data...</p>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   // Determine which entries to display
   const displayEntries = ledgerData ? (showOldRecords ? (ledgerData.oldRecords || []) : (ledgerData.ledgerEntries || [])) : [];
+  
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -813,7 +990,7 @@ const AccountLedgerComponent = () => {
       {/* Main Content Area */}
       <div className="flex flex-col h-screen">
           {/* Top Section - Party Information */}
-        <div className="bg-white shadow-lg border-b border-gray-200 px-6 py-4">
+        <div className="bg-white shadow-lg border-b border-gray-200 px-6 py-4 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-8">
               <div className="flex items-center space-x-3">
@@ -821,87 +998,121 @@ const AccountLedgerComponent = () => {
                 <div className="relative top-party-dropdown-container">
                   <div className="relative">
                     <input
-                      ref={topInputRef}
                       type="text"
                       value={typingPartyName}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setTypingPartyName(value);
-                        
-                        // Calculate text width for proper positioning
-                        if (topInputRef.current) {
-                          const canvas = document.createElement('canvas');
-                          const context = canvas.getContext('2d');
-                          if (context) {
-                            context.font = window.getComputedStyle(topInputRef.current).font;
-                            const width = context.measureText(value).width;
-                            setTopTextWidth(width);
+                      onChange={(e) => handlePartyNameChange(e.target.value)}
+                      onFocus={handleInputFocus}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (topHighlightedIndex >= 0 && topHighlightedIndex < filteredTopParties.length) {
+                            // Select highlighted party
+                            const selectedParty = filteredTopParties[topHighlightedIndex];
+                            handlePartySelect(selectedParty.party_name || selectedParty.name);
+                          } else if (showTopInlineSuggestion && topAutoCompleteText) {
+                            handleTabComplete();
+                          } else if (filteredTopParties.length > 0) {
+                            handleAutoComplete();
                           }
+                        } else if (e.key === 'Tab') {
+                          e.preventDefault();
+                          if (showTopInlineSuggestion && topAutoCompleteText) {
+                            handleTabComplete();
+                          }
+                        } else if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          dispatch(uiSlice.actions.setTopHighlightedIndex(
+                            Math.min(topHighlightedIndex + 1, Math.min(filteredTopParties.length - 1, 9))
+                          ));
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          dispatch(uiSlice.actions.setTopHighlightedIndex(
+                            Math.max(topHighlightedIndex - 1, -1)
+                          ));
+                        } else if (e.key === 'Escape') {
+                          dispatch(uiSlice.actions.setShowTopPartyDropdown(false));
+                          dispatch(uiSlice.actions.setTopAutoCompleteText(''));
+                          dispatch(uiSlice.actions.setShowTopInlineSuggestion(false));
+                          dispatch(uiSlice.actions.setTopHighlightedIndex(-1));
+                          // Clear input on Escape
+                          dispatch(uiSlice.actions.setTypingPartyName(''));
                         }
-                        
-                        if (value.trim()) {
-                          filterTopParties(value);
-                        } else {
-                          const availablePartiesExcludingCurrent = availableParties.filter((party: any) => 
-                            (party.party_name || party.name) !== selectedPartyName
-                          );
-                          setFilteredTopParties(availablePartiesExcludingCurrent);
-                          setTopAutoCompleteText('');
-                          setShowTopInlineSuggestion(false);
-                        }
-                        setShowTopPartyDropdown(true);
                       }}
-                      onFocus={() => {
-                        setShowTopPartyDropdown(true);
-                      }}
-                      onKeyDown={handleTopPartyKeyDown}
-                      className="w-64 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Type party name..."
+                      placeholder="Search party..."
+                      className="w-80 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent relative"
+                      autoComplete="off"
                     />
-                    
-                    {/* Inline suggestion */}
+                    {/* VS Code style inline suggestion */}
                     {showTopInlineSuggestion && topAutoCompleteText && (
-                      <div 
-                        className="absolute top-0 left-0 px-3 py-2 text-gray-400 pointer-events-none"
-                        style={{ left: `${topTextWidth + 12}px` }}
+                      <div className="absolute inset-y-0 left-0 text-gray-400 pointer-events-none z-0 flex items-center">
+                        <span 
+                          style={{ 
+                            marginLeft: `${calculateTextWidth(typingPartyName)}px`,
+                            color: '#9CA3AF',
+                            fontSize: '14px',
+                            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                            whiteSpace: 'nowrap'
+                          }}
                       >
                         {topAutoCompleteText}
+                        </span>
                       </div>
                     )}
                   </div>
                   
-                  {/* Dropdown */}
                   {showTopPartyDropdown && filteredTopParties.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-md shadow-lg z-50 mt-1 max-h-60 overflow-y-auto">
-                      {filteredTopParties.map((party, index) => (
-                        <div
-                          key={party.id}
-                          onClick={() => handlePartySelect(party.party_name || party.name)}
-                          className={`px-3 py-2 cursor-pointer border-b last:border-b-0 ${
-                            index === highlightedTopIndex ? 'bg-blue-100' : 'hover:bg-blue-50'
-                          }`}
-                        >
-                          <div className="font-medium">{party.party_name || party.name}</div>
-                          <div className="text-sm text-gray-500">ID: {party.id}</div>
+                    <div className="absolute top-full left-0 mt-1 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+                      {filteredTopParties.slice(0, 10).map((party, index) => {
+                        const partyName = party.party_name || party.name;
+                        const searchTerm = typingPartyName.toLowerCase();
+                        const partyNameLower = partyName.toLowerCase();
+                        const isHighlighted = index === topHighlightedIndex;
+                        
+                        // Highlight matching text
+                        const matchIndex = partyNameLower.indexOf(searchTerm);
+                        const beforeMatch = partyName.substring(0, matchIndex);
+                        const matchText = partyName.substring(matchIndex, matchIndex + searchTerm.length);
+                        const afterMatch = partyName.substring(matchIndex + searchTerm.length);
+                        
+                        return (
+                          <div
+                            key={party._id}
+                            className={`px-4 py-2 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors duration-150 ${
+                              isHighlighted 
+                                ? 'bg-blue-100 border-blue-200' 
+                                : 'hover:bg-blue-50'
+                            }`}
+                            onClick={() => handlePartySelect(partyName)}
+                            onMouseEnter={() => dispatch(uiSlice.actions.setTopHighlightedIndex(index))}
+                          >
+                            <div className="font-medium text-gray-900">
+                              {searchTerm && matchIndex !== -1 ? (
+                                <>
+                                  {beforeMatch}
+                                  <span className="bg-yellow-200 font-bold">{matchText}</span>
+                                  {afterMatch}
+                                </>
+                              ) : (
+                                partyName
+                              )}
                         </div>
-                      ))}
+                            <div className="text-sm text-gray-500">{party.companyName}</div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
               </div>
+
               <div className="flex items-center space-x-3">
-                <label className="text-sm font-semibold text-gray-700">Closing Balance:</label>
-                <span className={`text-lg font-bold px-3 py-1 rounded-lg ${
-                  (ledgerData?.closingBalance || 0) > 0 
-                    ? 'text-green-600 bg-green-50' 
-                    : (ledgerData?.closingBalance || 0) < 0 
-                      ? 'text-red-600 bg-red-50'
-                      : 'text-gray-600 bg-gray-50'
-                }`}>
-                  ₹{(ledgerData?.closingBalance || 0).toLocaleString()}
+                <label className="text-sm font-semibold text-gray-700">Company:</label>
+                <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+                  {companyName}
                 </span>
               </div>
               </div>
+
             </div>
           </div>
 
@@ -914,194 +1125,72 @@ const AccountLedgerComponent = () => {
                 <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-3">
                     <h2 className="text-white font-semibold text-lg">Account Ledger Entries</h2>
                   </div>
-                <div className="overflow-auto" style={{ height: 'calc(100% - 60px)' }}>
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 sticky top-0">
-                  <tr>
-                    <th className="border-b border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Date</th>
-                    <th className="border-b border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Party Name</th>
-                    <th className="border-b border-gray-200 px-4 py-3 text-center font-semibold text-gray-700">Type</th>
-                    <th className="border-b border-gray-200 px-4 py-3 text-center font-semibold text-gray-700">Credit</th>
-                    <th className="border-b border-gray-200 px-4 py-3 text-center font-semibold text-gray-700">Debit</th>
-                    <th className="border-b border-gray-200 px-4 py-3 text-center font-semibold text-gray-700">Balance</th>
-                    <th className="border-b border-gray-200 px-4 py-3 text-center font-semibold text-gray-700">Select</th>
-                    <th className="border-b border-gray-200 px-4 py-3 text-center font-semibold text-gray-700">ID</th>
-                  </tr>
-                </thead>
-              <tbody className="divide-y divide-gray-100">
-                {loading ? (
-                  // SKELETON LOADING: Show skeleton rows for better perceived performance
-                  <>
-                    {[...Array(5)].map((_, index) => (
-                      <tr key={`skeleton-${index}`} className="animate-pulse">
-                        <td className="px-4 py-3">
-                          <div className="h-4 bg-gray-200 rounded w-20"></div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="h-4 bg-gray-200 rounded w-32"></div>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <div className="h-4 bg-gray-200 rounded w-16 mx-auto"></div>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="h-4 bg-gray-200 rounded w-20 ml-auto"></div>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="h-4 bg-gray-200 rounded w-20 ml-auto"></div>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="h-4 bg-gray-200 rounded w-20 ml-auto"></div>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <div className="h-4 bg-gray-200 rounded w-16 mx-auto"></div>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <div className="h-4 bg-gray-200 rounded w-12 mx-auto"></div>
-                        </td>
-                      </tr>
-                    ))}
-                  </>
-                ) : !ledgerData || displayEntries.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="text-center py-12 text-gray-500">
-                      <div className="flex flex-col items-center space-y-2">
-                        <svg className="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        <span>{showOldRecords ? 'No old records found' : 'No ledger entries found'}</span>
-                </div>
-                    </td>
-                  </tr>
-                ) : (
-                  displayEntries.map((entry: any, index: number) => {
-                    const entryId = entry.id || entry._id || entry.ti || `entry_${index}`;
-                    const entryIdString = entryId.toString();
-                    const isSelected = selectedEntries.includes(entryIdString);
-                    
-                    return (
-                      <TableRow
-                        key={entryIdString}
-                        entry={entry}
-                        index={index}
-                        isSelected={isSelected}
-                        onCheckboxChange={handleEntrySelect}
-                      />
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                <div className="overflow-auto p-4" style={{ height: 'calc(100% - 60px)' }}>
+                  <LedgerTable
+                    ledgerData={ledgerData}
+                    showOldRecords={showOldRecords}
+                    selectedEntries={selectedEntries}
+                    onEntrySelect={handleEntrySelect}
+                    loading={loading}
+                  />
                 </div>
               </div>
               
-              {/* Form Section - Right after table */}
+              {/* Transaction Form - Right after table */}
                 <TransactionForm
-                newEntry={transactionForm.newEntry}
-                loading={transactionForm.actionLoading}
-                availableParties={availableParties}
                   selectedPartyName={selectedPartyName}
-                onPartyNameChange={transactionForm.handlePartyNameChange}
-                onAmountChange={transactionForm.handleAmountChange}
-                onRemarksChange={transactionForm.handleRemarksChange}
-                onAddEntry={transactionForm.handleAddEntry}
-                onTransactionKeyDown={transactionForm.handleTransactionFormKeyDown}
-                onTransactionPartyKeyDown={transactionForm.handleTransactionKeyDown}
-                onTransactionSuggestionClick={transactionForm.handleTransactionSuggestionClick}
-                onFilterTransactionParties={transactionForm.filterTransactionParties}
-                showTransactionPartyDropdown={transactionForm.showTransactionPartyDropdown}
-                filteredTransactionParties={transactionForm.filteredTransactionParties}
-                highlightedTransactionIndex={transactionForm.highlightedTransactionIndex}
-                showTransactionInlineSuggestion={transactionForm.showTransactionInlineSuggestion}
-                transactionAutoCompleteText={transactionForm.transactionAutoCompleteText}
-                transactionTextWidth={transactionForm.transactionTextWidth}
-                setTransactionInputRef={transactionForm.setTransactionInputRef}
+                onAddEntry={handleAddEntry}
               />
           </div>
         </div>
 
           {/* Right Side Action Buttons */}
-          <div className="w-64 bg-white shadow-lg border-l border-gray-200 p-6">
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Actions</h3>
-              <div className="text-sm text-gray-600 mb-4">
-                Selected: {selectedEntries.length} entries
+          <div className="w-64 bg-white shadow-lg border-l border-gray-200 p-6 flex flex-col h-full">
+            <ActionButtons
+              onRefresh={() => handleRefresh()}
+              onDCReport={() => {}}
+              onMondayFinal={handleMondayFinal}
+              onOldRecord={() => {}}
+              onModify={() => {}}
+              onDelete={handleDeleteClick}
+              onPrint={() => {}}
+              onCheckAll={handleCheckAll}
+              onExit={() => {}}
+            />
             </div>
           </div>
           
-          <div className="space-y-3">
-            <button
-              onClick={handleRefresh}
-              disabled={actionLoading}
-              className="w-full px-4 py-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
-            >
-                <RefreshCw className="w-4 h-4" />
-              <span>Refresh All</span>
-            </button>
-            
-              <button
-                onClick={() => toast({ title: "Info", description: "DC Report functionality coming soon" })}
-                className="w-full px-4 py-3 bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white rounded-lg text-sm font-medium transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
-              >
-                <Download className="w-4 h-4" />
-              <span>DC Report</span>
-            </button>
-            
-            <button
-                onClick={handleMondayFinal}
-                disabled={actionLoading || selectedEntries.length === 0}
-              className="w-full px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
-            >
-              <span>Monday Final</span>
-            </button>
-            
-            <button
-                onClick={() => setShowOldRecords(!showOldRecords)}
-              className="w-full px-4 py-3 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white rounded-lg text-sm font-medium transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
-            >
-              <span>{showOldRecords ? 'Current Records' : 'Old Record'}</span>
-            </button>
-            
-            <button
-                onClick={() => toast({ title: "Info", description: "Modify functionality coming soon" })}
-              disabled={selectedEntries.length !== 1}
-              className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
-            >
-                <Edit className="w-4 h-4" />
-              <span>Modify</span>
-            </button>
-            
-            <button
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Entries</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {selectedEntries.length} selected entries? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              className="bg-red-600 hover:bg-red-700" 
               onClick={handleDeleteSelected}
-              disabled={actionLoading || selectedEntries.length === 0}
-              className="w-full px-4 py-3 bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
+              disabled={isDeleting}
             >
-              <Trash2 className="w-4 h-4" />
-              <span>Delete</span>
-            </button>
-            
-            <button
-              onClick={handlePrint}
-              className="w-full px-4 py-3 bg-gradient-to-r from-teal-500 to-green-500 hover:from-teal-600 hover:to-green-600 text-white rounded-lg text-sm font-medium transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
-            >
-                <Printer className="w-4 h-4" />
-              <span>Print</span>
-            </button>
-            
-            <button
-                onClick={handleSelectAll}
-              className="w-full px-4 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white rounded-lg text-sm font-medium transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
-            >
-              <span>Check All</span>
-            </button>
-          </div>
-        </div>
-      </div>
+              {isDeleting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       </div>
       </div>
   );
 };
 
-// Memoize the component to prevent unnecessary re-renders
-const AccountLedger = memo(AccountLedgerComponent);
-
-export default AccountLedger;
+export default AccountLedgerComponent;

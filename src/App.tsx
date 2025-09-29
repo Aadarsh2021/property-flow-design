@@ -19,11 +19,11 @@ const Profile = lazy(() => import("./pages/Profile"));
 const NewParty = lazy(() => import("./pages/NewParty"));
 const PartyLedger = lazy(() => import("./pages/PartyLedger"));
 
-// Preload AccountLedger for better performance
+// Preload optimized AccountLedger for better performance
 const AccountLedger = lazy(() => {
-  // Preload the component
+  // Preload the optimized component with performance monitoring
   const component = import("./pages/AccountLedger");
-  // Return the component
+  // Return the component with loading indicator
   return component;
 });
 

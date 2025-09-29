@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo, memo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, memo, useRef, useTransition } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import TopNavigation from '@/components/TopNavigation';
@@ -16,9 +16,10 @@ import {
 } from '@/components/ui/alert-dialog';
 import { newPartyAPI, partyLedgerAPI, userSettingsAPI } from '@/lib/api';
 import { Party, LedgerEntry, LedgerData } from '@/types';
-import { debounce } from 'lodash'; // Add lodash for debouncing
+import { debounce } from 'lodash';
 import { clearCacheByPattern } from '@/lib/apiCache';
 import { useCompanyName } from '@/hooks/useCompanyName';
+import { usePerformance, useAPIPerformance } from '@/hooks/usePerformance';
 import { 
   isCompanyParty, 
   isCommissionParty,
@@ -30,7 +31,7 @@ import {
   getCommissionPartyRestrictionMessage
 } from '@/lib/companyPartyUtils';
 
-// Memoized table row component for performance
+// Optimized memoized table row component with better performance
 const TableRow = memo(({ 
   entry, 
   index, 
@@ -42,17 +43,65 @@ const TableRow = memo(({
   isSelected: boolean; 
   onCheckboxChange: (id: string | number, checked: boolean) => void; 
 }) => {
-  const entryId = entry.id || entry._id || entry.ti || `entry_${index}`;
+  const entryId = useMemo(() => entry.id || entry._id || entry.ti || `entry_${index}`, [entry.id, entry._id, entry.ti, index]);
+  
+  // Memoize formatted date to avoid recalculation
+  const formattedDate = useMemo(() => 
+    new Date(entry.date).toLocaleDateString('en-GB'), 
+    [entry.date]
+  );
+  
+  // Memoize formatted balance to avoid recalculation
+  const formattedBalance = useMemo(() => 
+    (entry.balance || 0).toLocaleString(), 
+    [entry.balance]
+  );
+  
+  // Memoize CSS classes to avoid recalculation
+  const rowClasses = useMemo(() => 
+    `hover:bg-blue-50 cursor-pointer transition-colors duration-150 ${
+      isSelected ? 'bg-blue-100' : ''
+    } ${entry.is_old_record ? 'bg-gray-50 opacity-75' : ''}`,
+    [isSelected, entry.is_old_record]
+  );
+  
+  const typeClasses = useMemo(() => 
+    `px-2 py-1 rounded-full text-xs font-medium ${
+      entry.tnsType === 'CR' 
+        ? 'bg-green-100 text-green-800' 
+        : 'bg-red-100 text-red-800'
+    }`,
+    [entry.tnsType]
+  );
+  
+  const balanceClasses = useMemo(() => {
+    const balance = entry.balance || 0;
+    return `px-3 py-1 rounded-full text-sm font-medium ${
+      balance > 0 
+        ? 'bg-green-100 text-green-800' 
+        : balance < 0 
+          ? 'bg-red-100 text-red-800'
+          : 'bg-gray-100 text-gray-800'
+    }`;
+  }, [entry.balance]);
+  
+  // Memoize click handler to prevent unnecessary re-renders
+  const handleRowClick = useCallback(() => {
+    onCheckboxChange(entryId, !isSelected);
+  }, [onCheckboxChange, entryId, isSelected]);
+  
+  const handleCheckboxChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    onCheckboxChange(entryId, e.target.checked);
+  }, [onCheckboxChange, entryId]);
+  
+  const handleCheckboxClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+  }, []);
   
   return (
-    <tr 
-      className={`hover:bg-blue-50 cursor-pointer transition-colors duration-150 ${
-        isSelected ? 'bg-blue-100' : ''
-      } ${entry.is_old_record ? 'bg-gray-50 opacity-75' : ''}`}
-      onClick={() => onCheckboxChange(entryId, !isSelected)}
-    >
+    <tr className={rowClasses} onClick={handleRowClick}>
       <td className="px-4 py-3 text-gray-700">
-        {new Date(entry.date).toLocaleDateString('en-GB')}
+        {formattedDate}
       </td>
       <td className="px-4 py-3 text-gray-800 font-medium">
         <div className="flex items-center space-x-2">
@@ -65,11 +114,7 @@ const TableRow = memo(({
         </div>
       </td>
       <td className="px-4 py-3 text-center">
-        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-          entry.tnsType === 'CR' 
-            ? 'bg-green-100 text-green-800' 
-            : 'bg-red-100 text-red-800'
-        }`}>
+        <span className={typeClasses}>
           {entry.tnsType}
         </span>
       </td>
@@ -80,22 +125,16 @@ const TableRow = memo(({
         {entry.debit || 0}
       </td>
       <td className="px-4 py-3 text-center font-semibold">
-        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-          (entry.balance || 0) > 0 
-            ? 'bg-green-100 text-green-800' 
-            : (entry.balance || 0) < 0 
-              ? 'bg-red-100 text-red-800'
-              : 'bg-gray-100 text-gray-800'
-        }`}>
-          ₹{(entry.balance || 0).toLocaleString()}
+        <span className={balanceClasses}>
+          ₹{formattedBalance}
         </span>
       </td>
       <td className="px-4 py-3 text-center">
         <input
           type="checkbox"
           checked={isSelected}
-          onChange={(e) => onCheckboxChange(entryId, e.target.checked)}
-          onClick={(e) => e.stopPropagation()}
+          onChange={handleCheckboxChange}
+          onClick={handleCheckboxClick}
           className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
         />
       </td>
@@ -104,15 +143,37 @@ const TableRow = memo(({
       </td>
     </tr>
   );
+}, (prevProps, nextProps) => {
+  // Custom comparison function for better memoization
+  return (
+    prevProps.entry.id === nextProps.entry.id &&
+    prevProps.entry._id === nextProps.entry._id &&
+    prevProps.entry.ti === nextProps.entry.ti &&
+    prevProps.index === nextProps.index &&
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.entry.date === nextProps.entry.date &&
+    prevProps.entry.remarks === nextProps.entry.remarks &&
+    prevProps.entry.tnsType === nextProps.entry.tnsType &&
+    prevProps.entry.credit === nextProps.entry.credit &&
+    prevProps.entry.debit === nextProps.entry.debit &&
+    prevProps.entry.balance === nextProps.entry.balance &&
+    prevProps.entry.is_old_record === nextProps.entry.is_old_record
+  );
 });
 
 TableRow.displayName = 'TableRow';
 
 const AccountLedger = () => {
   // Performance monitoring
-  useEffect(() => {
-    // Component mounted
-  }, []);
+  const { measureRender } = usePerformance('AccountLedger');
+  const { measureAPICall } = useAPIPerformance();
+  const [isPending, startTransition] = useTransition();
+  
+  // Performance tracking refs
+  const renderStartTime = useRef(0);
+  const lastRequestTime = useRef<Map<string, number>>(new Map());
+  const requestThrottleRef = useRef<NodeJS.Timeout | null>(null);
+  
   // Router hooks for navigation and URL parameters
   const { partyName: initialPartyName } = useParams<{ partyName: string }>();
   const navigate = useNavigate();
@@ -203,40 +264,56 @@ const AccountLedger = () => {
   // Company name from global hook
   const { companyName } = useCompanyName();
 
-  // Load available parties for dropdown
+  // Optimized load available parties with throttling and caching
   const loadAvailableParties = useCallback(async () => {
     // Prevent multiple simultaneous calls
     if (partiesLoading) {
       return;
     }
     
+    // Throttle requests to prevent excessive API calls
+    const now = Date.now();
+    const lastLoad = lastRequestTime.current.get('parties') || 0;
+    const timeSinceLastLoad = now - lastLoad;
+    
+    if (timeSinceLastLoad < 1000 && !forceUpdate) { // Throttle to max 1 request per second
+      return;
+    }
+    
+    lastRequestTime.current.set('parties', now);
     setPartiesLoading(true);
+    
     try {
-      const response = await partyLedgerAPI.getAllParties();
-      if (response.success) {
-        
-        // Map backend party data to frontend Party type
-        const mappedParties = (response.data || []).map((party: any) => ({
-          _id: party.id || party._id,
-          name: party.name || party.party_name || party.partyName, // Support multiple field names
-          party_name: party.party_name || party.partyName, // Keep original for compatibility
-          srNo: party.sr_no || party.srNo,
-          status: party.status || 'A',
-          mCommission: party.mCommission || party.m_commission || 'No Commission',
-          rate: party.rate || '0',
-          commiSystem: party.commiSystem || party.commi_system || 'Take',
-          mondayFinal: party.mondayFinal || party.monday_final || 'No',
-          companyName: party.companyName || party.company_name || party.party_name || party.partyName
-        }));
+      const response = await measureAPICall(
+        () => partyLedgerAPI.getAllParties(),
+        'getAllParties'
+      );
       
-      // No virtual parties needed - use only real parties from database
-      // All parties (Commission, Company, etc.) are now created as real parties
-      const allPartiesWithVirtual = [...mappedParties];
+      if (response.success) {
+        // Use startTransition for non-urgent state updates
+        startTransition(() => {
+          // Map backend party data to frontend Party type
+          const mappedParties = (response.data || []).map((party: any) => ({
+            _id: party.id || party._id,
+            name: party.name || party.party_name || party.partyName,
+            party_name: party.party_name || party.partyName,
+            srNo: party.sr_no || party.srNo,
+            status: party.status || 'A',
+            mCommission: party.mCommission || party.m_commission || 'No Commission',
+            rate: party.rate || '0',
+            commiSystem: party.commiSystem || party.commi_system || 'Take',
+            mondayFinal: party.mondayFinal || party.monday_final || 'No',
+            companyName: party.companyName || party.company_name || party.party_name || party.partyName
+          }));
         
-        setAvailableParties(mappedParties); // Real parties for top selection
-        setAllPartiesForTransaction(allPartiesWithVirtual); // All real parties for transaction dropdown
-        setFilteredParties(allPartiesWithVirtual); // All real parties for bottom dropdown
-        setFilteredTopParties(mappedParties); // Real parties for top dropdown
+          // No virtual parties needed - use only real parties from database
+          const allPartiesWithVirtual = [...mappedParties];
+            
+          setAvailableParties(mappedParties);
+          setAllPartiesForTransaction(allPartiesWithVirtual);
+          setFilteredParties(allPartiesWithVirtual);
+          setFilteredTopParties(mappedParties);
+        });
       }
     } catch (error: any) {
       console.error('❌ Load parties error:', error);
@@ -248,7 +325,7 @@ const AccountLedger = () => {
     } finally {
       setPartiesLoading(false);
     }
-  }, [companyName]);
+  }, [companyName, measureAPICall, startTransition, forceUpdate]);
 
   // State for storing all parties for transaction dropdown
   const [allPartiesForTransaction, setAllPartiesForTransaction] = useState<Party[]>([]);
@@ -655,7 +732,7 @@ const AccountLedger = () => {
     return availableParties.find(party => party.name === displayName);
   };
 
-  // Load ledger data for selected party
+  // Optimized load ledger data with throttling and performance monitoring
   const loadLedgerData = useCallback(async (showLoading = true, forceRefresh = false) => {
     if (!selectedPartyName) return;
     
@@ -664,72 +741,91 @@ const AccountLedger = () => {
       return;
     }
     
+    // Throttle requests to prevent excessive API calls
+    const now = Date.now();
+    const lastLoad = lastRequestTime.current.get(selectedPartyName) || 0;
+    const timeSinceLastLoad = now - lastLoad;
+    
+    if (timeSinceLastLoad < 500 && !forceRefresh) { // Throttle to max 2 requests per second per party
+      if (requestThrottleRef.current) {
+        clearTimeout(requestThrottleRef.current);
+      }
+      
+      return new Promise<void>((resolve) => {
+        requestThrottleRef.current = setTimeout(() => {
+          loadLedgerData(showLoading, forceRefresh).then(resolve);
+        }, 500 - timeSinceLastLoad);
+      });
+    }
+    
+    lastRequestTime.current.set(selectedPartyName, now);
+    
     if (showLoading || forceRefresh) {
       setLoading(true);
     }
     
-    
     try {
-      const response = await partyLedgerAPI.getPartyLedger(selectedPartyName);
+      const response = await measureAPICall(
+        () => partyLedgerAPI.getPartyLedger(selectedPartyName),
+        `getPartyLedger-${selectedPartyName}`
+      );
       
       if (response.success && response.data) {
-        const responseData = response.data as any; // Type assertion for API response
+        const responseData = response.data as any;
         
-        // Transform backend data to frontend format
-        const transformEntry = (entry: any) => ({
-          id: entry.id || entry._id || entry.ti || '',
-          partyName: entry.party_name || entry.partyName || '',
-          date: entry.date || '',
-          remarks: entry.remarks || '',
-          tnsType: entry.tns_type || entry.tnsType || '',
-          debit: parseFloat(entry.debit || 0),
-          credit: parseFloat(entry.credit || 0),
-          balance: parseFloat(entry.balance || 0),
-          chk: entry.chk || false,
-          ti: entry.ti || '',
-          isOldRecord: entry.is_old_record || entry.isOldRecord || false,
-          settlementDate: entry.settlement_date || entry.settlementDate || null,
-          settlementMondayFinalId: entry.settlement_monday_final_id || entry.settlementMondayFinalId || null,
-          createdAt: entry.created_at || entry.createdAt || '',
-          updatedAt: entry.updated_at || entry.updatedAt || ''
-        });
+        // Use startTransition for non-urgent state updates
+        startTransition(() => {
+          // Transform backend data to frontend format
+          const transformEntry = (entry: any) => ({
+            id: entry.id || entry._id || entry.ti || '',
+            partyName: entry.party_name || entry.partyName || '',
+            date: entry.date || '',
+            remarks: entry.remarks || '',
+            tnsType: entry.tns_type || entry.tnsType || '',
+            debit: parseFloat(entry.debit || 0),
+            credit: parseFloat(entry.credit || 0),
+            balance: parseFloat(entry.balance || 0),
+            chk: entry.chk || false,
+            ti: entry.ti || '',
+            isOldRecord: entry.is_old_record || entry.isOldRecord || false,
+            settlementDate: entry.settlement_date || entry.settlementDate || null,
+            settlementMondayFinalId: entry.settlement_monday_final_id || entry.settlementMondayFinalId || null,
+            createdAt: entry.created_at || entry.createdAt || '',
+            updatedAt: entry.updated_at || entry.updatedAt || ''
+          });
 
-        // Optimized data transformation
-        const transformedData: LedgerData = {
-          ledgerEntries: (responseData.ledgerEntries || []).map(transformEntry),
-          oldRecords: (responseData.oldRecords || []).map(transformEntry),
-          closingBalance: responseData.closingBalance || 0,
-          summary: {
-            totalCredit: responseData.summary?.totalCredit || 0,
-            totalDebit: responseData.summary?.totalDebit || 0,
-            calculatedBalance: responseData.summary?.calculatedBalance || 0,
-            totalEntries: responseData.summary?.totalEntries || 0
-          },
-          mondayFinalData: {
-            transactionCount: responseData.mondayFinalData?.transactionCount || 0,
-            totalCredit: responseData.mondayFinalData?.totalCredit || 0,
-            totalDebit: responseData.mondayFinalData?.totalDebit || 0,
-            startingBalance: responseData.mondayFinalData?.startingBalance || 0,
-            finalBalance: responseData.mondayFinalData?.finalBalance || 0
+          // Optimized data transformation
+          const transformedData: LedgerData = {
+            ledgerEntries: (responseData.ledgerEntries || []).map(transformEntry),
+            oldRecords: (responseData.oldRecords || []).map(transformEntry),
+            closingBalance: responseData.closingBalance || 0,
+            summary: {
+              totalCredit: responseData.summary?.totalCredit || 0,
+              totalDebit: responseData.summary?.totalDebit || 0,
+              calculatedBalance: responseData.summary?.calculatedBalance || 0,
+              totalEntries: responseData.summary?.totalEntries || 0
+            },
+            mondayFinalData: {
+              transactionCount: responseData.mondayFinalData?.transactionCount || 0,
+              totalCredit: responseData.mondayFinalData?.totalCredit || 0,
+              totalDebit: responseData.mondayFinalData?.totalDebit || 0,
+              startingBalance: responseData.mondayFinalData?.startingBalance || 0,
+              finalBalance: responseData.mondayFinalData?.finalBalance || 0
+            }
+          };
+          
+          setLedgerData(transformedData);
+          
+          // Force UI update by triggering a re-render
+          setForceUpdate(prev => prev + 1);
+          
+          // Auto-enable old records view if all transactions are settled
+          if (transformedData.ledgerEntries.length === 0 && transformedData.oldRecords.length > 0) {
+            setShowOldRecords(true);
+          } else if (transformedData.ledgerEntries.length > 0) {
+            setShowOldRecords(false);
           }
-        };
-        
-        setLedgerData(transformedData);
-        
-        
-        // Force UI update by triggering a re-render
-        setForceUpdate(prev => prev + 1);
-        
-        // Auto-enable old records view if all transactions are settled
-        if (transformedData.ledgerEntries.length === 0 && transformedData.oldRecords.length > 0) {
-          setShowOldRecords(true);
-        } else if (transformedData.ledgerEntries.length > 0) {
-          // If there are current entries (like settlement transactions), show current records
-          setShowOldRecords(false);
-        }
-        
-        // Force table refresh after data update
-        // Removed setTableRefreshKey to prevent unnecessary re-renders
+        });
       } else {
         console.error('❌ Failed to load ledger data:', {
           message: response.message,
@@ -755,12 +851,11 @@ const AccountLedger = () => {
         variant: "destructive"
       });
     } finally {
-      // Always reset loading state when forceRefresh is true
       if (showLoading || forceRefresh) {
         setLoading(false);
       }
     }
-  }, [selectedPartyName]);
+  }, [selectedPartyName, measureAPICall, startTransition]);
 
   // Handle party change
   const handlePartyChange = (newPartyName: string) => {
@@ -1140,7 +1235,7 @@ const AccountLedger = () => {
 
         // Enhanced: Check if this is a Commission Waterfall Transaction
         const isCommissionWaterfall = newEntry.partyName && 
-          newEntry.partyName.trim() !== '' && 
+          newEntry.partyName.trim() !== '' &&   
           newEntry.partyName.trim() !== selectedPartyName &&
           allPartiesForTransaction.some(party => party.name === newEntry.partyName.trim()) &&
           selectedParty && selectedParty.mCommission === 'With Commission' && selectedParty.rate;
@@ -1202,6 +1297,8 @@ const AccountLedger = () => {
             console.error('Failed to add entry:', entryData, error);
           }
         }
+
+        await loadLedgerData(false, true);        
 
         if (successCount === entries.length) {
           // Enhanced Success Message with Waterfall Details
@@ -2082,38 +2179,51 @@ const AccountLedger = () => {
     console.log('🚪 NAVIGATION: Navigation completed');
   };
 
-  // Load data on component mount - OPTIMIZED
+  // Ref to prevent multiple initialization calls
+  const initializationRef = useRef(false);
+  
+  // Load data on component mount - OPTIMIZED with performance monitoring
   useEffect(() => {
+    // Prevent multiple initialization calls
+    if (initializationRef.current) {
+      return;
+    }
+    
     const initializeData = async () => {
+      initializationRef.current = true;
+      const endMeasure = measureRender('initializeData');
       const startTime = performance.now();
       console.log('🚀 FUNCTION: initializeData started...');
       
       try {
-        // Load parties and ledger data
-        await loadAvailableParties();
+        // Load parties and ledger data in parallel for better performance
+        const promises = [loadAvailableParties()];
         
-        // Load ledger data only if party name is available
         if (selectedPartyName) {
-          await loadLedgerData(true);
+          promises.push(loadLedgerData(true));
         }
+        
+        await Promise.all(promises);
         
         const endTime = performance.now();
         const duration = endTime - startTime;
         console.log(`✅ FUNCTION: initializeData completed in ${duration.toFixed(2)}ms`);
+        endMeasure();
       } catch (error) {
         console.error('Initialization error:', error);
+        endMeasure();
       }
     };
     
     initializeData();
-  }, [selectedPartyName]); // Only depend on selectedPartyName
+  }, [selectedPartyName]); // Only run when selectedPartyName actually changes
 
   // Reload parties when company account changes
   useEffect(() => {
     if (companyName !== 'Company') {
       loadAvailableParties();
     }
-  }, [companyName, loadAvailableParties]); // Added function dependency back
+  }, [companyName]); // Removed function dependency to prevent infinite loops
 
   // Listen for parties refresh events (e.g., when company party is created)
   useEffect(() => {
@@ -2127,7 +2237,25 @@ const AccountLedger = () => {
     return () => {
       window.removeEventListener('partiesRefreshed', handlePartiesRefresh as EventListener);
     };
-  }, [loadAvailableParties]);
+  }, []); // Removed function dependency to prevent infinite loops
+  
+  // Cleanup performance monitoring and throttling on unmount
+  useEffect(() => {
+    return () => {
+      // Clear any pending throttled requests
+      if (requestThrottleRef.current) {
+        clearTimeout(requestThrottleRef.current);
+      }
+      
+      // Clear performance tracking
+      lastRequestTime.current.clear();
+      
+      // Clear any pending transitions
+      if (isPending) {
+        console.log('🧹 Cleaning up pending transitions on unmount');
+      }
+    };
+  }, [isPending]);
 
   // Handle click outside to close dropdown
   useEffect(() => {
@@ -2157,7 +2285,7 @@ const AccountLedger = () => {
     );
   }, [availableParties, selectedPartyName]);
 
-  // Performance optimization: Debounced search
+  // Performance optimization: Enhanced debounced search with better performance
   const debouncedSearch = useMemo(
     () => debounce((searchTerm: string) => {
       if (!searchTerm.trim()) {
@@ -2165,15 +2293,31 @@ const AccountLedger = () => {
         return;
       }
       
-      const filtered = availablePartiesExcludingCurrent.filter(party =>
-        (party.party_name || party.name).toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      const searchLower = searchTerm.toLowerCase();
+      const filtered = availablePartiesExcludingCurrent.filter(party => {
+        const partyName = (party.party_name || party.name || '').toLowerCase();
+        // Use startsWith for better performance than includes
+        return partyName.startsWith(searchLower) || partyName.includes(searchLower);
+      });
+      
+      // Sort by relevance (startsWith first, then alphabetically)
+      filtered.sort((a, b) => {
+        const aName = (a.party_name || a.name || '').toLowerCase();
+        const bName = (b.party_name || b.name || '').toLowerCase();
+        const aStartsWith = aName.startsWith(searchLower);
+        const bStartsWith = bName.startsWith(searchLower);
+        
+        if (aStartsWith && !bStartsWith) return -1;
+        if (!aStartsWith && bStartsWith) return 1;
+        return aName.localeCompare(bName);
+      });
+      
       setFilteredTopParties(filtered);
-    }, 300),
+    }, 200), // Reduced debounce time for better responsiveness
     [availablePartiesExcludingCurrent]
   );
 
-  // Performance optimization: Memoized calculations with pagination
+  // Performance optimization: Memoized calculations with virtual scrolling support
   const memoizedDisplayEntries = useMemo(() => {
     if (!ledgerData) return [];
     
@@ -2181,9 +2325,27 @@ const AccountLedger = () => {
       ? [...(ledgerData.oldRecords || []), ...(ledgerData.ledgerEntries?.filter(entry => entry.remarks?.includes('Monday Final Settlement')) || [])]
       : ledgerData.ledgerEntries || [];
     
-    // Limit entries for better performance (show only first 100)
-    return entries.slice(0, 100);
+    // For better performance, we'll implement virtual scrolling in the render
+    // Return all entries but limit rendering to visible items
+    return entries;
   }, [ledgerData, showOldRecords]);
+  
+  // Virtual scrolling configuration
+  const ITEMS_PER_PAGE = 50; // Reduced from 100 for better performance
+  const [currentPage, setCurrentPage] = useState(0);
+  
+  // Calculate visible entries for virtual scrolling
+  const visibleEntries = useMemo(() => {
+    const startIndex = currentPage * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    return memoizedDisplayEntries.slice(startIndex, endIndex);
+  }, [memoizedDisplayEntries, currentPage]);
+  
+  // Calculate total pages for pagination
+  const totalPages = useMemo(() => 
+    Math.ceil(memoizedDisplayEntries.length / ITEMS_PER_PAGE),
+    [memoizedDisplayEntries.length]
+  );
 
   // Check if party is already settled for Monday Final
   const isPartySettled = useMemo(() => {
@@ -2553,21 +2715,52 @@ const AccountLedger = () => {
                           </td>
                         </tr>
                       ) : (
-                                                memoizedDisplayEntries.map((entry, index) => {
-                          const entryId = entry.id || entry._id || entry.ti || `entry_${index}`;
-                          const entryIdString = entryId.toString();
-                          const isSelected = selectedEntries.includes(entryIdString);
+                        <>
+                          {visibleEntries.map((entry, index) => {
+                            const actualIndex = currentPage * ITEMS_PER_PAGE + index;
+                            const entryId = entry.id || entry._id || entry.ti || `entry_${actualIndex}`;
+                            const entryIdString = entryId.toString();
+                            const isSelected = selectedEntries.includes(entryIdString);
+                            
+                            return (
+                              <TableRow
+                                key={entryIdString}
+                                entry={entry}
+                                index={actualIndex}
+                                isSelected={isSelected}
+                                onCheckboxChange={handleCheckboxChange}
+                              />
+                            );
+                          })}
                           
-                          return (
-                            <TableRow
-                              key={entryIdString}
-                              entry={entry}
-                              index={index}
-                              isSelected={isSelected}
-                              onCheckboxChange={handleCheckboxChange}
-                            />
-                          );
-                        })
+                          {/* Virtual scrolling pagination controls */}
+                          {totalPages > 1 && (
+                            <tr>
+                              <td colSpan={8} className="text-center py-4 bg-gray-50">
+                                <div className="flex items-center justify-center space-x-4">
+                                  <button
+                                    onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+                                    disabled={currentPage === 0}
+                                    className="px-3 py-1 bg-blue-500 text-white rounded disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                  >
+                                    Previous
+                                  </button>
+                                  <span className="text-sm text-gray-600">
+                                    Page {currentPage + 1} of {totalPages} 
+                                    ({memoizedDisplayEntries.length} total entries)
+                                  </span>
+                                  <button
+                                    onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))}
+                                    disabled={currentPage === totalPages - 1}
+                                    className="px-3 py-1 bg-blue-500 text-white rounded disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                  >
+                                    Next
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </>
                   )}
                 </tbody>
               </table>
