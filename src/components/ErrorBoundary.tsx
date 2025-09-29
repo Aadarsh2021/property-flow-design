@@ -31,7 +31,7 @@ class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
           <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
             <div className="text-center">
               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -41,12 +41,31 @@ class ErrorBoundary extends Component<Props, State> {
               </div>
               <h2 className="text-xl font-semibold text-gray-900 mb-2">Something went wrong</h2>
               <p className="text-gray-600 mb-4">We're sorry, but something unexpected happened.</p>
-              <button
-                onClick={() => window.location.reload()}
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
-              >
-                Reload Page
-              </button>
+              
+              {/* Environment Info for debugging */}
+              <div className="mb-4 p-3 bg-gray-50 rounded-lg text-left">
+                <h4 className="font-medium text-sm mb-2">Debug Info:</h4>
+                <div className="text-xs space-y-1">
+                  <div><strong>Mode:</strong> {import.meta.env.MODE}</div>
+                  <div><strong>Production:</strong> {import.meta.env.PROD ? 'Yes' : 'No'}</div>
+                  <div><strong>Error:</strong> {this.state.error?.message || 'Unknown error'}</div>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <button
+                  onClick={() => window.location.reload()}
+                  className="w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
+                >
+                  Reload Page
+                </button>
+                <button
+                  onClick={() => window.location.href = '/api-test'}
+                  className="w-full bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 transition-colors"
+                >
+                  Test API Connection
+                </button>
+              </div>
             </div>
           </div>
         </div>

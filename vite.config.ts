@@ -27,24 +27,20 @@ export default defineConfig(({ mode }) => ({
   },
   build: {
     target: 'esnext',
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: false, // Keep console logs for performance monitoring
-        drop_debugger: true,
-        // Removed pure_funcs to keep console logs
-      },
-      mangle: {
-        safari10: true
-      }
-    },
+    minify: 'esbuild', // Use esbuild instead of terser for better React compatibility
+    sourcemap: true, // Enable sourcemaps for debugging
     rollupOptions: {
       output: {
         entryFileNames: `assets/[name]-[hash].js`,
         chunkFileNames: `assets/[name]-[hash].js`,
         assetFileNames: (assetInfo) => {
+          if (!assetInfo.name) {
+            return `assets/[name]-[hash].[ext]`;
+          }
+          
           const info = assetInfo.name.split('.');
           const ext = info[info.length - 1];
+          
           if (/\.(css)$/.test(assetInfo.name)) {
             return `assets/css/[name]-[hash].${ext}`;
           }
@@ -56,56 +52,52 @@ export default defineConfig(({ mode }) => ({
           }
           return `assets/[name]-[hash].${ext}`;
         },
-        manualChunks: {
-          // Core React libraries
-          'react-vendor': ['react', 'react-dom'],
-          'react-router': ['react-router-dom'],
+        manualChunks: (id) => {
+          // Simplified chunk splitting to avoid React initialization issues
+          if (id.includes('node_modules/react') || 
+              id.includes('node_modules/react-dom') || 
+              id.includes('node_modules/react-router') ||
+              id.includes('node_modules/react-hook-form') ||
+              id.includes('node_modules/@hookform') ||
+              id.includes('node_modules/@tanstack/react-query') ||
+              id.includes('node_modules/@radix-ui')) {
+            return 'react-vendor';
+          }
           
-          // UI Libraries - Split by usage
-          'radix-core': ['@radix-ui/react-dialog', '@radix-ui/react-alert-dialog'],
-          'radix-forms': ['@radix-ui/react-toast', '@radix-ui/react-select', '@radix-ui/react-dropdown-menu'],
-          'radix-navigation': ['@radix-ui/react-navigation-menu', '@radix-ui/react-tabs'],
-          
-          // Utility libraries
-          'utils': ['lucide-react', 'clsx', 'tailwind-merge'],
-          
-          // Data fetching
-          'query': ['@tanstack/react-query'],
-          
-          // Firebase
-          'firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/analytics'],
+          // Firebase - keep separate
+          if (id.includes('node_modules/firebase/')) {
+            return 'firebase';
+          }
           
           // Supabase
-          'supabase': ['@supabase/supabase-js'],
+          if (id.includes('node_modules/@supabase/')) {
+            return 'supabase';
+          }
           
-          // Charts and visualization
-          'charts': ['recharts'],
-          
-          // Form handling
-          'forms': ['react-hook-form', '@hookform/resolvers', 'zod']
+          // Everything else goes to vendor
+          if (id.includes('node_modules/')) {
+            return 'vendor';
+          }
         }
       }
     },
-    chunkSizeWarningLimit: 1000,
-    sourcemap: false,
+    chunkSizeWarningLimit: 500,
     reportCompressedSize: true,
-    // Enable tree shaking
-    treeshake: {
-      moduleSideEffects: false,
-      propertyReadSideEffects: false,
-      unknownGlobalSideEffects: false
-    },
     // Optimize dependencies
     commonjsOptions: {
-      include: [/node_modules/]
+      include: [/node_modules/],
+      transformMixedEsModules: true
     },
     // Enable CSS code splitting
     cssCodeSplit: true,
     // Optimize asset handling
-    assetsInlineLimit: 4096
+    assetsInlineLimit: 2048, // Reduced inline limit
   },
   plugins: [
-    react(),
+    react({
+      jsxRuntime: 'automatic',
+      jsxImportSource: 'react'
+    }),
   ],
   resolve: {
     alias: {
@@ -113,6 +105,48 @@ export default defineConfig(({ mode }) => ({
     },
   },
   optimizeDeps: {
-    include: ['react', 'react-dom', 'react-router-dom']
+    include: [
+      'react', 
+      'react-dom', 
+      'react-router-dom',
+      'react/jsx-runtime',
+      'react/jsx-dev-runtime',
+      'react-hook-form',
+      '@hookform/resolvers',
+      'react-window',
+      'react-resizable-panels',
+      'react-day-picker',
+      '@tanstack/react-query',
+      '@radix-ui/react-slot',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-dropdown-menu',
+      '@radix-ui/react-select',
+      '@radix-ui/react-toast',
+      '@radix-ui/react-tooltip',
+      '@radix-ui/react-accordion',
+      '@radix-ui/react-alert-dialog',
+      '@radix-ui/react-avatar',
+      '@radix-ui/react-checkbox',
+      '@radix-ui/react-label',
+      '@radix-ui/react-popover',
+      '@radix-ui/react-progress',
+      '@radix-ui/react-radio-group',
+      '@radix-ui/react-scroll-area',
+      '@radix-ui/react-separator',
+      '@radix-ui/react-switch',
+      '@radix-ui/react-tabs',
+      '@radix-ui/react-toggle',
+      '@radix-ui/react-toggle-group',
+      'lucide-react',
+      'clsx',
+      'tailwind-merge',
+      'zod',
+      'class-variance-authority'
+    ],
+    force: true, // Force re-optimization
+    esbuildOptions: {
+      target: 'esnext',
+      jsx: 'automatic'
+    }
   }
 }));

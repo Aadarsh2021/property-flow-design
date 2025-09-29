@@ -7,10 +7,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { Suspense, lazy } from "react";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 // Lazy load all pages for better performance with preloading
 const ProtectedRoute = lazy(() => import("@/components/ProtectedRoute"));
-const ErrorBoundary = lazy(() => import("@/components/ErrorBoundary"));
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
 const Index = lazy(() => import("./pages/Index"));
@@ -33,6 +33,7 @@ const PartyReport = lazy(() => import("./pages/PartyReport"));
 const AdminLogin = lazy(() => import("./pages/AdminLogin"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const ApiTest = lazy(() => import("./components/ApiTest"));
 
 // Loading component
 const PageLoader = () => (
@@ -101,6 +102,9 @@ const App = () => {
                         {/* Admin Routes */}
                         <Route path="/admin" element={<AdminLogin />} />
                         <Route path="/admin/dashboard" element={<AdminDashboard />} />
+                        
+                        {/* Debug Routes */}
+                        <Route path="/api-test" element={<ApiTest />} />
                         
                         {/* Protected Routes */}
                         <Route path="/dashboard" element={
