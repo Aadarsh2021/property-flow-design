@@ -94,7 +94,10 @@ export default defineConfig(({ mode }) => ({
     assetsInlineLimit: 2048, // Reduced inline limit
   },
   plugins: [
-    react(),
+    react({
+      jsxRuntime: 'automatic',
+      jsxImportSource: 'react'
+    }),
   ],
   resolve: {
     alias: {
@@ -142,7 +145,8 @@ export default defineConfig(({ mode }) => ({
     ],
     force: true, // Force re-optimization
     esbuildOptions: {
-      target: 'esnext'
+      target: 'esnext',
+      jsx: 'automatic'
     }
   }
 }));
