@@ -34,6 +34,10 @@ const AccountLedgerComponent = () => {
   // Redux dispatch
   const dispatch = useAppDispatch();
 
+  // Local state for delete dialog
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // Redux state - actually connected now!
   const authState = useAppSelector(state => state.auth) as any;
   const ledgerState = useAppSelector(state => state.ledger) as any;
@@ -224,6 +228,252 @@ const AccountLedgerComponent = () => {
       dispatch(uiSlice.actions.addSelectedEntry(String(id)));
       } else {
       dispatch(uiSlice.actions.removeSelectedEntry(String(id)));
+    }
+  };
+
+  // Refresh ledger data
+  const handleRefresh = async () => {
+    if (!selectedPartyName) return;
+    
+    try {
+      dispatch(ledgerSlice.actions.setLoading(true));
+      const response = await partyLedgerAPI.getPartyLedger(selectedPartyName);
+      
+      if (response.success) {
+        dispatch(ledgerSlice.actions.setLedgerData(response.data));
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to refresh ledger data",
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      console.error('❌ Error refreshing ledger:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to refresh ledger data",
+        variant: "destructive",
+      });
+    } finally {
+      dispatch(ledgerSlice.actions.setLoading(false));
+    }
+  };
+
+  // Add new entry
+  const handleAddEntry = async () => {
+    const { newEntryPartyName, newEntryAmount, newEntryRemarks } = uiState;
+    
+    // Validation
+    if (!newEntryPartyName.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Please select a party",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!newEntryAmount.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter an amount",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Prevent self-transaction
+    if (newEntryPartyName.trim() === selectedPartyName) {
+      toast({
+        title: "Invalid Transaction",
+        description: "A party cannot make a transaction with itself",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    dispatch(uiSlice.actions.setIsAddingEntry(true));
+
+    try {
+      const amount = parseFloat(newEntryAmount);
+      const isCredit = amount > 0;
+      const tnsType = isCredit ? 'credit' : 'debit';
+      const absoluteAmount = Math.abs(amount);
+
+      // Prepare main entry data
+      const mainEntryData = {
+        partyName: selectedPartyName,
+        involvedParty: newEntryPartyName.trim(),
+        amount: absoluteAmount,
+        tnsType,
+        remarks: newEntryRemarks.trim() || `${newEntryPartyName}:${selectedPartyName}`,
+        ti: `GROUP_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      };
+
+      // Add the main entry
+      const response = await partyLedgerAPI.addEntry(mainEntryData);
+      
+      if (response.success) {
+        // Clear form
+        dispatch(uiSlice.actions.setNewEntryPartyName(''));
+        dispatch(uiSlice.actions.setNewEntryAmount(''));
+        dispatch(uiSlice.actions.setNewEntryRemarks(''));
+        
+        // Refresh ledger data to show the new entry
+        await handleRefresh();
+        
+        toast({
+          title: "Transaction Added",
+          description: `Successfully added transaction with ${newEntryPartyName}`,
+        });
+      } else {
+        throw new Error(response.message || 'Failed to add transaction');
+      }
+
+    } catch (error: any) {
+      console.error('❌ Error adding entry:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add transaction",
+        variant: "destructive",
+      });
+    } finally {
+      dispatch(uiSlice.actions.setIsAddingEntry(false));
+    }
+  };
+
+  // Check All function
+  const handleCheckAll = () => {
+    if (!ledgerData) return;
+    
+    const entriesToShow = showOldRecords ? ledgerData.oldRecords : ledgerData.ledgerEntries;
+    const allEntryIds = entriesToShow.map(entry => String(entry.id));
+    
+    dispatch(uiSlice.actions.setSelectedEntries(allEntryIds));
+    
+    toast({
+      title: "All Entries Selected",
+      description: `Selected ${allEntryIds.length} entries`,
+    });
+  };
+
+  // Monday Final function
+  const handleMondayFinal = async () => {
+    if (!selectedPartyName) return;
+    
+    try {
+      if (ledgerData?.mondayFinalData?.id) {
+        // Delete Monday Final
+        const response = await partyLedgerAPI.deleteMondayFinalEntry(ledgerData.mondayFinalData.id);
+        
+        if (response.success) {
+          await handleRefresh();
+          toast({
+            title: "Monday Final Deleted",
+            description: "Transactions have been unsettled",
+          });
+        }
+      } else {
+        // Create Monday Final
+        const response = await partyLedgerAPI.updateMondayFinal(selectedPartyName, {});
+        
+        if (response.success) {
+          await handleRefresh();
+      toast({
+            title: "Monday Final Created",
+            description: "All current transactions have been settled",
+        });
+        }
+      }
+    } catch (error: any) {
+      console.error('❌ Error with Monday Final:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to process Monday Final",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Delete click handler
+  const handleDeleteClick = () => {
+    if (selectedEntries.length === 0) {
+      toast({
+        title: "No Selection",
+        description: "Please select entries to delete",
+        variant: "destructive",
+      });
+      return;
+    }
+    setShowDeleteDialog(true);
+  };
+
+  // Delete selected entries
+  const handleDeleteSelected = async () => {
+    if (selectedEntries.length === 0) return;
+
+    // Check for old records protection
+    const selectedOldRecords = selectedEntries.filter(entryId => {
+      const entry = [...(ledgerData?.ledgerEntries || []), ...(ledgerData?.oldRecords || [])]
+        .find(e => String(e.id) === entryId);
+      return entry?.is_old_record === true;
+    });
+
+    if (selectedOldRecords.length > 0 && ledgerData?.mondayFinalData?.id) {
+      toast({
+        title: "Cannot Delete Old Records",
+        description: `${selectedOldRecords.length} selected entries are old records that were settled in Monday Final. Delete the Monday Final entry first to unsettle these transactions.`,
+        variant: "destructive",
+      });
+      setShowDeleteDialog(false);
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      const deletePromises = selectedEntries.map(entryId => 
+        partyLedgerAPI.deleteEntry(entryId)
+      );
+      
+      const results = await Promise.all(deletePromises);
+      
+      // Check if all deletions were successful
+      const successfulDeletions = results.filter(result => result.success);
+      const failedDeletions = results.filter(result => !result.success);
+
+      if (successfulDeletions.length > 0) {
+        // Clear selected entries
+        dispatch(uiSlice.actions.clearSelectedEntries());
+        
+        // Auto-refresh ledger data to show updated entries immediately
+        await handleRefresh();
+        
+        toast({
+          title: "Entries Deleted",
+          description: `Successfully deleted ${successfulDeletions.length} entries.`,
+        });
+      }
+
+      if (failedDeletions.length > 0) {
+        toast({
+          title: "Some Deletions Failed",
+          description: `Failed to delete ${failedDeletions.length} entries. They might be old records or have other restrictions.`,
+          variant: "destructive",
+        });
+      }
+
+    } catch (error: any) {
+      console.error('❌ Error deleting entries:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete entries",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteDialog(false);
     }
   };
 
@@ -514,7 +764,7 @@ const AccountLedgerComponent = () => {
         description: "Please select a party for the transaction.",
         variant: "destructive",
       });
-      return;
+            return;
     }
 
     // Validate that transaction party is different from current party
@@ -595,7 +845,7 @@ const AccountLedgerComponent = () => {
           // Take commission = negative amount (debit)
           commissionAmountValue = -totalCommissionAmount;
           commissionTypeLabel = 'Debit';
-      } else {
+    } else {
           // Give commission = positive amount (credit)
           commissionAmountValue = totalCommissionAmount;
           commissionTypeLabel = 'Credit';
