@@ -940,7 +940,7 @@ const AccountLedgerComponent = () => {
         const response = await partyLedgerAPI.getPartyLedger(partyNameWithTimestamp);
         console.log('🔍 Raw API response:', response);
         console.log('🔍 Response success:', response.success);
-        console.log('🔍 Response error:', response.error);
+        console.log('🔍 Response errors:', response.errors);
       if (response.success) {
           // Convert API response to LedgerData format
           const data = response.data as any;
@@ -971,7 +971,7 @@ const AccountLedgerComponent = () => {
           console.log('✅ Redux state updated');
       } else {
           console.error('❌ API call failed:', response);
-          dispatch(ledgerSlice.actions.setError(response.message || response.error || 'Failed to refresh ledger data'));
+          dispatch(ledgerSlice.actions.setError(response.message || (response.errors && response.errors.length > 0 ? response.errors[0] : 'Unknown error') || 'Failed to refresh ledger data'));
       }
     } catch (error) {
         console.error('❌ Error refreshing ledger data:', error);
