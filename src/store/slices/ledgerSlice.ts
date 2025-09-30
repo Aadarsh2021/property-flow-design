@@ -239,10 +239,26 @@ export const ledgerSlice = createSlice({
             }
           }
           
-          // Don't add involved entry to current table - it belongs to different party
-          // The involved entry will be handled separately when that party's data is loaded
+          // CRITICAL FIX: Add involved entry to current table for dual-party transactions
+          // The involved entry should show the party who initiated the transaction
+          if (action.payload.involvedEntry) {
+            // Check if optimistic involved entry exists to replace
+            const involvedIndex = state.data.ledgerEntries.findIndex(
+              entry => 
+                entry.isOptimistic === true &&
+                entry._id === action.payload.optimisticInvolvedEntry?._id
+            );
+            
+            if (involvedIndex !== -1) {
+              // Replace optimistic involved entry with real data
+              state.data.ledgerEntries[involvedIndex] = action.payload.involvedEntry;
+            } else {
+              // Add new involved entry if no optimistic entry found
+              state.data.ledgerEntries.unshift(action.payload.involvedEntry);
+            }
+          }
           
-          // Replace optimistic involved entry with real data if exists
+          // Replace optimistic involved entry with real data if exists (legacy handling)
           if (action.payload.optimisticInvolvedEntry && action.payload.involvedEntry) {
             const optimisticIndex = state.data.ledgerEntries.findIndex(
               entry => entry._id === action.payload.optimisticInvolvedEntry._id

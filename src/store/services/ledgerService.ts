@@ -171,10 +171,20 @@ export const addLedgerEntry = createAsyncThunk(
         id: (mainResponse.data as any).involvedEntry.id || (mainResponse.data as any).involvedEntry._id || (mainResponse.data as any).involvedEntry.ti,
         ti: (mainResponse.data as any).involvedEntry.ti || (mainResponse.data as any).involvedEntry.id || (mainResponse.data as any).involvedEntry._id,
         ...(mainResponse.data as any).involvedEntry,
-        // Override with correct party name - involved entry should show the selected party name
-        // For dual-party transactions: involved entry should show the party who initiated the transaction
-        partyName: params.selectedPartyName, // This will be "Rahul" - the selected party
-        party_name: params.selectedPartyName
+        // CRITICAL FIX: For dual-party transactions, the involved entry should show the party who initiated the transaction
+        // When viewing "Give" party table, the involved entry should show "Rahul" (the party who initiated)
+        // When viewing "Rahul" party table, the main entry should show "Give" (the party involved)
+        partyName: params.selectedPartyName, // This will be "Rahul" - the party who initiated the transaction
+        party_name: params.selectedPartyName,
+        // Ensure the entry shows the correct transaction details
+        tnsType: (mainResponse.data as any).involvedEntry.tns_type || (mainResponse.data as any).involvedEntry.tnsType,
+        type: (mainResponse.data as any).involvedEntry.tns_type || (mainResponse.data as any).involvedEntry.tnsType,
+        amount: (mainResponse.data as any).involvedEntry.tns_type === 'CR' ? 
+          (mainResponse.data as any).involvedEntry.credit : 
+          (mainResponse.data as any).involvedEntry.debit,
+        credit: (mainResponse.data as any).involvedEntry.credit,
+        debit: (mainResponse.data as any).involvedEntry.debit,
+        balance: (mainResponse.data as any).involvedEntry.balance
       } : null;
       
       console.log('🔍 Constructed Involved Entry:', involvedEntry);
