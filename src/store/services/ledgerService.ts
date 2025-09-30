@@ -179,12 +179,22 @@ export const addLedgerEntry = createAsyncThunk(
         // Ensure the entry shows the correct transaction details
         tnsType: (mainResponse.data as any).involvedEntry.tns_type || (mainResponse.data as any).involvedEntry.tnsType,
         type: (mainResponse.data as any).involvedEntry.tns_type || (mainResponse.data as any).involvedEntry.tnsType,
+        // CRITICAL FIX: Use the actual amount from the transaction, not based on type
         amount: (mainResponse.data as any).involvedEntry.tns_type === 'CR' ? 
           (mainResponse.data as any).involvedEntry.credit : 
           (mainResponse.data as any).involvedEntry.debit,
         credit: (mainResponse.data as any).involvedEntry.credit,
         debit: (mainResponse.data as any).involvedEntry.debit,
-        balance: (mainResponse.data as any).involvedEntry.balance
+        balance: (mainResponse.data as any).involvedEntry.balance,
+        // Debug logging
+        debugInfo: {
+          originalTnsType: (mainResponse.data as any).involvedEntry.tns_type,
+          originalCredit: (mainResponse.data as any).involvedEntry.credit,
+          originalDebit: (mainResponse.data as any).involvedEntry.debit,
+          calculatedAmount: (mainResponse.data as any).involvedEntry.tns_type === 'CR' ? 
+            (mainResponse.data as any).involvedEntry.credit : 
+            (mainResponse.data as any).involvedEntry.debit
+        }
       } : null;
       
       console.log('🔍 Constructed Involved Entry:', involvedEntry);
@@ -193,10 +203,13 @@ export const addLedgerEntry = createAsyncThunk(
         console.log('🔍 Involved Entry Party Name:', involvedEntry.partyName);
         console.log('🔍 Involved Entry Type:', involvedEntry.type);
         console.log('🔍 Involved Entry Amount:', involvedEntry.amount);
+        console.log('🔍 Involved Entry Credit:', involvedEntry.credit);
+        console.log('🔍 Involved Entry Debit:', involvedEntry.debit);
         console.log('🔍 Original Backend Party Name:', (mainResponse.data as any).involvedEntry.party_name);
         console.log('🔍 Selected Party Name:', params.selectedPartyName);
         console.log('🔍 Overridden Party Name:', involvedEntry.partyName);
-        console.log('🔍 Expected: Involved entry should show selected party name (Rahul) in Give table');
+        console.log('🔍 Debug Info:', involvedEntry.debugInfo);
+        console.log('🔍 Expected: Involved entry should show OPPOSITE transaction type for regular parties');
       }
       
       return {
