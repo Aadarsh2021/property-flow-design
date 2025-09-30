@@ -205,13 +205,52 @@ export const addLedgerEntry = createAsyncThunk(
   }
 );
 
-// 3. Delete Entries with Optimistic Updates
+// 3. Delete Entries with Optimistic Updates - OPTIMIZED BATCH VERSION
 export const deleteLedgerEntries = createAsyncThunk(
   'ledger/deleteEntries',
   async (params: DeleteEntryParams, { rejectWithValue, dispatch, getState }) => {
     try {
-      
       console.log('🔍 Attempting to delete entries with IDs:', params.entryIds);
+      
+      // Use batch delete API for better performance
+      if (params.entryIds.length > 1) {
+        console.log('🚀 Using batch delete API for', params.entryIds.length, 'entries');
+        
+        try {
+          const result = await partyLedgerAPI.deleteEntriesBatch(params.entryIds.map(String));
+          
+          console.log('🔍 Batch Delete Results:', {
+            totalDeleted: result.totalDeleted,
+            totalFailed: result.totalFailed,
+            batchCount: result.batchCount,
+            involvedParties: result.involvedParties.length
+          });
+          
+          if (result.totalFailed === 0) {
+            console.log('✅ Batch delete operation completed successfully');
+            return {
+              deletedIds: params.entryIds,
+              successfulCount: result.totalDeleted,
+              failedCount: result.totalFailed,
+              showOldRecords: params.showOldRecords || false
+            };
+          } else {
+            console.warn(`⚠️ Batch delete partially successful: ${result.totalDeleted} deleted, ${result.totalFailed} failed`);
+            return {
+              deletedIds: result.deletedEntries.map(e => e.entryId),
+              successfulCount: result.totalDeleted,
+              failedCount: result.totalFailed,
+              showOldRecords: params.showOldRecords || false
+            };
+          }
+        } catch (error: any) {
+          console.error('❌ Batch delete failed, falling back to individual deletions:', error);
+          // Fall back to individual deletions if batch fails
+        }
+      }
+      
+      // Fallback: Individual deletions for single entries or if batch fails
+      console.log('🔄 Using individual delete API');
       
       const deletePromises = params.entryIds.map(async (entryId) => {
         console.log('🔍 Deleting entry with ID:', entryId);
@@ -245,17 +284,15 @@ export const deleteLedgerEntries = createAsyncThunk(
       // Consider it successful if at least some deletions worked or all were already deleted
       if (successfulDeletions.length > 0 || failedDeletions.length === 0) {
         console.log('✅ Delete operation completed successfully');
+        return {
+          deletedIds: successfulDeletions.map(r => r.entryId),
+          successfulCount: successfulDeletions.length,
+          failedCount: failedDeletions.length,
+          showOldRecords: params.showOldRecords || false
+        };
       } else {
         return rejectWithValue('All deletions failed');
       }
-      
-      
-      return {
-        deletedIds: params.entryIds,
-        successfulCount: successfulDeletions.length,
-        failedCount: failedDeletions.length,
-        showOldRecords: params.showOldRecords
-      };
       
     } catch (error: any) {
       console.error('❌ Error deleting entries:', error);

@@ -509,6 +509,18 @@ export const partyLedgerAPI = {
   }>(`/party-ledger/entry/${id}`, {
     method: 'DELETE',
   }),
+  deleteEntriesBatch: (entryIds: string[]) => apiCall<{
+    totalDeleted: number;
+    totalFailed: number;
+    deletedEntries: Array<{ entryId: string; deletedCount: number }>;
+    failedEntries: Array<{ entryId: string; reason: string }>;
+    involvedParties: string[];
+    batchCount: number;
+    batchSize: number;
+  }>('/party-ledger/entries/batch', {
+    method: 'DELETE',
+    body: JSON.stringify({ entryIds }),
+  }),
   deleteParties: (partyNames: string[]) => apiCall<{ deleted: number }>('/parties', {
     method: 'DELETE',
     body: JSON.stringify({ partyNames }),
