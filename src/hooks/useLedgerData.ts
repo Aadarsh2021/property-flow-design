@@ -178,7 +178,7 @@ export const useLedgerData = ({
       debit: debit,
       balance: balance,
       chk: entry.chk || false,
-      partyName: entry.partyName || entry.party_name || selectedPartyName,
+      partyName: entry.partyName || entry.party_name || selectedPartyName || 'Unknown Party',
       is_old_record: entry.is_old_record || false,
       ti: entry.ti || entry.id || entry._id
     };

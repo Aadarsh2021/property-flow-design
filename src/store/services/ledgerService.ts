@@ -137,6 +137,7 @@ export const addLedgerEntry = createAsyncThunk(
         ti: (mainResponse.data as any)?.mainEntry?.ti || (mainResponse.data as any)?.mainEntry?.id || (mainResponse.data as any)?.mainEntry?._id,
         date: params.entryData.date,
         partyName: params.entryData.partyName,
+        party_name: params.entryData.partyName,
         remarks: params.entryData.remarks,
         amount: params.entryData.amount,
         credit: params.entryData.credit,

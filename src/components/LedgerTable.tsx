@@ -71,10 +71,10 @@ const TableRow = ({
       <td className="px-4 py-3 text-gray-800 font-medium">
         <div className="flex items-center space-x-2">
           <span>
-            {entry.partyName ? (
+            {entry.partyName || entry.party_name ? (
               entry.remarks && entry.remarks.trim() && !entry.remarks.includes(':') ? 
-                `${entry.partyName}(${entry.remarks.trim()})` : 
-                entry.partyName
+                `${entry.partyName || entry.party_name}(${entry.remarks.trim()})` : 
+                (entry.partyName || entry.party_name)
             ) : (
               formatPartyNameDisplay(entry.remarks || '')
             )}
