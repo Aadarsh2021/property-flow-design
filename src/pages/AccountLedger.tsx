@@ -34,10 +34,6 @@ const AccountLedgerComponent = () => {
   // Redux dispatch
   const dispatch = useAppDispatch();
 
-  // Local state for delete dialog
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-
   // Redux state - actually connected now!
   const authState = useAppSelector(state => state.auth) as any;
   const ledgerState = useAppSelector(state => state.ledger) as any;
@@ -52,6 +48,8 @@ const AccountLedgerComponent = () => {
     selectedPartyName = initialPartyName || '',
     filters = { showOldRecords: false }
   } = ledgerState || {};
+  
+  console.log('🔍 Main component ledgerData from Redux:', ledgerData);
   const {
     availableParties = [],
     filteredTopParties = [],
@@ -95,6 +93,7 @@ const AccountLedgerComponent = () => {
   // Local state for delete functionality
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Extract showOldRecords with default
   const showOldRecords = filters?.showOldRecords || false;
@@ -178,6 +177,7 @@ const AccountLedgerComponent = () => {
               totalCredit: data?.totalCredit || 0,
             };
             dispatch(ledgerSlice.actions.setLedgerData(ledgerData));
+            setRefreshKey(prev => prev + 1); // Force table re-render
           }
         } catch (error) {
           console.error('Error loading ledger data:', error);
@@ -228,252 +228,6 @@ const AccountLedgerComponent = () => {
       dispatch(uiSlice.actions.addSelectedEntry(String(id)));
       } else {
       dispatch(uiSlice.actions.removeSelectedEntry(String(id)));
-    }
-  };
-
-  // Refresh ledger data
-  const handleRefresh = async () => {
-    if (!selectedPartyName) return;
-    
-    try {
-      dispatch(ledgerSlice.actions.setLoading(true));
-      const response = await partyLedgerAPI.getPartyLedger(selectedPartyName);
-      
-      if (response.success) {
-        dispatch(ledgerSlice.actions.setLedgerData(response.data));
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to refresh ledger data",
-          variant: "destructive",
-        });
-      }
-    } catch (error: any) {
-      console.error('❌ Error refreshing ledger:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to refresh ledger data",
-        variant: "destructive",
-      });
-    } finally {
-      dispatch(ledgerSlice.actions.setLoading(false));
-    }
-  };
-
-  // Add new entry
-  const handleAddEntry = async () => {
-    const { newEntryPartyName, newEntryAmount, newEntryRemarks } = uiState;
-    
-    // Validation
-    if (!newEntryPartyName.trim()) {
-      toast({
-        title: "Validation Error",
-        description: "Please select a party",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    if (!newEntryAmount.trim()) {
-      toast({
-        title: "Validation Error",
-        description: "Please enter an amount",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Prevent self-transaction
-    if (newEntryPartyName.trim() === selectedPartyName) {
-      toast({
-        title: "Invalid Transaction",
-        description: "A party cannot make a transaction with itself",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    dispatch(uiSlice.actions.setIsAddingEntry(true));
-
-    try {
-      const amount = parseFloat(newEntryAmount);
-      const isCredit = amount > 0;
-      const tnsType = isCredit ? 'credit' : 'debit';
-      const absoluteAmount = Math.abs(amount);
-
-      // Prepare main entry data
-      const mainEntryData = {
-        partyName: selectedPartyName,
-        involvedParty: newEntryPartyName.trim(),
-        amount: absoluteAmount,
-        tnsType,
-        remarks: newEntryRemarks.trim() || `${newEntryPartyName}:${selectedPartyName}`,
-        ti: `GROUP_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      };
-
-      // Add the main entry
-      const response = await partyLedgerAPI.addEntry(mainEntryData);
-      
-      if (response.success) {
-        // Clear form
-        dispatch(uiSlice.actions.setNewEntryPartyName(''));
-        dispatch(uiSlice.actions.setNewEntryAmount(''));
-        dispatch(uiSlice.actions.setNewEntryRemarks(''));
-        
-        // Refresh ledger data to show the new entry
-        await handleRefresh();
-        
-        toast({
-          title: "Transaction Added",
-          description: `Successfully added transaction with ${newEntryPartyName}`,
-        });
-      } else {
-        throw new Error(response.message || 'Failed to add transaction');
-      }
-
-    } catch (error: any) {
-      console.error('❌ Error adding entry:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to add transaction",
-        variant: "destructive",
-      });
-    } finally {
-      dispatch(uiSlice.actions.setIsAddingEntry(false));
-    }
-  };
-
-  // Check All function
-  const handleCheckAll = () => {
-    if (!ledgerData) return;
-    
-    const entriesToShow = showOldRecords ? ledgerData.oldRecords : ledgerData.ledgerEntries;
-    const allEntryIds = entriesToShow.map(entry => String(entry.id));
-    
-    dispatch(uiSlice.actions.setSelectedEntries(allEntryIds));
-    
-    toast({
-      title: "All Entries Selected",
-      description: `Selected ${allEntryIds.length} entries`,
-    });
-  };
-
-  // Monday Final function
-  const handleMondayFinal = async () => {
-    if (!selectedPartyName) return;
-    
-    try {
-      if (ledgerData?.mondayFinalData?.id) {
-        // Delete Monday Final
-        const response = await partyLedgerAPI.deleteMondayFinalEntry(ledgerData.mondayFinalData.id);
-        
-        if (response.success) {
-          await handleRefresh();
-          toast({
-            title: "Monday Final Deleted",
-            description: "Transactions have been unsettled",
-          });
-        }
-      } else {
-        // Create Monday Final
-        const response = await partyLedgerAPI.updateMondayFinal(selectedPartyName, {});
-        
-        if (response.success) {
-          await handleRefresh();
-      toast({
-            title: "Monday Final Created",
-            description: "All current transactions have been settled",
-        });
-        }
-      }
-    } catch (error: any) {
-      console.error('❌ Error with Monday Final:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to process Monday Final",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Delete click handler
-  const handleDeleteClick = () => {
-    if (selectedEntries.length === 0) {
-      toast({
-        title: "No Selection",
-        description: "Please select entries to delete",
-        variant: "destructive",
-      });
-      return;
-    }
-    setShowDeleteDialog(true);
-  };
-
-  // Delete selected entries
-  const handleDeleteSelected = async () => {
-    if (selectedEntries.length === 0) return;
-
-    // Check for old records protection
-    const selectedOldRecords = selectedEntries.filter(entryId => {
-      const entry = [...(ledgerData?.ledgerEntries || []), ...(ledgerData?.oldRecords || [])]
-        .find(e => String(e.id) === entryId);
-      return entry?.is_old_record === true;
-    });
-
-    if (selectedOldRecords.length > 0 && ledgerData?.mondayFinalData?.id) {
-      toast({
-        title: "Cannot Delete Old Records",
-        description: `${selectedOldRecords.length} selected entries are old records that were settled in Monday Final. Delete the Monday Final entry first to unsettle these transactions.`,
-        variant: "destructive",
-      });
-      setShowDeleteDialog(false);
-      return;
-    }
-
-    setIsDeleting(true);
-
-    try {
-      const deletePromises = selectedEntries.map(entryId => 
-        partyLedgerAPI.deleteEntry(entryId)
-      );
-      
-      const results = await Promise.all(deletePromises);
-      
-      // Check if all deletions were successful
-      const successfulDeletions = results.filter(result => result.success);
-      const failedDeletions = results.filter(result => !result.success);
-
-      if (successfulDeletions.length > 0) {
-        // Clear selected entries
-        dispatch(uiSlice.actions.clearSelectedEntries());
-        
-        // Auto-refresh ledger data to show updated entries immediately
-        await handleRefresh();
-        
-        toast({
-          title: "Entries Deleted",
-          description: `Successfully deleted ${successfulDeletions.length} entries.`,
-        });
-      }
-
-      if (failedDeletions.length > 0) {
-        toast({
-          title: "Some Deletions Failed",
-          description: `Failed to delete ${failedDeletions.length} entries. They might be old records or have other restrictions.`,
-          variant: "destructive",
-        });
-      }
-
-    } catch (error: any) {
-      console.error('❌ Error deleting entries:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete entries",
-        variant: "destructive",
-      });
-    } finally {
-      setIsDeleting(false);
-      setShowDeleteDialog(false);
     }
   };
 
@@ -764,7 +518,7 @@ const AccountLedgerComponent = () => {
         description: "Please select a party for the transaction.",
         variant: "destructive",
       });
-            return;
+      return;
     }
 
     // Validate that transaction party is different from current party
@@ -845,7 +599,7 @@ const AccountLedgerComponent = () => {
           // Take commission = negative amount (debit)
           commissionAmountValue = -totalCommissionAmount;
           commissionTypeLabel = 'Debit';
-    } else {
+      } else {
           // Give commission = positive amount (credit)
           commissionAmountValue = totalCommissionAmount;
           commissionTypeLabel = 'Credit';
@@ -922,8 +676,14 @@ const AccountLedgerComponent = () => {
         }
 
         
-        // Auto-refresh ledger data to show new entries immediately
-        await handleRefresh();
+        // Auto-refresh ledger data to show new entries immediately (force refresh)
+        console.log('🔄 Refreshing ledger data after transaction...');
+        
+        // Add a small delay to ensure transaction is committed
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        await handleRefresh(true);
+        console.log('✅ Ledger data refreshed');
         
       } else {
         console.error('❌ Failed to add main entry:', mainResponse.message);
@@ -1023,8 +783,8 @@ const AccountLedgerComponent = () => {
         // Clear selected entries
         dispatch(uiSlice.actions.clearSelectedEntries());
         
-        // Auto-refresh ledger data to show updated entries immediately
-        await handleRefresh();
+        // Auto-refresh ledger data to show updated entries immediately (force refresh)
+        await handleRefresh(true);
         
         toast({
           title: "Entries Deleted",
@@ -1120,7 +880,7 @@ const AccountLedgerComponent = () => {
           });
           
           // Auto-refresh ledger data to show unsettled transactions immediately
-          await handleRefresh();
+          await handleRefresh(true);
       } else {
         toast({
           title: "Error",
@@ -1150,7 +910,7 @@ const AccountLedgerComponent = () => {
           });
           
           // Auto-refresh ledger data to show settled transactions immediately
-          await handleRefresh();
+          await handleRefresh(true);
       } else {
         toast({
           title: "Error",
@@ -1169,30 +929,60 @@ const AccountLedgerComponent = () => {
     }
   };
 
-  const handleRefresh = async () => {
+  const handleRefresh = async (forceRefresh = false) => {
     if (selectedPartyName) {
       dispatch(ledgerSlice.actions.setLoading(true));
       try {
-        const response = await partyLedgerAPI.getPartyLedger(selectedPartyName);
+        // Add timestamp to force cache busting for real-time updates
+        const partyNameWithTimestamp = forceRefresh 
+          ? `${selectedPartyName}&_t=${Date.now()}&_r=${Math.random()}` 
+          : selectedPartyName;
+        const response = await partyLedgerAPI.getPartyLedger(partyNameWithTimestamp);
+        console.log('🔍 Raw API response:', response);
+        console.log('🔍 Response success:', response.success);
+        console.log('🔍 Response error:', response.error);
       if (response.success) {
           // Convert API response to LedgerData format
           const data = response.data as any;
+          console.log('🔍 Raw API data:', data);
+          console.log('🔍 Data type:', typeof data, 'Is Array:', Array.isArray(data));
+          console.log('🔍 Data keys:', data ? Object.keys(data) : 'null');
+          
           const ledgerEntries = Array.isArray(data) ? data : (data?.ledgerEntries || []);
           const oldRecords = data?.oldRecords || [];
+          
+          console.log('🔍 Processed ledgerEntries:', ledgerEntries);
+          console.log('🔍 Processed oldRecords:', oldRecords);
 
           const ledgerData = {
             ledgerEntries,
             oldRecords,
-            totalBalance: data?.totalBalance || 0,
-            totalDebit: data?.totalDebit || 0,
-            totalCredit: data?.totalCredit || 0,
+            totalBalance: data?.closingBalance || 0,
+            totalDebit: data?.summary?.totalDebit || 0,
+            totalCredit: data?.summary?.totalCredit || 0,
           };
+          console.log('📊 Updating Redux with new ledger data:', ledgerData);
           dispatch(ledgerSlice.actions.setLedgerData(ledgerData));
+          setRefreshKey(prev => {
+            const newKey = prev + 1;
+            console.log('🔄 Incrementing refreshKey:', prev, '->', newKey);
+            return newKey;
+          }); // Force table re-render
+          console.log('✅ Redux state updated');
       } else {
-          dispatch(ledgerSlice.actions.setError(response.message || 'Failed to refresh ledger data'));
+          console.error('❌ API call failed:', response);
+          dispatch(ledgerSlice.actions.setError(response.message || response.error || 'Failed to refresh ledger data'));
       }
     } catch (error) {
-        dispatch(ledgerSlice.actions.setError('Failed to refresh ledger data'));
+        console.error('❌ Error refreshing ledger data:', error);
+        dispatch(ledgerSlice.actions.setError(`Failed to refresh ledger data: ${error.message || error}`));
+        
+        // Show user-friendly error message
+        toast({
+          title: "Error Loading Data",
+          description: "Unable to load ledger data. Please try refreshing the page or contact support if the issue persists.",
+          variant: "destructive",
+        });
     } finally {
         dispatch(ledgerSlice.actions.setLoading(false));
       }
@@ -1377,6 +1167,7 @@ const AccountLedgerComponent = () => {
                   </div>
                 <div className="overflow-auto p-4" style={{ height: 'calc(100% - 60px)' }}>
                   <LedgerTable
+                    key={`${selectedPartyName}-${refreshKey}`}
                     ledgerData={ledgerData}
                     showOldRecords={showOldRecords}
                     selectedEntries={selectedEntries}
@@ -1397,7 +1188,7 @@ const AccountLedgerComponent = () => {
           {/* Right Side Action Buttons */}
           <div className="w-64 bg-white shadow-lg border-l border-gray-200 p-6 flex flex-col h-full">
             <ActionButtons
-              onRefresh={() => handleRefresh()}
+              onRefresh={() => handleRefresh(true)}
               onDCReport={() => {}}
               onMondayFinal={handleMondayFinal}
               onOldRecord={() => {}}

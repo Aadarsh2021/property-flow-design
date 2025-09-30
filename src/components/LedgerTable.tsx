@@ -92,6 +92,8 @@ const LedgerTable: React.FC<LedgerTableProps> = ({
   onEntrySelect,
   loading = false
 }) => {
+  console.log('📋 LedgerTable rendering with:', { ledgerData, loading, hasEntries: ledgerData?.ledgerEntries?.length });
+  
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">

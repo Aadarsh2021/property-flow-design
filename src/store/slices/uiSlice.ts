@@ -45,9 +45,6 @@ interface UIState {
   showTransactionInlineSuggestion: boolean;
   isAddingEntry: boolean;
   
-  // Selected entries for bulk operations
-  selectedEntries: string[];
-  
   // Toast notifications
   toasts: ToastMessage[];
   
@@ -98,9 +95,6 @@ const initialState: UIState = {
   transactionAutoCompleteText: '',
   showTransactionInlineSuggestion: false,
   isAddingEntry: false,
-  
-  // Selected entries for bulk operations
-  selectedEntries: [],
   
   // Toast notifications
   toasts: [],
@@ -185,17 +179,11 @@ export const uiSlice = createSlice({
     
     // Selected entries management
     addSelectedEntry: (state, action: PayloadAction<string>) => {
-      if (!state.selectedEntries) {
-        state.selectedEntries = [];
-      }
       if (!state.selectedEntries.includes(action.payload)) {
         state.selectedEntries.push(action.payload);
       }
     },
     removeSelectedEntry: (state, action: PayloadAction<string>) => {
-      if (!state.selectedEntries) {
-        state.selectedEntries = [];
-      }
       state.selectedEntries = state.selectedEntries.filter(id => id !== action.payload);
     },
     clearSelectedEntries: (state) => {

@@ -6,7 +6,7 @@
  */
 
 import { ApiResponse, NewPartyData, NewParty, Party, LedgerEntry, LedgerEntryInput, UserSettings, TrialBalanceEntry, GoogleUserData, GoogleAuthResponse } from '../types';
-// import { cachedApiCall } from './apiCache'; // Removed cache functionality
+import { cachedApiCall } from './apiCache';
 
 // API Configuration
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://account-ledger-software.vercel.app/api';
@@ -405,15 +405,54 @@ export const newPartyAPI = {
 };
 
 export const partyLedgerAPI = {
-  getAllParties: () => {
-    console.log('📋 Fetching all parties');
-    return apiCall<Party[]>('/parties');
+  getAllParties: (forceRefresh = false) => {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = user.id || 'anonymous';
+    
+    // Add cache-busting parameter if force refresh is requested
+    const cacheKey = forceRefresh ? `all-parties-${userId}-${Date.now()}` : `all-parties-${userId}`;
+    
+    return cachedApiCall(
+      cacheKey,
+      () => apiCall<Party[]>('/parties'),
+      forceRefresh ? 0 : 5 * 60 * 1000 // No cache if force refresh, otherwise 5 minutes for better performance
+    );
   },
   getPartyLedger: (partyName: string) => {
-    // Clean party name if it contains cache busting parameter
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = user.id || 'anonymous';
+    
+    // Check if partyName contains cache busting parameter
+    const isForceRefresh = partyName.includes('&_t=');
     const cleanPartyName = partyName.split('&_t=')[0];
-    console.log('📊 Fetching party ledger for:', cleanPartyName);
-    return apiCall<LedgerEntry[]>(`/party-ledger/${encodeURIComponent(cleanPartyName)}`);
+    
+    if (isForceRefresh) {
+      // Force refresh - bypass cache completely
+      console.log('🔄 Force refresh requested for party ledger:', cleanPartyName);
+      return apiCall<LedgerEntry[]>(`/party-ledger/${encodeURIComponent(cleanPartyName)}`);
+    } else {
+      // Use optimized cache strategy based on party type
+      const cacheKey = `party-ledger-${userId}-${cleanPartyName}`;
+      
+      // Different cache times based on party type
+      let cacheTime = 60 * 1000; // Default 1 minute
+      
+      // Commission and company parties change more frequently
+      if (cleanPartyName.toLowerCase().includes('commission') || 
+          cleanPartyName.toLowerCase().includes('company') ||
+          cleanPartyName.toLowerCase().includes('give')) {
+        cacheTime = 30 * 1000; // 30 seconds for system parties
+      }
+      
+      return cachedApiCall(
+        cacheKey,
+        () => {
+          console.log('📊 Fetching party ledger for:', cleanPartyName);
+          return apiCall<LedgerEntry[]>(`/party-ledger/${encodeURIComponent(cleanPartyName)}`);
+        },
+        cacheTime
+      );
+    }
   },
   addEntry: (entryData: LedgerEntryInput) => apiCall<LedgerEntry>('/party-ledger/entry', {
     method: 'POST',
@@ -469,38 +508,43 @@ export const userSettingsAPI = {
 
 export const finalTrialBalanceAPI = {
   getAll: () => {
-    console.log('📊 Fetching trial balance...');
-    return apiCall<{
-      trialBalance: Array<{
-        partyName: string;
-        totalCredit: number;
-        totalDebit: number;
-        balance: number;
-        transactionCount: number;
-        lastTransactionDate: string;
-        status: string;
-      }>;
-      summary: {
-        totalParties: number;
-        totalCredit: number;
-        totalDebit: number;
-        totalTransactions: number;
-        netBalance: number;
-      };
-      pagination: {
-        page: number;
-        limit: number;
-        total: number;
-        totalPages: number;
-      };
-      performance: {
-        totalTime: number;
-        queryTime: number;
-        cacheHit: boolean;
-      };
-    }>('/final-trial-balance', {
-      method: 'GET',
-    });
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = user.id || 'anonymous';
+    return cachedApiCall(
+      `trial-balance-${userId}`,
+      () => apiCall<{
+        trialBalance: Array<{
+          partyName: string;
+          totalCredit: number;
+          totalDebit: number;
+          balance: number;
+          transactionCount: number;
+          lastTransactionDate: string;
+          status: string;
+        }>;
+        summary: {
+          totalParties: number;
+          totalCredit: number;
+          totalDebit: number;
+          totalTransactions: number;
+          netBalance: number;
+        };
+        pagination: {
+          page: number;
+          limit: number;
+          total: number;
+          totalPages: number;
+        };
+        performance: {
+          totalTime: number;
+          queryTime: number;
+          cacheHit: boolean;
+        };
+      }>('/final-trial-balance', {
+        method: 'GET',
+      }),
+      5 * 60 * 1000 // 5 minutes cache - trial balance is expensive to calculate
+    );
   },
   forceRefresh: () => {
     console.log('🔄 Force refreshing trial balance...');
@@ -538,25 +582,46 @@ export const finalTrialBalanceAPI = {
   },
   // Get balance for a specific party
   getPartyBalance: (partyName: string) => {
-    console.log('📊 Fetching party balance for:', partyName);
-    return apiCall<{
-      partyName: string;
-      balance: number;
-      creditTotal: number;
-      debitTotal: number;
-    }>(`/final-trial-balance/party/${encodeURIComponent(partyName)}`, {
-      method: 'GET',
-    });
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = user.id || 'anonymous';
+    const cacheKey = `party-balance-${userId}-${partyName}`;
+    
+    return cachedApiCall(
+      cacheKey,
+      () => {
+        console.log('📊 Fetching party balance for:', partyName);
+        return apiCall<{
+          partyName: string;
+          balance: number;
+          creditTotal: number;
+          debitTotal: number;
+        }>(`/final-trial-balance/party/${encodeURIComponent(partyName)}`, {
+          method: 'GET',
+        });
+      },
+      2 * 60 * 1000 // 2 minutes cache - party balances change moderately
+    );
   },
   // Optimized batch API for getting multiple party balances at once
   getBatchBalances: (partyNames: string[]) => {
-    // Sort party names for consistent results
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = user.id || 'anonymous';
+    
+    // Sort party names for consistent cache keys
     const sortedPartyNames = [...partyNames].sort();
-    console.log('📊 Fetching batch balances for parties:', sortedPartyNames.length);
-    return apiCall<any[]>('/final-trial-balance/batch-balances', {
-      method: 'POST',
-      body: JSON.stringify({ partyNames: sortedPartyNames }),
-    });
+    const cacheKey = `batch-balances-${userId}-${sortedPartyNames.join(',')}`;
+    
+    return cachedApiCall(
+      cacheKey,
+      () => {
+        console.log('📊 Fetching batch balances for parties:', sortedPartyNames.length);
+        return apiCall<any[]>('/final-trial-balance/batch-balances', {
+          method: 'POST',
+          body: JSON.stringify({ partyNames: sortedPartyNames }),
+        });
+      },
+      3 * 60 * 1000 // 3 minutes cache - batch operations are expensive
+    );
   },
   generateReport: (reportData: { startDate: string; endDate: string; partyName?: string }) => {
     console.log('📋 Generating trial balance report:', reportData);
@@ -615,22 +680,46 @@ export const authAPI = {
 
 export const dashboardAPI = {
   getStats: () => {
-    console.log('📊 Fetching dashboard stats...');
-    return apiCall<any>('/dashboard/stats');
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = user.id || 'anonymous';
+    return cachedApiCall(
+      `dashboard-stats-${userId}`,
+      () => {
+        console.log('📊 Fetching dashboard stats...');
+        return apiCall<any>('/dashboard/stats');
+      },
+      3 * 60 * 1000 // 3 minutes cache - stats change moderately
+    );
   },
   getSummary: () => {
-    console.log('📈 Fetching dashboard summary...');
-    return apiCall<any>('/dashboard/summary');
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = user.id || 'anonymous';
+    return cachedApiCall(
+      `dashboard-summary-${userId}`,
+      () => {
+        console.log('📈 Fetching dashboard summary...');
+        return apiCall<any>('/dashboard/summary');
+      },
+      3 * 60 * 1000 // 3 minutes cache - summary is calculated data
+    );
   },
   // New: Get comprehensive dashboard data in one call
   getAllDashboardData: () => {
-    console.log('📊 Fetching comprehensive dashboard data...');
-    return apiCall<{
-      stats: any;
-      summary: any;
-      recentActivity?: any[];
-      health?: any;
-    }>('/dashboard/all');
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = user.id || 'anonymous';
+    return cachedApiCall(
+      `dashboard-all-${userId}`,
+      () => {
+        console.log('📊 Fetching comprehensive dashboard data...');
+        return apiCall<{
+          stats: any;
+          summary: any;
+          recentActivity?: any[];
+          health?: any;
+        }>('/dashboard/all');
+      },
+      2 * 60 * 1000 // 2 minutes cache - comprehensive data
+    );
   },
 };
 
