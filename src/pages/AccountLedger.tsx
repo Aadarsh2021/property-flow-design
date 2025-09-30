@@ -680,14 +680,52 @@ const AccountLedgerComponent = () => {
         console.log('🔄 Refreshing ledger data after transaction...');
         console.log('🔍 Current refreshKey before refresh:', refreshKey);
         
-        // Add a small delay to ensure transaction is committed
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Add longer delay to ensure transaction is fully committed
+        await new Promise(resolve => setTimeout(resolve, 1500));
         
-        await handleRefresh(true);
+        // Try refreshing with retry logic
+        let retryCount = 0;
+        let hasData = false;
+        
+        while (retryCount < 3 && !hasData) {
+          const response = await partyLedgerAPI.getPartyLedger(`${selectedPartyName}&_t=${Date.now()}&_r=${Math.random()}`);
+          
+          if (response.success && response.data) {
+            const data = response.data as any;
+            hasData = data.ledgerEntries && data.ledgerEntries.length > 0;
+            
+            if (hasData) {
+              // Update Redux state with the fresh data
+              const ledgerEntries = Array.isArray(data) ? data : (data?.ledgerEntries || []);
+              const oldRecords = data?.oldRecords || [];
+              
+              const ledgerData = {
+                ledgerEntries,
+                oldRecords,
+                totalBalance: data?.closingBalance || 0,
+                totalDebit: data?.summary?.totalDebit || 0,
+                totalCredit: data?.summary?.totalCredit || 0,
+              };
+              
+              dispatch(ledgerSlice.actions.setLedgerData(ledgerData));
+              setRefreshKey(prev => prev + 1);
+              console.log('✅ Found data and updated Redux state');
+            }
+          }
+          
+          if (!hasData && retryCount < 2) {
+            console.log(`🔄 No data found, retrying... (attempt ${retryCount + 1}/3)`);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            retryCount++;
+          } else {
+            break;
+          }
+        }
+        
         console.log('✅ Ledger data refreshed');
         console.log('🔍 Current refreshKey after refresh:', refreshKey);
         
-      } else {
+    } else {
         console.error('❌ Failed to add main entry:', mainResponse.message);
         dispatch(uiSlice.actions.setIsAddingEntry(false));
       toast({
@@ -719,7 +757,7 @@ const AccountLedgerComponent = () => {
       successMessage += `\n\n📋 Transactions created:\n${transactionsCreated.join('\n')}`;
     }
 
-    toast({
+      toast({
       title: "Transaction Added Successfully",
       description: successMessage,
     });
