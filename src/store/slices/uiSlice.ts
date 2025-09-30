@@ -48,6 +48,9 @@ interface UIState {
   // Toast notifications
   toasts: ToastMessage[];
   
+  // Selected entries for bulk operations
+  selectedEntries: (string | number)[];
+  
   // Theme and display
   theme: 'light' | 'dark' | 'system';
   sidebarCollapsed: boolean;
@@ -98,6 +101,9 @@ const initialState: UIState = {
   
   // Toast notifications
   toasts: [],
+  
+  // Selected entries for bulk operations
+  selectedEntries: [],
   
   // Theme and display
   theme: 'system',
@@ -179,11 +185,17 @@ export const uiSlice = createSlice({
     
     // Selected entries management
     addSelectedEntry: (state, action: PayloadAction<string>) => {
+      if (!state.selectedEntries) {
+        state.selectedEntries = [];
+      }
       if (!state.selectedEntries.includes(action.payload)) {
         state.selectedEntries.push(action.payload);
       }
     },
     removeSelectedEntry: (state, action: PayloadAction<string>) => {
+      if (!state.selectedEntries) {
+        state.selectedEntries = [];
+      }
       state.selectedEntries = state.selectedEntries.filter(id => id !== action.payload);
     },
     clearSelectedEntries: (state) => {
