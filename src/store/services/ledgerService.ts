@@ -15,6 +15,7 @@ import { AppDispatch, RootState } from '../index';
 // Types
 export interface LedgerEntryInput {
   partyName: string;
+  involvedParty: string; // Required for dual-party transactions
   amount: number;
   remarks: string;
   tnsType: 'CR' | 'DR';
@@ -22,7 +23,6 @@ export interface LedgerEntryInput {
   debit: number;
   date: string;
   ti: string;
-  involvedParty: string;
 }
 
 export interface AddEntryParams {

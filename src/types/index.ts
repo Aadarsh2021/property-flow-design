@@ -164,6 +164,7 @@ export interface LedgerEntry {
 
 export interface LedgerEntryInput {
   partyName: string;
+  involvedParty: string; // Required for dual-party transactions
   amount?: number;
   remarks: string;
   tnsType: 'CR' | 'DR' | 'Monday S...' | string;

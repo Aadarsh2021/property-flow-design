@@ -476,9 +476,10 @@ export const useTransactionForm = ({
       const displayRemarks = remarksText || '';
       
       const entryData = {
-          partyName: selectedPartyName, // Current party (Take) - so it appears in Take's ledger
+          partyName: selectedPartyName, // Current party (Rahul) - so it appears in Rahul's ledger
+          involvedParty: newEntry.partyName, // Other party (Give) - for dual-party transaction
         amount: absoluteAmount,
-        remarks: displayRemarks, // Other party name + remarks (Give(0))
+        remarks: displayRemarks, // Remarks (optional)
           tnsType,
         credit: tnsType === 'CR' ? absoluteAmount : 0,
         debit: tnsType === 'DR' ? absoluteAmount : 0,
