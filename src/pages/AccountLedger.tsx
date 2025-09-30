@@ -678,12 +678,14 @@ const AccountLedgerComponent = () => {
         
         // Auto-refresh ledger data to show new entries immediately (force refresh)
         console.log('🔄 Refreshing ledger data after transaction...');
+        console.log('🔍 Current refreshKey before refresh:', refreshKey);
         
         // Add a small delay to ensure transaction is committed
         await new Promise(resolve => setTimeout(resolve, 500));
         
         await handleRefresh(true);
         console.log('✅ Ledger data refreshed');
+        console.log('🔍 Current refreshKey after refresh:', refreshKey);
         
       } else {
         console.error('❌ Failed to add main entry:', mainResponse.message);
@@ -1174,6 +1176,10 @@ const AccountLedgerComponent = () => {
                     onEntrySelect={handleEntrySelect}
                     loading={loading}
                   />
+                  {/* Debug info */}
+                  <div className="text-xs text-gray-400 mt-2">
+                    Debug: refreshKey={refreshKey}, party={selectedPartyName}
+                  </div>
                 </div>
               </div>
               
