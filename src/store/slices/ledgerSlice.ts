@@ -239,9 +239,11 @@ export const ledgerSlice = createSlice({
             }
           }
           
-          // CRITICAL FIX: Add involved entry to current table for dual-party transactions
-          // The involved entry should show the party who initiated the transaction
-          if (action.payload.involvedEntry) {
+          // CRITICAL FIX: DON'T add involved entry to current table
+          // Involved entry belongs to different party's table, not current table
+          // Only add involved entry if it's for the same party (which shouldn't happen in dual-party transactions)
+          if (action.payload.involvedEntry && action.payload.involvedEntry.partyName === action.payload.mainEntry.partyName) {
+            console.log('🔍 Adding involved entry to same party table (unusual case)');
             // Check if optimistic involved entry exists to replace
             const involvedIndex = state.data.ledgerEntries.findIndex(
               entry => 
@@ -256,6 +258,8 @@ export const ledgerSlice = createSlice({
               // Add new involved entry if no optimistic entry found
               state.data.ledgerEntries.unshift(action.payload.involvedEntry);
             }
+          } else {
+            console.log('🔍 Skipping involved entry - belongs to different party table');
           }
           
           // Replace optimistic involved entry with real data if exists (legacy handling)
