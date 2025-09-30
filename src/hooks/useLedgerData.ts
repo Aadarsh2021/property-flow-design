@@ -184,7 +184,7 @@ export const useLedgerData = ({
     };
   }, [selectedPartyName]);
 
-  // Load ledger data - ULTRA optimized for speed with throttling
+  // ULTRA-OPTIMIZED: Load ledger data using single API call
   const loadLedgerData = useCallback(async (showLoading = true, forceRefresh = false, partyName?: string) => {
     const currentPartyName = partyName || selectedPartyName;
     if (!currentPartyName) return;
@@ -198,6 +198,7 @@ export const useLedgerData = ({
     if (forceRefresh) {
       // Clear ALL party-related cache, not just specific party
       clearCacheByPattern('party-ledger-.*');
+      clearCacheByPattern('account-ledger-page-.*');
       clearRequestQueueForParty(currentPartyName);
     }
     

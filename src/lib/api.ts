@@ -749,7 +749,7 @@ export const dashboardAPI = {
       3 * 60 * 1000 // 3 minutes cache - summary is calculated data
     );
   },
-  // New: Get comprehensive dashboard data in one call
+  // ULTRA-OPTIMIZED: Get comprehensive dashboard data in one call
   getAllDashboardData: () => {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     const userId = user.id || 'anonymous';
@@ -764,6 +764,31 @@ export const dashboardAPI = {
         }>('/dashboard/all');
       },
       2 * 60 * 1000 // 2 minutes cache - comprehensive data
+    );
+  },
+  // NEW: Get account ledger page data in single call
+  getAccountLedgerPageData: (partyName?: string) => {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = user.id || 'anonymous';
+    const cacheKey = `account-ledger-page-${userId}-${partyName || 'all'}`;
+    
+    return cachedApiCall(
+      cacheKey,
+      () => {
+        return apiCall<{
+          parties: Party[];
+          ledgerData?: {
+            ledgerEntries: LedgerEntry[];
+            oldRecords: LedgerEntry[];
+            closingBalance: number;
+            summary: any;
+            mondayFinalData: any;
+          };
+          userSettings: UserSettings;
+          stats: any;
+        }>(`/account-ledger/page-data${partyName ? `?partyName=${encodeURIComponent(partyName)}` : ''}`);
+      },
+      1 * 60 * 1000 // 1 minute cache for real-time data
     );
   },
 };
