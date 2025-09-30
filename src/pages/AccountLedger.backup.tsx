@@ -1321,7 +1321,7 @@ const AccountLedger = () => {
             const aqcEntry = {
               partyName: companyName,
               amount: Math.abs(amount),
-              remarks: `Transaction with ${selectedPartyName}`,
+              remarks: '',
               tnsType: tnsType === 'CR' ? 'DR' : 'CR', // Opposite transaction type
               credit: tnsType === 'CR' ? 0 : Math.abs(amount),
               debit: tnsType === 'CR' ? Math.abs(amount) : 0,
@@ -1598,7 +1598,7 @@ const AccountLedger = () => {
             const aqcEntry = {
               partyName: companyName,
               amount: Math.abs(amount) - calculatedCommissionAmount, // Remaining amount after commission
-              remarks: `Transaction with ${selectedPartyName}`,
+              remarks: '',
               tnsType: tnsType, // Same transaction type as main transaction
               credit: tnsType === 'CR' ? (Math.abs(amount) - calculatedCommissionAmount) : 0,
               debit: tnsType === 'DR' ? (Math.abs(amount) - calculatedCommissionAmount) : 0,

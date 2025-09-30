@@ -50,7 +50,10 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
           return false;
         }
         
-        return partyLower.startsWith(searchLower);
+        // Improved matching - includes partial matches and contains
+        return partyLower.startsWith(searchLower) || 
+               partyLower.includes(searchLower) ||
+               partyName.toLowerCase().includes(searchLower);
       });
 
       const sortedFiltered = filtered.sort((a, b) => {
@@ -58,9 +61,17 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
         const bName = (b.party_name || b.name).toLowerCase();
         const searchLower = value.toLowerCase();
         
+        // Exact match first
         if (aName === searchLower && bName !== searchLower) return -1;
         if (bName === searchLower && aName !== searchLower) return 1;
         
+        // Starts with match second
+        const aStartsWith = aName.startsWith(searchLower);
+        const bStartsWith = bName.startsWith(searchLower);
+        if (aStartsWith && !bStartsWith) return -1;
+        if (bStartsWith && !aStartsWith) return 1;
+        
+        // Alphabetical order
         return aName.localeCompare(bName);
       });
 
@@ -69,9 +80,16 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
       if (sortedFiltered.length > 0) {
         const firstParty = sortedFiltered[0];
         const partyName = firstParty.party_name || firstParty.name;
-        const autoCompleteText = partyName.substring(value.length);
-        dispatch(uiSlice.actions.setTransactionAutoCompleteText(autoCompleteText));
-        dispatch(uiSlice.actions.setShowTransactionInlineSuggestion(true));
+        
+        // Only show auto-complete if it's a startsWith match
+        if (partyName.toLowerCase().startsWith(value.toLowerCase())) {
+          const autoCompleteText = partyName.substring(value.length);
+          dispatch(uiSlice.actions.setTransactionAutoCompleteText(autoCompleteText));
+          dispatch(uiSlice.actions.setShowTransactionInlineSuggestion(true));
+        } else {
+          dispatch(uiSlice.actions.setTransactionAutoCompleteText(''));
+          dispatch(uiSlice.actions.setShowTransactionInlineSuggestion(false));
+        }
       } else {
         dispatch(uiSlice.actions.setTransactionAutoCompleteText(''));
         dispatch(uiSlice.actions.setShowTransactionInlineSuggestion(false));
@@ -97,50 +115,15 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
     dispatch(uiSlice.actions.setShowTransactionInlineSuggestion(false));
     dispatch(uiSlice.actions.setTransactionHighlightedIndex(-1));
 
-    // Focus on amount input
-    const amountInput = document.querySelector('input[placeholder*="Credit"], input[placeholder*="Debit"]') as HTMLInputElement;
-    if (amountInput) {
-      amountInput.focus();
-    }
+    // Focus on amount input after a small delay
+    setTimeout(() => {
+      const amountInput = document.querySelector('input[placeholder*="Credit"], input[placeholder*="Debit"]') as HTMLInputElement;
+      if (amountInput) {
+        amountInput.focus();
+      }
+    }, 50);
   };
 
-  // Calculate commission preview
-  const calculateCommissionPreview = () => {
-    if (!newEntryAmount.trim()) return null;
-    
-    const amount = parseFloat(newEntryAmount);
-    if (isNaN(amount)) return null;
-
-    const selectedParty = availableParties.find(party => 
-      (party.party_name || party.name) === selectedPartyName
-    );
-
-    if (!selectedParty || !selectedParty.commiSystem || selectedParty.commiSystem === 'No Commission') {
-      return null;
-    }
-
-    const commissionRate = parseFloat(selectedParty.rate || '0');
-    if (commissionRate === 0) return null;
-
-    // Calculate cumulative amount for commission calculation
-    const today = new Date().toISOString().split('T')[0];
-    const cumulativeAmount = amount; // Simplified for preview
-
-    const totalCommissionAmount = (cumulativeAmount * commissionRate) / 100;
-    const commissionType = selectedParty.commiSystem;
-    const commissionAmountValue = commissionType === 'Take' ? -totalCommissionAmount : totalCommissionAmount;
-    const commissionTypeLabel = commissionType === 'Take' ? 'Debit' : 'Credit';
-
-    return {
-      amount: Math.abs(commissionAmountValue),
-      type: commissionTypeLabel,
-      rate: commissionRate,
-      cumulativeAmount,
-      isTake: commissionType === 'Take'
-    };
-  };
-
-  const commissionPreview = calculateCommissionPreview();
 
   return (
     <div className="bg-white border-t border-gray-200 p-6">
@@ -189,6 +172,14 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
                       } else if (transactionFilteredParties.length > 0) {
                         const firstParty = transactionFilteredParties[0];
                         handleTransactionPartySelect(firstParty.party_name || firstParty.name);
+                      } else if (newEntryPartyName.trim()) {
+                        // If party name is entered, move to amount field
+                        setTimeout(() => {
+                          const amountInput = document.querySelector('input[placeholder*="Credit"], input[placeholder*="Debit"]') as HTMLInputElement;
+                          if (amountInput) {
+                            amountInput.focus();
+                          }
+                        }, 10);
                       }
                     } else if (e.key === 'Tab') {
                       e.preventDefault();
@@ -200,6 +191,14 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
                         if (matchingParty) {
                           handleTransactionPartySelect(matchingParty.party_name || matchingParty.name);
                         }
+                      } else {
+                        // Move to amount field
+                        setTimeout(() => {
+                          const amountInput = document.querySelector('input[placeholder*="Credit"], input[placeholder*="Debit"]') as HTMLInputElement;
+                          if (amountInput) {
+                            amountInput.focus();
+                          }
+                        }, 10);
                       }
                     } else if (e.key === 'ArrowDown') {
                       e.preventDefault();
@@ -226,10 +225,15 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
                 {/* Auto-complete suggestion */}
                 {showTransactionInlineSuggestion && transactionAutoCompleteText && (
                   <div 
-                    className="absolute inset-0 pointer-events-none flex items-center"
-                    style={{ left: `${newEntryPartyName.length * 8.5}px` }}
+                    className="absolute pointer-events-none flex items-center"
+                    style={{ 
+                      left: `${newEntryPartyName.length * 8.5 + 12}px`, 
+                      top: '50%', 
+                      transform: 'translateY(-50%)',
+                      zIndex: 1
+                    }}
                   >
-                    <span className="text-gray-400 text-sm">
+                    <span className="text-gray-400 text-sm opacity-50 select-none">
                       {transactionAutoCompleteText}
                     </span>
                   </div>
@@ -273,7 +277,9 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
                             partyName
                           )}
                         </div>
-                        <div className="text-sm text-gray-500">{party.companyName}</div>
+                        {party.companyName && (
+                          <div className="text-sm text-gray-500">{party.companyName}</div>
+                        )}
                       </div>
                     );
                   })}
@@ -297,10 +303,16 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
-                  const remarksInput = document.querySelector('input[placeholder*="Remarks"]') as HTMLInputElement;
-                  if (remarksInput) {
-                    remarksInput.focus();
-                  }
+                  e.preventDefault();
+                  e.stopPropagation();
+                  // Always move to remarks field when Enter is pressed in amount field
+                  requestAnimationFrame(() => {
+                    const remarksInput = document.querySelector('input[placeholder*="remarks"]') as HTMLInputElement;
+                    if (remarksInput) {
+                      remarksInput.focus();
+                      remarksInput.select(); // Select all text for better UX
+                    }
+                  });
                 }
               }}
               placeholder={newEntryAmount.startsWith('-') ? "Debit amount" : "Credit amount"}
@@ -313,17 +325,6 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
               }`}
             />
             
-            {/* Commission Preview */}
-            {commissionPreview && (
-              <div className="text-xs p-2 rounded bg-gray-50 border">
-                <div className={`font-medium ${commissionPreview.isTake ? 'text-red-600' : 'text-green-600'}`}>
-                  Commission: {commissionPreview.type} ₹{commissionPreview.amount.toLocaleString()}
-                </div>
-                <div className="text-gray-500">
-                  {commissionPreview.rate}% of ₹{commissionPreview.cumulativeAmount.toLocaleString()}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Remarks Input */}
@@ -335,7 +336,12 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
               onChange={(e) => dispatch(uiSlice.actions.setNewEntryRemarks(e.target.value))}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
-                  onAddEntry();
+                  e.preventDefault();
+                  // Submit form when Enter is pressed in remarks field
+                  // Remarks is optional, so submit regardless of whether it's filled or not
+                  if (newEntryPartyName.trim() && newEntryAmount.trim()) {
+                    onAddEntry();
+                  }
                 }
               }}
               placeholder="Enter remarks (optional)"

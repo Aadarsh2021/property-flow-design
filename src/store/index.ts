@@ -4,7 +4,7 @@ import { authSlice } from './slices/authSlice';
 import { ledgerSlice } from './slices/ledgerSlice';
 import { partiesSlice } from './slices/partiesSlice';
 import { uiSlice } from './slices/uiSlice';
-import { listenerMiddleware } from './middleware/apiMiddleware';
+// import { listenerMiddleware } from './middleware/apiMiddleware';
 
 export const store = configureStore({
   reducer: {
@@ -23,7 +23,7 @@ export const store = configureStore({
         // Ignore these paths in the state
         ignoredPaths: ['items.dates'],
       },
-    }).prepend(listenerMiddleware.middleware),
+    }),
   devTools: process.env.NODE_ENV !== 'production',
 });
 

@@ -76,7 +76,6 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
   
   // Check if this exact request is already in progress
   if (requestQueue.has(requestKey)) {
-    console.log('🔄 Reusing existing request:', requestKey);
     return requestQueue.get(requestKey);
   }
   
@@ -182,9 +181,21 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
           // For 5xx errors, retry
           if (response.status >= 500 && attempt < API_RETRY_ATTEMPTS) {
             lastError = new Error(`Server error ${response.status}: ${errorData.message || response.statusText}`);
-            console.log(`🔄 Server error, retrying in ${API_RETRY_DELAY}ms...`, lastError.message);
             await new Promise(resolve => setTimeout(resolve, API_RETRY_DELAY));
             continue;
+          }
+          
+          // For 404 errors, don't throw - return success response for graceful handling
+          if (response.status === 404) {
+            console.log(`⚠️ 404 Not Found - treating as successful deletion:`, config.url);
+            return {
+              success: true,
+              message: 'Entry not found - already deleted',
+              deleted: true,
+              deletedCount: 0,
+              relatedDeletedCount: 0,
+              relatedParties: []
+            };
           }
           
           throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
@@ -230,7 +241,6 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
         // For other errors, retry if attempts remain with exponential backoff
         if (attempt < API_RETRY_ATTEMPTS) {
           const backoffDelay = API_RETRY_DELAY * Math.pow(2, attempt); // Exponential backoff
-          console.log(`🔄 Error occurred, retrying in ${backoffDelay}ms... (attempt ${attempt + 1}/${API_RETRY_ATTEMPTS})`, error.message);
           await new Promise(resolve => setTimeout(resolve, backoffDelay));
           continue;
         }
@@ -418,18 +428,32 @@ export const partyLedgerAPI = {
       forceRefresh ? 0 : 5 * 60 * 1000 // No cache if force refresh, otherwise 5 minutes for better performance
     );
   },
-  getPartyLedger: (partyName: string) => {
+  getPartyLedger: (partyName: string, queryParams?: Record<string, any>) => {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     const userId = user.id || 'anonymous';
     
-    // Check if partyName contains cache busting parameter
-    const isForceRefresh = partyName.includes('&_t=');
-    const cleanPartyName = partyName.split('&_t=')[0];
+    // Check if we have query parameters that indicate force refresh
+    const isForceRefresh = queryParams && (queryParams._force || queryParams._fresh);
+    const cleanPartyName = partyName;
     
     if (isForceRefresh) {
       // Force refresh - bypass cache completely
-      console.log('🔄 Force refresh requested for party ledger:', cleanPartyName);
-      return apiCall<LedgerEntry[]>(`/party-ledger/${encodeURIComponent(cleanPartyName)}`);
+      
+      // Build URL with query parameters
+      let url = `/party-ledger/${encodeURIComponent(cleanPartyName)}`;
+      if (queryParams) {
+        const searchParams = new URLSearchParams();
+        Object.entries(queryParams).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            searchParams.append(key, String(value));
+          }
+        });
+        if (searchParams.toString()) {
+          url += `?${searchParams.toString()}`;
+        }
+      }
+      
+      return apiCall<LedgerEntry[]>(url);
     } else {
       // Use optimized cache strategy based on party type
       const cacheKey = `party-ledger-${userId}-${cleanPartyName}`;
@@ -447,8 +471,22 @@ export const partyLedgerAPI = {
       return cachedApiCall(
         cacheKey,
         () => {
-          console.log('📊 Fetching party ledger for:', cleanPartyName);
-          return apiCall<LedgerEntry[]>(`/party-ledger/${encodeURIComponent(cleanPartyName)}`);
+          
+          // Build URL with query parameters if provided
+          let url = `/party-ledger/${encodeURIComponent(cleanPartyName)}`;
+          if (queryParams) {
+            const searchParams = new URLSearchParams();
+            Object.entries(queryParams).forEach(([key, value]) => {
+              if (value !== undefined && value !== null) {
+                searchParams.append(key, String(value));
+              }
+            });
+            if (searchParams.toString()) {
+              url += `?${searchParams.toString()}`;
+            }
+          }
+          
+          return apiCall<LedgerEntry[]>(url);
         },
         cacheTime
       );
@@ -547,7 +585,6 @@ export const finalTrialBalanceAPI = {
     );
   },
   forceRefresh: () => {
-    console.log('🔄 Force refreshing trial balance...');
     return apiCall<{
       trialBalance: Array<{
         partyName: string;
@@ -589,7 +626,6 @@ export const finalTrialBalanceAPI = {
     return cachedApiCall(
       cacheKey,
       () => {
-        console.log('📊 Fetching party balance for:', partyName);
         return apiCall<{
           partyName: string;
           balance: number;
@@ -614,7 +650,6 @@ export const finalTrialBalanceAPI = {
     return cachedApiCall(
       cacheKey,
       () => {
-        console.log('📊 Fetching batch balances for parties:', sortedPartyNames.length);
         return apiCall<any[]>('/final-trial-balance/batch-balances', {
           method: 'POST',
           body: JSON.stringify({ partyNames: sortedPartyNames }),
@@ -685,7 +720,6 @@ export const dashboardAPI = {
     return cachedApiCall(
       `dashboard-stats-${userId}`,
       () => {
-        console.log('📊 Fetching dashboard stats...');
         return apiCall<any>('/dashboard/stats');
       },
       3 * 60 * 1000 // 3 minutes cache - stats change moderately
@@ -710,7 +744,6 @@ export const dashboardAPI = {
     return cachedApiCall(
       `dashboard-all-${userId}`,
       () => {
-        console.log('📊 Fetching comprehensive dashboard data...');
         return apiCall<{
           stats: any;
           summary: any;

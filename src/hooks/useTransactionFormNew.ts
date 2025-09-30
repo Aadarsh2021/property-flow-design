@@ -147,7 +147,7 @@ export const useTransactionFormNew = ({
         const dualPartyData = {
           partyName: partyName,
           date: new Date().toISOString().split('T')[0],
-          remarks: `Transaction with ${selectedPartyName}`,
+          remarks: '',
           tnsType: tnsType === 'CR' ? 'DR' : 'CR',
           credit: tnsType === 'CR' ? 0 : absoluteAmount,
           debit: tnsType === 'CR' ? absoluteAmount : 0,

@@ -1,4 +1,11 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { 
+  fetchAllParties, 
+  filterParties, 
+  getPartySuggestions, 
+  refreshParties,
+  clearPartiesSearch 
+} from '../services/partiesService';
 
 export interface Party {
   _id: string;
@@ -182,6 +189,24 @@ export const partiesSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
+  },
+  extraReducers: (builder) => {
+    // Fetch All Parties
+    builder
+      .addCase(fetchAllParties.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(fetchAllParties.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.availableParties = action.payload;
+        state.allPartiesForTransaction = action.payload;
+        state.error = null;
+      })
+      .addCase(fetchAllParties.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+      });
   },
 });
 

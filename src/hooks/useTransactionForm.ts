@@ -473,9 +473,7 @@ export const useTransactionForm = ({
 
       // Create main entry data - Party name should be current party, remarks should contain other party name
       const remarksText = newEntry.remarks?.trim();
-      const displayRemarks = newEntry.partyName 
-        ? (remarksText ? `${newEntry.partyName}(${remarksText})` : newEntry.partyName)
-        : (remarksText || 'Transaction');
+      const displayRemarks = remarksText || '';
       
       const entryData = {
           partyName: selectedPartyName, // Current party (Take) - so it appears in Take's ledger
@@ -547,7 +545,7 @@ export const useTransactionForm = ({
           const companyEntry = {
             partyName: companyName,
             amount: absoluteAmount,
-            remarks: `Transaction with ${selectedPartyName}`,
+            remarks: '',
             tnsType: tnsType, // Same transaction type as main entry
             credit: tnsType === 'CR' ? absoluteAmount : 0,
             debit: tnsType === 'DR' ? absoluteAmount : 0,
