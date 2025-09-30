@@ -71,13 +71,9 @@ const TableRow = ({
       <td className="px-4 py-3 text-gray-800 font-medium">
         <div className="flex items-center space-x-2">
           <span>
-            {entry.partyName || entry.party_name ? (
-              entry.remarks && entry.remarks.trim() && !entry.remarks.includes(':') ? 
-                `${entry.partyName || entry.party_name}(${entry.remarks.trim()})` : 
-                (entry.partyName || entry.party_name)
-            ) : (
-              formatPartyNameDisplay(entry.remarks || '')
-            )}
+            {/* Display format: Party Name (remarks) or just Party Name */}
+            {/* remarks contains the party name to display, party_name is for table assignment */}
+            {entry.remarks ? entry.remarks : (entry.partyName || entry.party_name || '')}
           </span>
           {entry.is_old_record && (
             <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full font-medium">
