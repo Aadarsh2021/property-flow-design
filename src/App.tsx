@@ -8,7 +8,6 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { Suspense, lazy } from "react";
 import ErrorBoundary from "@/components/ErrorBoundary";
-// import ReduxTest from "@/components/ReduxTest";
 
 // Lazy load all pages for better performance with preloading
 const ProtectedRoute = lazy(() => import("@/components/ProtectedRoute"));
