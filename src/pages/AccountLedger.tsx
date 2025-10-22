@@ -1543,7 +1543,7 @@ const AccountLedger = () => {
     }
   };
 
-  // Helper function to find corresponding dual transaction
+  // Helper function to find corresponding dual transaction using Transaction ID
   const findCorrespondingEntry = async (mainEntry: any) => {
     try {
       // Get all parties to search for corresponding entries
@@ -1556,26 +1556,33 @@ const AccountLedger = () => {
             const partyData = partyLedgerResponse.data;
             const partyEntries = Array.isArray(partyData) ? partyData : ((partyData as any)?.ledgerEntries || []);
             
-            // Find corresponding entry based on:
-            // 1. Same date
-            // 2. Same amount
-            // 3. Cross-reference party names in remarks
+            // Find corresponding entry using Transaction ID matching
             const correspondingEntry = partyEntries.find(entry => {
-              // Same date
-              if (entry.date !== mainEntry.date) return false;
+              // Primary matching: Same transaction ID (ti)
+              const mainTi = mainEntry.ti;
+              const entryTi = entry.ti;
               
-              // Same amount
-              const mainAmount = Math.abs((mainEntry.credit || 0) - (mainEntry.debit || 0));
-              const entryAmount = Math.abs((entry.credit || 0) - (entry.debit || 0));
-              if (mainAmount !== entryAmount) return false;
-              
-              // Cross-reference check: main entry's party name should be in this entry's remarks
-              const mainPartyName = mainEntry.partyName;
-              const entryRemarks = entry.remarks || '';
-              
-              // Check if main party name appears in entry remarks
-              if (entryRemarks.includes(mainPartyName)) {
-                return true;
+              if (mainTi && entryTi) {
+                // Extract base timestamp from ti (before the ::)
+                const mainTimestamp = mainTi.split('::')[0];
+                const entryTimestamp = entryTi.split('::')[0];
+                
+                // Check if timestamps are consecutive (within 1-2 seconds)
+                const mainTime = parseInt(mainTimestamp);
+                const entryTime = parseInt(entryTimestamp);
+                const timeDiff = Math.abs(mainTime - entryTime);
+                
+                // If timestamps are very close (within 2 seconds), they're likely paired
+                if (timeDiff <= 2000) {
+                  // Additional validation: Cross-reference party names in remarks
+                  const mainPartyName = mainEntry.partyName;
+                  const entryRemarks = entry.remarks || '';
+                  
+                  // Check if main party name appears in entry remarks
+                  if (entryRemarks.includes(mainPartyName)) {
+                    return true;
+                  }
+                }
               }
               
               return false;
