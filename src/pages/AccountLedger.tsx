@@ -495,9 +495,57 @@ const AccountLedger = () => {
       commissionRate = 3;
     }
 
-    // Calculate commission amount (default base amount for calculation)
-    const baseAmount = 10000; // Default base amount for commission calculation
-    const commissionAmount = Math.round((baseAmount * commissionRate) / 100);
+    // Calculate total transaction amount from all entries
+    let totalTransactionAmount = 0;
+    let transactionCount = 0;
+
+    if (ledgerData && ledgerData.ledgerEntries) {
+      // Get all non-commission transactions for the selected party
+      const partyTransactions = ledgerData.ledgerEntries.filter(entry => {
+        const entryPartyName = entry.partyName || entry.party_name;
+        const remarks = entry.remarks || '';
+        
+        // Include only non-commission transactions
+        return entryPartyName === selectedPartyName && 
+               !remarks.toLowerCase().includes('commission') &&
+               !remarks.includes('Monday Final Settlement') &&
+               !remarks.includes('Monday Settlement');
+      });
+
+      // Calculate total amount based on commission system
+      if (selectedParty.commiSystem === 'Take') {
+        // Take System: Commission on CR (credit) transactions
+        partyTransactions.forEach(entry => {
+          if (entry.tnsType === 'CR') {
+            totalTransactionAmount += entry.credit || 0;
+            transactionCount++;
+          }
+        });
+      } else if (selectedParty.commiSystem === 'Give') {
+        // Give System: Commission on DR (debit) transactions
+        partyTransactions.forEach(entry => {
+          if (entry.tnsType === 'DR') {
+            totalTransactionAmount += entry.debit || 0;
+            transactionCount++;
+          }
+        });
+      } else {
+        // Default: Commission on all transactions
+        partyTransactions.forEach(entry => {
+          const amount = (entry.credit || 0) + (entry.debit || 0);
+          totalTransactionAmount += amount;
+          transactionCount++;
+        });
+      }
+    }
+
+    // If no transactions found, use default base amount
+    if (totalTransactionAmount === 0) {
+      totalTransactionAmount = 10000; // Default base amount
+    }
+
+    // Calculate commission amount
+    const commissionAmount = Math.round((totalTransactionAmount * commissionRate) / 100);
 
     // Set commission amount based on commission system
     let finalAmount = commissionAmount;
@@ -518,10 +566,20 @@ const AccountLedger = () => {
       amount: finalAmount.toString()
     }));
 
-    // Show success message
+    // Show success message with transaction details
+    let message = `Commission amount: ₹${commissionAmount} (${commissionRate}% of ₹${totalTransactionAmount.toLocaleString()})`;
+    if (transactionCount > 0) {
+      const transactionType = selectedParty.commiSystem === 'Take' ? 'CR' : 
+                            selectedParty.commiSystem === 'Give' ? 'DR' : 'All';
+      message += ` - Based on ${transactionCount} ${transactionType} transaction${transactionCount > 1 ? 's' : ''}`;
+    } else {
+      message += ` - Using default base amount (no transactions found)`;
+    }
+    message += ` - ${selectedParty.commiSystem || 'Default'} System`;
+
     toast({
       title: "Commission Calculated",
-      description: `Commission amount: ₹${commissionAmount} (${commissionRate}% of ₹${baseAmount}) - ${selectedParty.commiSystem || 'Default'} System`
+      description: message
     });
   };
 
