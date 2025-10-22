@@ -418,12 +418,9 @@ const AccountLedger = () => {
     setNewEntry(prev => ({ ...prev, partyName }));
     setShowPartyDropdown(false);
     
-    // Reset manual commission flag
-    // setIsManualCommissionAmount(false); // Removed - commission logic to be implemented fresh
-    
     // Auto-calculate commission if "Commission" is selected from dropdown
     if (partyName.toLowerCase().trim() === 'commission') {
-      // Commission auto-fill removed - to be implemented fresh
+      calculateCommissionAmount();
     }
   };
 
@@ -457,6 +454,75 @@ const AccountLedger = () => {
         setTextWidth(width);
       }
     }
+    
+    // Auto-calculate commission when typing "commission"
+    if (value.toLowerCase().trim() === 'commission') {
+      calculateCommissionAmount();
+    }
+  };
+
+  // Calculate commission amount based on selected party's rate
+  const calculateCommissionAmount = () => {
+    if (!selectedPartyName) {
+      toast({
+        title: "Error",
+        description: "Please select a party first",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Find selected party to get commission settings
+    const selectedParty = allPartiesForTransaction.find(party => 
+      party.name === selectedPartyName || party.party_name === selectedPartyName
+    );
+
+    if (!selectedParty) {
+      toast({
+        title: "Error",
+        description: "Selected party not found",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Get commission rate
+    let commissionRate = 0;
+    if (selectedParty.mCommission === 'With Commission' && selectedParty.rate) {
+      commissionRate = parseFloat(selectedParty.rate) || 0;
+    } else {
+      // Default 3% if no commission settings
+      commissionRate = 3;
+    }
+
+    // Calculate commission amount (default base amount for calculation)
+    const baseAmount = 10000; // Default base amount for commission calculation
+    const commissionAmount = Math.round((baseAmount * commissionRate) / 100);
+
+    // Set commission amount based on commission system
+    let finalAmount = commissionAmount;
+    if (selectedParty.commiSystem === 'Take') {
+      // Take System: Company takes commission → Negative amount (DR)
+      finalAmount = -commissionAmount;
+    } else if (selectedParty.commiSystem === 'Give') {
+      // Give System: Company gives commission → Positive amount (CR)
+      finalAmount = commissionAmount;
+    } else {
+      // Default: Positive amount (CR)
+      finalAmount = commissionAmount;
+    }
+
+    // Set the calculated amount
+    setNewEntry(prev => ({
+      ...prev,
+      amount: finalAmount.toString()
+    }));
+
+    // Show success message
+    toast({
+      title: "Commission Calculated",
+      description: `Commission amount: ₹${commissionAmount} (${commissionRate}% of ₹${baseAmount}) - ${selectedParty.commiSystem || 'Default'} System`
+    });
   };
 
   // Generic auto-complete functionality
@@ -2194,9 +2260,9 @@ const AccountLedger = () => {
                                   const partyName = party.party_name || party.name;
                                   handlePartySelect(partyName);
                                   
-                                  // Auto-fill commission if commission is selected
+                                  // Auto-calculate commission if commission is selected
                                   if (partyName.toLowerCase().trim() === 'commission') {
-                                    // Commission auto-fill removed - to be implemented fresh
+                                    calculateCommissionAmount();
                                   }
                                 }}
                                 onMouseEnter={() => setHighlightedIndex(index)}
