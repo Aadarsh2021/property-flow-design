@@ -154,6 +154,7 @@ export interface LedgerEntry {
   createdAt?: string;
   partyName?: string; // Frontend field
   party_name?: string; // Backend field
+  amount?: string; // For modify functionality (positive/negative)
   mondayFinal?: string;
   is_old_record?: boolean; // Indicates if entry is settled in Monday Final
   settlement_date?: string; // Date when entry was settled

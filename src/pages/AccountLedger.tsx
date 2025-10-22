@@ -200,6 +200,7 @@ const AccountLedger = () => {
   // UI State Management
   const [showOldRecords, setShowOldRecords] = useState(false);
   const [showMondayFinalModal, setShowMondayFinalModal] = useState(false);
+  const [showModifyModal, setShowModifyModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   // Removed tableRefreshKey and forceUpdate to prevent unnecessary re-renders
   
@@ -223,6 +224,7 @@ const AccountLedger = () => {
   // State for top section dropdown
   const [showTopPartyDropdown, setShowTopPartyDropdown] = useState(false);
   const [filteredTopParties, setFilteredTopParties] = useState<Party[]>([]);
+  const [editingEntry, setEditingEntry] = useState<LedgerEntry | null>(null);
   const [topAutoCompleteText, setTopAutoCompleteText] = useState('');
   const [showTopInlineSuggestion, setShowTopInlineSuggestion] = useState(false);
   const [topInputRef, setTopInputRef] = useState<HTMLInputElement | null>(null);
@@ -1108,8 +1110,121 @@ const AccountLedger = () => {
   // Handle modifying an existing ledger entry
   // Handle modify entry functionality
   const handleModifyEntry = async () => {
-    // TODO: Implement modify entry logic based on user requirements
-    console.log('Modify entry function - to be implemented');
+    if (!editingEntry) {
+      toast({
+        title: "Error",
+        description: "No entry selected for modification",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!editingEntry.partyName || editingEntry.partyName.trim() === '') {
+      toast({
+        title: "Error",
+        description: "Please enter party name",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const amount = parseFloat((editingEntry as any).amount || '0');
+    if (isNaN(amount) || amount === 0) {
+      toast({
+        title: "Error",
+        description: "Please enter a valid amount",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      // Find corresponding dual transaction
+      const correspondingEntry = await findCorrespondingEntry(editingEntry);
+      
+      if (!correspondingEntry) {
+        toast({
+          title: "Error",
+          description: "Corresponding dual transaction not found",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Determine transaction type based on amount
+      const tnsType = amount > 0 ? 'CR' : 'DR';
+      const transactionAmount = Math.abs(amount);
+
+      // Prepare update data for main entry
+      const mainUpdateData = {
+        partyName: editingEntry.partyName.trim(),
+        remarks: editingEntry.remarks || '',
+        credit: tnsType === 'CR' ? transactionAmount : 0,
+        debit: tnsType === 'DR' ? transactionAmount : 0,
+        tnsType: tnsType
+      };
+
+      // Prepare update data for corresponding entry
+      const correspondingUpdateData = {
+        partyName: correspondingEntry.partyName,
+        remarks: editingEntry.remarks || '',
+        credit: tnsType === 'CR' ? 0 : transactionAmount,
+        debit: tnsType === 'CR' ? transactionAmount : 0,
+        tnsType: tnsType === 'CR' ? 'DR' : 'CR'
+      };
+
+      // Update both entries
+      const mainEntryId = editingEntry.id || editingEntry._id || editingEntry.ti;
+      const correspondingEntryId = correspondingEntry.id || correspondingEntry._id || correspondingEntry.ti;
+
+      if (!mainEntryId || !correspondingEntryId) {
+        toast({
+          title: "Error",
+          description: "Entry IDs not found",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const [mainResponse, correspondingResponse] = await Promise.all([
+        partyLedgerAPI.updateEntry(mainEntryId, mainUpdateData),
+        partyLedgerAPI.updateEntry(correspondingEntryId, correspondingUpdateData)
+      ]);
+
+      if (mainResponse.success && correspondingResponse.success) {
+        toast({
+          title: "Success",
+          description: "Transaction modified successfully"
+        });
+
+        // Close modal and clear state
+        setShowModifyModal(false);
+        setEditingEntry(null);
+        setSelectedEntries([]);
+
+        // Refresh data
+        await loadLedgerData(false, true);
+        setForceUpdate(prev => prev + 1);
+
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to modify transaction",
+          variant: "destructive"
+        });
+      }
+
+    } catch (error: any) {
+      console.error('❌ Modify entry error:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to modify entry",
+        variant: "destructive"
+      });
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   // Helper function to find related transactions
@@ -2467,6 +2582,42 @@ const AccountLedger = () => {
               </button>
               
               <button
+                onClick={() => {
+                  if (selectedEntries.length === 1) {
+                    const displayEntries = showOldRecords ? ledgerData.oldRecords : ledgerData.ledgerEntries;
+                    const selectedEntry = displayEntries.find(entry => 
+                      (entry.id || entry._id || entry.ti || '').toString() === selectedEntries[0]
+                    );
+                    if (selectedEntry) {
+                      // Calculate amount for editing (positive/negative)
+                      const amount = selectedEntry.tnsType === 'CR' ? selectedEntry.credit : -selectedEntry.debit;
+                      setEditingEntry({
+                        ...selectedEntry,
+                        amount: amount.toString()
+                      } as any);
+                      setShowModifyModal(true);
+                    }
+                  }
+                }}
+                disabled={selectedEntries.length !== 1 || selectedEntries.some(entryId => {
+                  const displayEntries = showOldRecords ? ledgerData?.oldRecords : ledgerData?.ledgerEntries;
+                  const entry = displayEntries?.find(e => (e.id || e._id || e.ti || '').toString() === entryId);
+                  return entry?.is_old_record === true;
+                }) || isCompanyParty(selectedPartyName, companyName) || isCommissionParty(selectedPartyName)}
+                className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
+                title={selectedEntries.some(entryId => {
+                  const displayEntries = showOldRecords ? ledgerData?.oldRecords : ledgerData?.ledgerEntries;
+                  const entry = displayEntries?.find(e => (e.id || e._id || e.ti || '').toString() === entryId);
+                  return entry?.is_old_record === true;
+                }) ? "Cannot modify old records." : ""}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                <span>Modify</span>
+              </button>
+              
+              <button
               onClick={() => {
                 if (isCompanyParty(selectedPartyName, companyName)) {
                   toast({
@@ -2572,6 +2723,76 @@ const AccountLedger = () => {
                 className="bg-green-600 hover:bg-green-700 text-white"
               >
                 {actionLoading ? 'Processing...' : 'Confirm Settlement'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Modify Entry Modal */}
+        <AlertDialog open={showModifyModal} onOpenChange={(open) => {
+          setShowModifyModal(open);
+          if (!open) setEditingEntry(null);
+        }}>
+          <AlertDialogContent className="max-w-md">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Modify Transaction</AlertDialogTitle>
+              <AlertDialogDescription>
+                Edit the details for the selected transaction entry.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            
+            {/* Editing Form */}
+            {editingEntry && (
+              <div className="space-y-4 py-4">
+                {/* Party Name */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">Party Name</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={editingEntry.partyName || ''}
+                      onChange={(e) => setEditingEntry({...editingEntry, partyName: e.target.value})}
+                      placeholder="Enter party name"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Amount */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">Amount</label>
+                  <input
+                    type="number"
+                    value={(editingEntry as any).amount || ''}
+                    onChange={(e) => setEditingEntry({...editingEntry, amount: e.target.value} as any)}
+                    placeholder="Enter amount (positive/negative)"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Positive = Credit, Negative = Debit</p>
+                </div>
+
+                {/* Remarks */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">Remarks</label>
+                  <input
+                    type="text"
+                    value={editingEntry.remarks || ''}
+                    onChange={(e) => setEditingEntry({...editingEntry, remarks: e.target.value})}
+                    placeholder="Enter remarks"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            )}
+            
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={actionLoading}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleModifyEntry}
+                disabled={actionLoading}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {actionLoading ? 'Saving...' : 'Save Changes'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
