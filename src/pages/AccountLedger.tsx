@@ -1139,9 +1139,9 @@ const AccountLedger = () => {
       const tnsType = amount > 0 ? 'CR' : 'DR';
       const transactionAmount = Math.abs(amount);
 
-      // Format remarks: Party Name (Remarks)
+      // Format remarks: Party Name (Remarks) or just Party Name if no remarks
       const remarks = newEntry.remarks || '';
-      const finalRemarks = `${newEntry.partyName.trim()} (${remarks})`;
+      const finalRemarks = remarks ? `${newEntry.partyName.trim()} (${remarks})` : newEntry.partyName.trim();
 
       // Check if target party exists
       const targetParty = allPartiesForTransaction.find(party => 
@@ -1157,6 +1157,11 @@ const AccountLedger = () => {
         return;
       }
 
+      // Check if this is a special party (Company/Commission) - same transaction type
+      const isSpecialParty = newEntry.partyName.trim().toLowerCase() === 'commission' || 
+                            newEntry.partyName.trim().toLowerCase() === 'company' ||
+                            newEntry.partyName.trim().toLowerCase() === companyName.toLowerCase();
+
       // Create 2 entries for dual-party transaction
       const entries = [];
 
@@ -1164,7 +1169,7 @@ const AccountLedger = () => {
       entries.push({
         partyName: selectedPartyName,
         amount: transactionAmount,
-        remarks: finalRemarks, // Target party name (remarks)
+        remarks: finalRemarks, // Target party name (remarks) or just party name
         tnsType: tnsType,
         credit: tnsType === 'CR' ? transactionAmount : 0,
         debit: tnsType === 'DR' ? transactionAmount : 0,
@@ -1173,14 +1178,16 @@ const AccountLedger = () => {
         involvedParty: newEntry.partyName.trim()
       });
 
-      // 2. Entry for target party (opposite transaction)
+      // 2. Entry for target party
+      const targetRemarks = remarks ? `${selectedPartyName} (${remarks})` : selectedPartyName;
+      
       entries.push({
         partyName: newEntry.partyName.trim(),
         amount: transactionAmount,
-        remarks: `${selectedPartyName} (${remarks})`, // Current party name (remarks)
-        tnsType: tnsType === 'CR' ? 'DR' : 'CR', // Opposite transaction type
-        credit: tnsType === 'CR' ? 0 : transactionAmount,
-        debit: tnsType === 'CR' ? transactionAmount : 0,
+        remarks: targetRemarks, // Current party name (remarks) or just party name
+        tnsType: isSpecialParty ? tnsType : (tnsType === 'CR' ? 'DR' : 'CR'), // Same type for special parties, opposite for normal
+        credit: isSpecialParty ? (tnsType === 'CR' ? transactionAmount : 0) : (tnsType === 'CR' ? 0 : transactionAmount),
+        debit: isSpecialParty ? (tnsType === 'DR' ? transactionAmount : 0) : (tnsType === 'CR' ? transactionAmount : 0),
         date: new Date().toISOString().split('T')[0],
         ti: `${Date.now() + 1}::`,
         involvedParty: selectedPartyName
