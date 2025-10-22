@@ -244,8 +244,6 @@ const AccountLedger = () => {
   // Selected entries for bulk operations
   const [selectedEntries, setSelectedEntries] = useState<string[]>([]);
   
-  // Track if user manually entered commission amount
-  const [isManualCommissionAmount, setIsManualCommissionAmount] = useState(false);
 
   // Optimized load available parties with throttling and caching
   const loadAvailableParties = useCallback(async () => {
@@ -421,11 +419,11 @@ const AccountLedger = () => {
     setShowPartyDropdown(false);
     
     // Reset manual commission flag
-    setIsManualCommissionAmount(false);
+    // setIsManualCommissionAmount(false); // Removed - commission logic to be implemented fresh
     
     // Auto-calculate commission if "Commission" is selected from dropdown
     if (partyName.toLowerCase().trim() === 'commission') {
-      calculateCommissionAmount(partyName);
+      // Commission auto-fill removed - to be implemented fresh
     }
   };
 
@@ -444,156 +442,20 @@ const AccountLedger = () => {
 
 
 
-  // Calculate commission amount (extracted function)
-  const calculateCommissionAmount = useCallback((partyNameValue: string) => {
-    if (!ledgerData) {
-      toast({
-        title: "No Data",
-        description: "No ledger data available for commission calculation",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // Auto-calculate commission amount if party name is "commission"
-    if (partyNameValue.toLowerCase().trim() === 'commission') {
-      // Get all entries (current + old records) to find the last NON-COMMISSION transaction
-      const allEntries = [...ledgerData.ledgerEntries, ...ledgerData.oldRecords];
-      
-      // Filter out commission transactions to find the last regular transaction
-      const nonCommissionEntries = allEntries.filter(entry => 
-        !entry.remarks.toLowerCase().includes('commission') &&
-        entry.tnsType !== 'Monday Settlement'
-      );
-      
-      if (nonCommissionEntries.length > 0) {
-        // Sort by date and creation time to get the most recent non-commission entry
-        const sortedEntries = nonCommissionEntries.sort((a, b) => {
-          const dateA = new Date(a.date);
-          const dateB = new Date(b.date);
-          if (dateA.getTime() !== dateB.getTime()) {
-            return dateA.getTime() - dateB.getTime();
-          }
-          return 0;
-        });
-        
-        const lastEntry = sortedEntries[sortedEntries.length - 1];
-        const lastAmount = Math.abs(lastEntry.credit || lastEntry.debit || 0);
-        
-        // Find the selected party to get commission settings
-        const selectedParty = allPartiesForTransaction.find(party => party.name === selectedPartyName);
-        
-        if (selectedParty) {
-          // Calculate commission based on selected party settings (not Commission party)
-          let commissionAmount = 0;
-          let commissionRate = 0;
-          
-          if (selectedParty.mCommission === 'With Commission' && selectedParty.rate) {
-            commissionRate = parseFloat(selectedParty.rate) || 0;
-            // Calculate raw commission amount
-            const rawCommission = (lastAmount * commissionRate) / 100;
-            
-            // Apply standard rounding logic: >= 0.5 round up, < 0.5 round down
-            commissionAmount = Math.round(rawCommission);
-            
-            // Ensure minimum commission is 1 if rate > 0
-            if (commissionAmount < 1 && rawCommission > 0) {
-              commissionAmount = 1;
-      }
-    } else {
-            // Default to 3% if no commission settings
-            const rawCommission = lastAmount * 0.03;
-            
-            // Apply standard rounding logic: >= 0.5 round up, < 0.5 round down
-            commissionAmount = Math.round(rawCommission);
-            
-            // Ensure minimum commission is 1 if amount > 0
-            if (commissionAmount < 1 && rawCommission > 0) {
-              commissionAmount = 1;
-            }
-            
-            commissionRate = 3;
-          }
-          
-          // Ensure commission amount is a whole number (double-check)
-          commissionAmount = Math.round(commissionAmount);
-          
-          // Set commission amount based on selected party's commission system
-          let finalAmount = 0;
-          if (selectedParty.commiSystem === 'Take') {
-            // Take System: Company takes commission from party → Party debit (negative)
-            finalAmount = -commissionAmount;
-          } else if (selectedParty.commiSystem === 'Give') {
-            // Give System: Company gives commission to party → Party credit (positive)
-            finalAmount = commissionAmount;
-    } else {
-            // Default system: opposite logic based on last transaction
-            finalAmount = lastEntry.tnsType === 'CR' ? -commissionAmount : commissionAmount;
-          }
-          
-          setNewEntry(prev => {
-            const updated = { 
-              ...prev, 
-              partyName: partyNameValue,
-              amount: finalAmount.toString()
-            };
-            return updated;
-          });
-          
-          // Mark as auto-calculated (not manual)
-          setIsManualCommissionAmount(false);
-          
-          toast({
-            title: "Commission Auto-Calculated",
-            description: `Commission amount: ₹${commissionAmount} (${commissionRate}% of ₹${lastAmount}) - Rounded using standard rounding: >= 0.5 = round up, < 0.5 = round down`,
-          });
-        } else {
-          toast({
-            title: "Party Not Found",
-            description: "Could not find party commission settings",
-            variant: "destructive"
-          });
-        }
-      } else {
-        toast({
-          title: "No Regular Transactions",
-          description: "No non-commission transactions found for commission calculation",
-          variant: "destructive"
-        });
-      }
-    } else {
-      toast({
-        title: "No Transactions Found",
-        description: "No previous transactions found for commission calculation",
-        variant: "destructive"
-      });
-    }
-  }, [ledgerData, selectedPartyName, allPartiesForTransaction]);
-
-  // Handle party name change and auto-calculate commission
+  // Handle party name change
   const handlePartyNameChange = (value: string) => {
     setNewEntry(prev => ({ ...prev, partyName: value }));
     setIsTyping(true);
     
     // Calculate text width for proper positioning
     if (inputRef) {
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
       if (context) {
         context.font = window.getComputedStyle(inputRef).font;
         const width = context.measureText(value).width;
         setTextWidth(width);
       }
-    }
-    
-    // Reset manual commission flag when party changes
-    setIsManualCommissionAmount(false);
-    
-    // Auto-calculate commission when typing "commission"
-    if (value.toLowerCase().trim() === 'commission') {
-      calculateCommissionAmount(value);
-      // Clear any existing amount when switching to commission
-      setNewEntry(prev => ({ ...prev, amount: '' }));
     }
   };
 
@@ -621,7 +483,7 @@ const AccountLedger = () => {
         
         // Auto-fill commission if commission is selected
         if (partyName.toLowerCase().trim() === 'commission') {
-          handleCommissionAutoFill();
+          // Commission auto-fill removed - to be implemented fresh
         }
       }
     }
@@ -673,7 +535,7 @@ const AccountLedger = () => {
         // Auto-fill commission if commission is selected
         const finalPartyName = matchingParty ? (matchingParty.party_name || matchingParty.name) : (newEntry.partyName + autoCompleteText);
         if (finalPartyName.toLowerCase().trim() === 'commission') {
-          handleCommissionAutoFill();
+          // Commission auto-fill removed - to be implemented fresh
         }
       }
     }
@@ -869,122 +731,8 @@ const AccountLedger = () => {
 
   // Handle commission auto-fill when commission is selected
   const handleCommissionAutoFill = () => {
-    if (selectedPartyName) {
-      const currentParty = allPartiesForTransaction.find(party => 
-        party.name === selectedPartyName || party.party_name === selectedPartyName
-      );
-      
-      if (currentParty && currentParty.mCommission === 'With Commission' && currentParty.rate) {
-        const rate = parseFloat(currentParty.rate) || 0;
-        if (rate > 0) {
-          // Smart Commission Calculation based on Previous Transactions
-          let totalTransactionAmount = 0;
-          let transactionCount = 0;
-          
-          // Get current ledger entries for the selected party
-          if (ledgerData && ledgerData.ledgerEntries) {
-            
-            const partyEntries = ledgerData.ledgerEntries.filter(entry => 
-              (entry.partyName || entry.party_name) === selectedPartyName && 
-              !entry.remarks?.includes('Monday Final Settlement') &&
-              !entry.remarks?.includes('Monday Settlement')
-              // Include Commission transactions for calculation
-            );
-            
-            // Calculate total amount from previous transactions based on commission system
-            // Take system → commission on incoming CR amounts
-            // Give system → commission on outgoing DR amounts
-            const isTakeSystem = currentParty.commiSystem === 'Take';
-            const isGiveSystem = currentParty.commiSystem === 'Give';
-
-            const baseTransactions = partyEntries.filter(entry => {
-              const tType = entry.tnsType;
-              const r = entry.remarks || '';
-              if (r.includes('Monday Final Settlement') || r.includes('Monday Settlement')) return false;
-              if (r === companyName || r === 'Commission') return false;
-              return isTakeSystem ? tType === 'CR' : tType === 'DR';
-            });
-
-            totalTransactionAmount = baseTransactions.reduce((sum, entry) => {
-              return sum + (isTakeSystem ? (entry.credit || 0) : (entry.debit || 0));
-            }, 0);
-            transactionCount = baseTransactions.length;
-          }
-          
-          // Calculate commission based on total transaction amount
-          const rawCommission = (totalTransactionAmount * rate) / 100;
-          
-          // Apply standard rounding logic: >= 0.5 round up, < 0.5 round down
-          const commissionAmount = Math.round(rawCommission);
-          
-          // Prepare smart remarks
-          let remarks = `Commission for ${selectedPartyName} (${rate}%)`;
-          if (transactionCount > 0) {
-            if (transactionCount === 1) {
-              const transactionType = currentParty.commiSystem === 'Take' ? 'CR' : 'DR';
-              remarks += ` - Single ${transactionType} transaction: ₹${totalTransactionAmount.toLocaleString()}`;
-    } else {
-              const transactionType = currentParty.commiSystem === 'Take' ? 'CR' : 'DR';
-              remarks += ` - ${transactionCount} ${transactionType} transactions total: ₹${totalTransactionAmount.toLocaleString()}`;
-            }
-          } else {
-            const transactionType = currentParty.commiSystem === 'Take' ? 'CR' : 'DR';
-            remarks += ` - No applicable ${transactionType} transactions found`;
-          }
-          
-          // Set commission amount with correct sign based on commission system
-          let finalAmount = commissionAmount;
-          if (currentParty.commiSystem === 'Take') {
-            // Take System: Party pays commission → Negative amount
-            finalAmount = -commissionAmount;
-          } else if (currentParty.commiSystem === 'Give') {
-            // Give System: Party receives commission → Positive amount
-            finalAmount = commissionAmount;
-          }
-          
-          setNewEntry(prev => ({
-            ...prev,
-            amount: finalAmount.toString(),
-            remarks: remarks
-          }));
-          
-          // Smart notification based on transaction count
-          let notificationMessage = `Commission calculated: ₹${commissionAmount.toLocaleString()} (${rate}%)`;
-          if (transactionCount === 0) {
-            const transactionType = currentParty.commiSystem === 'Take' ? 'CR' : 'DR';
-            notificationMessage += `\n⚠️ No applicable ${transactionType} transactions found. Commission set to 0.`;
-            notificationMessage += `\n💡 Only ${transactionType} transactions (excluding ${companyName}, Commission, Monday Settlement) are considered.`;
-          } else if (transactionCount === 1) {
-            const transactionType = currentParty.commiSystem === 'Take' ? 'CR' : 'DR';
-            notificationMessage += `\n📊 Based on 1 ${transactionType} transaction: ₹${totalTransactionAmount.toLocaleString()}`;
-            notificationMessage += `\n🔢 Raw: ₹${rawCommission.toFixed(2)} → Rounded: ₹${commissionAmount}`;
-    } else {
-            const transactionType = currentParty.commiSystem === 'Take' ? 'CR' : 'DR';
-            notificationMessage += `\n📊 Based on ${transactionCount} ${transactionType} transactions: ₹${totalTransactionAmount.toLocaleString()}`;
-            notificationMessage += `\n🔢 Raw: ₹${rawCommission.toFixed(2)} → Rounded: ₹${commissionAmount}`;
-          }
-          
-          toast({
-            title: "Smart Commission Auto-Fill",
-            description: notificationMessage,
-            variant: "default"
-          });
-        }
-      } else {
-        // No commission structure, set default
-        setNewEntry(prev => ({
-          ...prev,
-          amount: '1000', // Default commission amount
-          remarks: `Commission for ${selectedPartyName}`
-        }));
-        
-        toast({
-          title: "Commission Auto-Fill",
-          description: "Default commission amount ₹1,000 filled. Modify as needed.",
-          variant: "default"
-        });
-      }
-    }
+    // TODO: Implement commission auto-fill logic based on user requirements
+    console.log('Commission auto-fill function - to be implemented');
   };
 
   // Handle checkbox state change for ledger entries
@@ -2448,7 +2196,7 @@ const AccountLedger = () => {
                                   
                                   // Auto-fill commission if commission is selected
                                   if (partyName.toLowerCase().trim() === 'commission') {
-                                    handleCommissionAutoFill();
+                                    // Commission auto-fill removed - to be implemented fresh
                                   }
                                 }}
                                 onMouseEnter={() => setHighlightedIndex(index)}
@@ -2469,10 +2217,6 @@ const AccountLedger = () => {
                   value={newEntry.amount}
                       onChange={(e) => {
                         setNewEntry(prev => ({ ...prev, amount: e.target.value }));
-                        // Mark as manual entry if user manually changes commission amount
-                        if (newEntry.partyName?.toLowerCase().trim() === 'commission' && e.target.value !== '') {
-                          setIsManualCommissionAmount(true);
-                        }
                       }}
                       onKeyDown={(e) => {
                         if (e.key === 'Tab') {
