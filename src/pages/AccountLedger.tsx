@@ -1105,8 +1105,137 @@ const AccountLedger = () => {
 
   // Handle adding new ledger entry
   const handleAddEntry = async () => {
-    // TODO: Implement add entry logic based on user requirements
-    console.log('Add entry function - to be implemented');
+    if (!selectedPartyName) {
+      toast({
+        title: "Error",
+        description: "Please select a party first",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const amount = parseFloat(newEntry.amount);
+    if (isNaN(amount) || amount === 0) {
+      toast({
+        title: "Error",
+        description: "Please enter a valid amount",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!newEntry.partyName || newEntry.partyName.trim() === '') {
+      toast({
+        title: "Error",
+        description: "Please enter party name for transaction",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Determine transaction type based on amount
+      const tnsType = amount > 0 ? 'CR' : 'DR';
+      const transactionAmount = Math.abs(amount);
+
+      // Format remarks: Party Name (Remarks)
+      const remarks = newEntry.remarks || '';
+      const finalRemarks = `${newEntry.partyName.trim()} (${remarks})`;
+
+      // Check if target party exists
+      const targetParty = allPartiesForTransaction.find(party => 
+        party.name === newEntry.partyName.trim()
+      );
+
+      if (!targetParty) {
+        toast({
+          title: "Error",
+          description: `Party "${newEntry.partyName.trim()}" not found`,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Create 2 entries for dual-party transaction
+      const entries = [];
+
+      // 1. Entry for selected party (current party)
+      entries.push({
+        partyName: selectedPartyName,
+        amount: transactionAmount,
+        remarks: finalRemarks, // Target party name (remarks)
+        tnsType: tnsType,
+        credit: tnsType === 'CR' ? transactionAmount : 0,
+        debit: tnsType === 'DR' ? transactionAmount : 0,
+        date: new Date().toISOString().split('T')[0],
+        ti: `${Date.now()}::`,
+        involvedParty: newEntry.partyName.trim()
+      });
+
+      // 2. Entry for target party (opposite transaction)
+      entries.push({
+        partyName: newEntry.partyName.trim(),
+        amount: transactionAmount,
+        remarks: `${selectedPartyName} (${remarks})`, // Current party name (remarks)
+        tnsType: tnsType === 'CR' ? 'DR' : 'CR', // Opposite transaction type
+        credit: tnsType === 'CR' ? 0 : transactionAmount,
+        debit: tnsType === 'CR' ? transactionAmount : 0,
+        date: new Date().toISOString().split('T')[0],
+        ti: `${Date.now() + 1}::`,
+        involvedParty: selectedPartyName
+      });
+
+      // Add both entries
+      let successCount = 0;
+      for (const entryData of entries) {
+        try {
+          const response = await partyLedgerAPI.addEntry(entryData);
+          if (response.success) {
+            successCount++;
+          }
+        } catch (error) {
+          console.error('Failed to add entry:', entryData, error);
+        }
+      }
+
+      if (successCount === entries.length) {
+        // Success message
+        toast({
+          title: "Success",
+          description: `Dual-party transaction completed: ${selectedPartyName} ↔ ${newEntry.partyName.trim()}`
+        });
+        
+        // Clear form after successful transaction
+        setNewEntry({
+          amount: '',
+          partyName: '',
+          remarks: ''
+        });
+        
+        // Refresh ledger data
+        await loadLedgerData(false, true);
+        
+        // Force UI update
+        setForceUpdate(prev => prev + 1);
+      } else {
+        toast({
+          title: "Partial Success",
+          description: `${successCount}/${entries.length} entries added successfully`,
+          variant: "destructive"
+        });
+      }
+
+    } catch (error: any) {
+      console.error('❌ Add entry error:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add entry",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
 
