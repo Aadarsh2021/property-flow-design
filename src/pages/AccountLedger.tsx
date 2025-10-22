@@ -200,7 +200,6 @@ const AccountLedger = () => {
   // UI State Management
   const [showOldRecords, setShowOldRecords] = useState(false);
   const [showMondayFinalModal, setShowMondayFinalModal] = useState(false);
-  const [showModifyModal, setShowModifyModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   // Removed tableRefreshKey and forceUpdate to prevent unnecessary re-renders
   
@@ -224,7 +223,6 @@ const AccountLedger = () => {
   // State for top section dropdown
   const [showTopPartyDropdown, setShowTopPartyDropdown] = useState(false);
   const [filteredTopParties, setFilteredTopParties] = useState<Party[]>([]);
-  const [editingEntry, setEditingEntry] = useState<LedgerEntry | null>(null);
   const [topAutoCompleteText, setTopAutoCompleteText] = useState('');
   const [showTopInlineSuggestion, setShowTopInlineSuggestion] = useState(false);
   const [topInputRef, setTopInputRef] = useState<HTMLInputElement | null>(null);
@@ -1108,96 +1106,10 @@ const AccountLedger = () => {
   };
 
   // Handle modifying an existing ledger entry
+  // Handle modify entry functionality
   const handleModifyEntry = async () => {
-    // Validate that we have an entry to modify
-    if (!editingEntry) {
-      toast({
-        title: "Error",
-        description: "No entry selected for modification",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // Validate amount
-    const amount = editingEntry.tnsType === 'CR' ? editingEntry.credit : editingEntry.debit;
-    if (!amount || amount <= 0) {
-      toast({
-        title: "Error",
-        description: "Amount must be greater than 0",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const entryId = editingEntry.id || editingEntry._id || editingEntry.ti;
-    if (!entryId) {
-      console.error('Modify entry error: No entry ID found', editingEntry);
-      toast({
-        title: "Error",
-        description: "No entry ID found for modification",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setActionLoading(true);
-    try {
-      // Prepare update data based on transaction type using editingEntry (modified data)
-      const updateData = {
-        remarks: editingEntry.remarks,
-        credit: editingEntry.tnsType === 'CR' ? parseFloat(String(editingEntry.credit || '0')) : 0,
-        debit: editingEntry.tnsType === 'DR' ? parseFloat(String(editingEntry.debit || '0')) : 0,
-        tnsType: editingEntry.tnsType
-      };
-      
-      const response = await partyLedgerAPI.updateEntry(entryId, updateData as any);
-      
-      if (response.success) {
-        // Reload data without showing loading spinner
-        await loadLedgerData(false);
-        
-        // Clear UI state
-        setEditingEntry(null);
-        setShowModifyModal(false);
-        setSelectedEntries([]); // Clear selection
-        
-        // Clear cache to ensure fresh data after modifying entry
-        console.log('💾 CACHE: Cache clearing removed for performance optimization');
-        
-        // Force table refresh with small delay to ensure state updates
-        // Removed setTableRefreshKey and setForceUpdate to prevent unnecessary re-renders
-        
-        toast({
-          title: "Success",
-          description: "Entry modified successfully"
-        });
-      } else {
-        // Handle specific error codes
-        if (response.code === 'OLD_RECORD_PROTECTED') {
-            toast({
-              title: "Old Record Protected",
-              description: "This entry cannot be modified.",
-              variant: "destructive"
-            });
-        } else {
-          toast({
-            title: "Error",
-            description: response.message || "Failed to modify entry",
-            variant: "destructive"
-          });
-        }
-      }
-    } catch (error: any) {
-      console.error('Modify entry error:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to modify entry",
-        variant: "destructive"
-      });
-    } finally {
-      setActionLoading(false);
-    }
+    // TODO: Implement modify entry logic based on user requirements
+    console.log('Modify entry function - to be implemented');
   };
 
   // Helper function to find related transactions
@@ -2572,53 +2484,6 @@ const AccountLedger = () => {
                   });
                   return;
                 }
-                if (selectedEntries.length === 1) {
-                  const displayEntries = showOldRecords ? ledgerData.oldRecords : ledgerData.ledgerEntries;
-                  const selectedEntry = displayEntries.find(entry => 
-                    (entry.id || entry._id || entry.ti || '').toString() === selectedEntries[0]
-                  );
-                  if (selectedEntry) {
-                    setEditingEntry({...selectedEntry});
-                    setShowModifyModal(true);
-                  }
-                }
-              }}
-              disabled={selectedEntries.length !== 1 || selectedEntries.some(entryId => {
-                const displayEntries = showOldRecords ? ledgerData?.oldRecords : ledgerData?.ledgerEntries;
-                const entry = displayEntries?.find(e => (e.id || e._id || e.ti || '').toString() === entryId);
-                return entry?.is_old_record === true;
-              }) || isCompanyParty(selectedPartyName, companyName) || isCommissionParty(selectedPartyName)}
-                className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
-                title={selectedEntries.some(entryId => {
-                  const displayEntries = showOldRecords ? ledgerData?.oldRecords : ledgerData?.ledgerEntries;
-                  const entry = displayEntries?.find(e => (e.id || e._id || e.ti || '').toString() === entryId);
-                  return entry?.is_old_record === true;
-                }) ? "Cannot modify old records." : ""}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-                <span>Modify</span>
-              </button>
-              
-              <button
-              onClick={() => {
-                if (isCompanyParty(selectedPartyName, companyName)) {
-                  toast({
-                    title: "Company Party Restriction",
-                    description: getCompanyPartyRestrictionMessage(),
-                    variant: "destructive"
-                  });
-                  return;
-                }
-                if (isCommissionParty(selectedPartyName)) {
-                  toast({
-                    title: "Commission Party Restriction",
-                    description: getCommissionPartyRestrictionMessage(),
-                    variant: "destructive"
-                  });
-                  return;
-                }
                 setShowDeleteModal(true);
               }}
               disabled={selectedEntries.length === 0 || selectedEntries.some(entryId => {
@@ -2712,83 +2577,8 @@ const AccountLedger = () => {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Modify Entry Modal */}
-        <AlertDialog open={showModifyModal} onOpenChange={(open) => {
-          setShowModifyModal(open);
-          if (!open) setEditingEntry(null);
-        }}>
-          <AlertDialogContent className="max-w-md">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Modify Entry</AlertDialogTitle>
-            <AlertDialogDescription>
-              Edit the details for the selected transaction entry.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          
-          {/* Editing Form */}
-          {editingEntry && (
-            <div className="space-y-4 py-4">
-              {/* Transaction Type */}
-              <div>
-                <label className="block text-sm font-medium mb-2">Transaction Type</label>
-                <select
-                  value={editingEntry.tnsType}
-                  onChange={(e) => setEditingEntry({...editingEntry, tnsType: e.target.value as 'CR' | 'DR'})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="CR">Credit (CR)</option>
-                  <option value="DR">Debit (DR)</option>
-                </select>
-              </div>
-
-              {/* Amount */}
-              <div>
-                <label className="block text-sm font-medium mb-2">Amount</label>
-                <input
-                  type="number"
-                  value={editingEntry.tnsType === 'CR' ? (editingEntry.credit || 0) : (editingEntry.debit || 0)}
-                  onChange={(e) => {
-                    const amount = parseFloat(e.target.value) || 0;
-                    if (editingEntry.tnsType === 'CR') {
-                      setEditingEntry({...editingEntry, credit: amount, debit: 0});
-                    } else {
-                      setEditingEntry({...editingEntry, debit: amount, credit: 0});
-                    }
-                  }}
-                  placeholder="Enter amount"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Remarks */}
-              <div>
-                <label className="block text-sm font-medium mb-2">Remarks</label>
-                <input
-                  type="text"
-                  value={editingEntry.remarks || ''}
-                  onChange={(e) => setEditingEntry({...editingEntry, remarks: e.target.value})}
-                  placeholder="Enter remarks"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-          )}
-          
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={actionLoading}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleModifyEntry}
-              disabled={actionLoading}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              {actionLoading ? 'Saving...' : 'Save Changes'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Delete Entry Modal */}
-      <AlertDialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        {/* Delete Entry Modal */}
+        <AlertDialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Entry</AlertDialogTitle>
