@@ -1428,8 +1428,173 @@ const AccountLedger = () => {
 
   // Handle deleting multiple ledger entries
   const handleDeleteEntry = async () => {
-    // TODO: Implement delete entry logic based on user requirements
-    console.log('Delete entry function - to be implemented');
+    // Get all selected entries from selectedEntries state
+    const entriesToDelete = (ledgerData?.ledgerEntries || []).filter(entry => 
+      selectedEntries.includes((entry.id || entry._id || entry.ti || '').toString())
+    );
+    
+    // Validate that we have entries to delete
+    if (entriesToDelete.length === 0) {
+      toast({
+        title: "Error",
+        description: "No entries selected for deletion",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setActionLoading(true);
+    
+    try {
+      let successCount = 0;
+      let errorCount = 0;
+      const allEntriesToDelete = new Set(); // To avoid duplicate deletions
+      
+      // Process each selected entry
+      for (const selectedEntry of entriesToDelete) {
+        try {
+          // Find corresponding dual transaction
+          const correspondingEntry = await findCorrespondingEntry(selectedEntry);
+          
+          // Add main entry to deletion list
+          const mainEntryId = selectedEntry.id || selectedEntry._id || selectedEntry.ti;
+          if (mainEntryId) {
+            allEntriesToDelete.add(mainEntryId);
+          }
+          
+          // Add corresponding entry to deletion list if found
+          if (correspondingEntry) {
+            const correspondingEntryId = correspondingEntry.id || correspondingEntry._id || correspondingEntry.ti;
+            if (correspondingEntryId) {
+              allEntriesToDelete.add(correspondingEntryId);
+            }
+          }
+          
+        } catch (error) {
+          console.error('Error finding corresponding entry:', error);
+        }
+      }
+      
+      // Delete all entries (main + corresponding)
+      for (const entryId of allEntriesToDelete) {
+        try {
+          const deleteResponse = await partyLedgerAPI.deleteEntry(entryId as string);
+          
+          if (deleteResponse.success) {
+            successCount++;
+            console.log('✅ Entry deleted successfully:', entryId);
+          } else {
+            errorCount++;
+            console.error('❌ Failed to delete entry:', deleteResponse.message);
+          }
+        } catch (error) {
+          errorCount++;
+          console.error('❌ Error deleting entry:', error);
+        }
+      }
+      
+      // Show success/error messages
+      if (successCount > 0 && errorCount === 0) {
+        toast({
+          title: "Success",
+          description: `${successCount} entries deleted successfully (including corresponding dual transactions)`
+        });
+        
+        // Clear selected entries
+        setSelectedEntries([]);
+        
+        // Refresh data
+        await loadLedgerData(false, true);
+        
+        // Force UI update
+        setForceUpdate(prev => prev + 1);
+      } else if (successCount > 0 && errorCount > 0) {
+        toast({
+          title: "Partial Success",
+          description: `${successCount} entries deleted, ${errorCount} failed`,
+          variant: "destructive"
+        });
+        
+        // Clear selected entries
+        setSelectedEntries([]);
+        
+        // Refresh data
+        await loadLedgerData(false, true);
+        
+        // Force UI update
+        setForceUpdate(prev => prev + 1);
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to delete entries",
+          variant: "destructive"
+        });
+      }
+      
+    } catch (error: any) {
+      console.error('❌ Delete entry error:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete entries",
+        variant: "destructive"
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Helper function to find corresponding dual transaction
+  const findCorrespondingEntry = async (mainEntry: any) => {
+    try {
+      // Get all parties to search for corresponding entries
+      const allParties = allPartiesForTransaction || [];
+      
+      for (const party of allParties) {
+        try {
+          const partyLedgerResponse = await partyLedgerAPI.getPartyLedger(party.name);
+          if (partyLedgerResponse.success) {
+            const partyData = partyLedgerResponse.data;
+            const partyEntries = Array.isArray(partyData) ? partyData : ((partyData as any)?.ledgerEntries || []);
+            
+            // Find corresponding entry based on:
+            // 1. Same date
+            // 2. Same amount
+            // 3. Cross-reference party names in remarks
+            const correspondingEntry = partyEntries.find(entry => {
+              // Same date
+              if (entry.date !== mainEntry.date) return false;
+              
+              // Same amount
+              const mainAmount = Math.abs((mainEntry.credit || 0) - (mainEntry.debit || 0));
+              const entryAmount = Math.abs((entry.credit || 0) - (entry.debit || 0));
+              if (mainAmount !== entryAmount) return false;
+              
+              // Cross-reference check: main entry's party name should be in this entry's remarks
+              const mainPartyName = mainEntry.partyName;
+              const entryRemarks = entry.remarks || '';
+              
+              // Check if main party name appears in entry remarks
+              if (entryRemarks.includes(mainPartyName)) {
+                return true;
+              }
+              
+              return false;
+            });
+            
+            if (correspondingEntry) {
+              return correspondingEntry;
+            }
+          }
+        } catch (error) {
+          console.error(`Error searching party ${party.name}:`, error);
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error finding corresponding entry:', error);
+      return null;
+    }
   };
 
   // Handle Monday Final settlement
