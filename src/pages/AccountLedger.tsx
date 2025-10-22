@@ -157,9 +157,6 @@ const AccountLedger = () => {
     return 'Cannot add transactions for Commission party';
   };
   
-  const isMondayFinalAllowed = (partyName: string, companyName: string) => {
-    return !isCompanyParty(partyName, companyName) && !isCommissionParty(partyName);
-  };
   
   // Performance tracking refs
   const lastRequestTime = useRef<Map<string, number>>(new Map());
@@ -198,18 +195,10 @@ const AccountLedger = () => {
       calculatedBalance: number;
       totalEntries: number;
     };
-    mondayFinalData: {
-      transactionCount: number;
-      totalCredit: number;
-      totalDebit: number;
-      startingBalance: number;
-      finalBalance: number;
-    };
   } | null>(null);
   
   // UI State Management
   const [showOldRecords, setShowOldRecords] = useState(false);
-  const [showMondayFinalModal, setShowMondayFinalModal] = useState(false);
   const [showModifyModal, setShowModifyModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   // Removed tableRefreshKey and forceUpdate to prevent unnecessary re-renders
@@ -278,7 +267,6 @@ const AccountLedger = () => {
           mCommission: party.mCommission || party.m_commission || 'No Commission',
           rate: party.rate || '0',
           commiSystem: party.commiSystem || party.commi_system || 'Take',
-          mondayFinal: party.mondayFinal || party.monday_final || 'No',
           companyName: party.companyName || party.company_name || party.party_name || party.partyName
         }));
       
@@ -507,9 +495,7 @@ const AccountLedger = () => {
         
         // Include only non-commission transactions
         return entryPartyName === selectedPartyName && 
-               !remarks.toLowerCase().includes('commission') &&
-               !remarks.includes('Monday Final Settlement') &&
-               !remarks.includes('Monday Settlement');
+               !remarks.toLowerCase().includes('commission');
       });
 
       // Calculate total amount based on commission system
@@ -762,13 +748,6 @@ const AccountLedger = () => {
             totalDebit: responseData.summary?.totalDebit || 0,
             calculatedBalance: responseData.summary?.calculatedBalance || 0,
             totalEntries: responseData.summary?.totalEntries || 0
-          },
-          mondayFinalData: {
-            transactionCount: responseData.mondayFinalData?.transactionCount || 0,
-            totalCredit: responseData.mondayFinalData?.totalCredit || 0,
-            totalDebit: responseData.mondayFinalData?.totalDebit || 0,
-            startingBalance: responseData.mondayFinalData?.startingBalance || 0,
-            finalBalance: responseData.mondayFinalData?.finalBalance || 0
           }
         };
         
@@ -877,13 +856,10 @@ const AccountLedger = () => {
         return entryId === id ? { ...entry, chk: checked } : entry;
       });
       
-      // Update Monday Final entries in ledger entries
+      // Update ledger entries
       const updatedLedgerEntries = ledgerData.ledgerEntries.map(entry => {
-        if (entry.remarks?.includes('Monday Final Settlement')) {
-          const entryId = entry.id || entry._id || entry.ti;
-          return entryId === id ? { ...entry, chk: checked } : entry;
-        }
-        return entry;
+        const entryId = entry.id || entry._id || entry.ti;
+        return entryId === id ? { ...entry, chk: checked } : entry;
       });
 
       setLedgerData({
@@ -911,7 +887,7 @@ const AccountLedger = () => {
 
     // Get the appropriate entries based on current view
     const entriesToToggle = showOldRecords 
-      ? [...ledgerData.oldRecords, ...ledgerData.ledgerEntries.filter(entry => entry.tnsType === 'Monday Settlement')]
+      ? ledgerData.oldRecords
       : ledgerData.ledgerEntries;
 
     // Check if all entries are currently checked
@@ -948,17 +924,14 @@ const AccountLedger = () => {
         return updatedEntry || entry;
       });
       
-      // Update Monday Final entries in ledger entries
+      // Update ledger entries
       const updatedLedgerEntries = ledgerData.ledgerEntries.map(entry => {
-        if (entry.remarks?.includes('Monday Final Settlement')) {
-          const entryId = entry.id || entry._id || entry.ti;
-          const updatedEntry = updatedEntries.find(e => {
-            const eId = e.id || e._id || e.ti;
-            return eId === entryId;
-          });
-          return updatedEntry || entry;
-        }
-        return entry;
+        const entryId = entry.id || entry._id || entry.ti;
+        const updatedEntry = updatedEntries.find(e => {
+          const eId = e.id || e._id || e.ti;
+          return eId === entryId;
+        });
+        return updatedEntry || entry;
       });
 
       setLedgerData({
@@ -1201,7 +1174,7 @@ const AccountLedger = () => {
         if (response.code === 'OLD_RECORD_PROTECTED') {
         toast({
             title: "Old Record Protected",
-            description: "This entry was settled in Monday Final and cannot be modified. Delete the Monday Final entry first to unsettle transactions.",
+            description: "This entry cannot be modified.",
             variant: "destructive"
           });
         } else {
@@ -1476,77 +1449,6 @@ const AccountLedger = () => {
     }
   };
 
-  // Handle Monday Final settlement
-  const handleMondayFinal = async () => {
-    if (!selectedPartyName) {
-      toast({
-        title: "Error",
-        description: "Please select a party first",
-        variant: "destructive"
-          });
-          return;
-        }
-
-    setActionLoading(true);
-    try {
-      
-      const response = await partyLedgerAPI.updateMondayFinal([selectedPartyName]);
-      
-        if (response.success) {
-          toast({
-          title: "Monday Final Success",
-          description: `Settlement completed! ${response.data?.settledEntries || 0} transactions settled.`,
-        });
-        
-        // Monday Final completed successfully
-        
-        // Close the modal
-        setShowMondayFinalModal(false);
-        
-        // 1. Clear current data to force refresh
-        setLedgerData(prev => ({
-          ...prev,
-          ledgerEntries: [],
-          oldRecords: []
-        }));
-        
-        // 2. Immediate reload for fast response
-        await loadLedgerData(false);
-        
-                 // 3. Force table re-render immediately
-         // Removed setForceUpdate and setTableRefreshKey to prevent unnecessary re-renders
-         
-         // 4. Clear selected entries
-         setSelectedEntries([]);
-         
-         // 5. Show old records immediately
-         setShowOldRecords(true);
-         
-         // 6. Quick final refresh (reduced from 1500ms to 200ms)
-         setTimeout(async () => {
-           await loadLedgerData(false);
-           // Removed setForceUpdate and setTableRefreshKey to prevent unnecessary re-renders
-         }, 200); // Reduced from 1500ms to 200ms
-        
-      } else {
-        console.error('❌ Monday Final failed:', response.message);
-        toast({
-          title: "Error",
-          description: response.message || "Failed to process Monday Final",
-          variant: "destructive"
-        });
-      }
-    } catch (error: any) {
-      console.error('❌ Monday Final error:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to process Monday Final",
-        variant: "destructive"
-      });
-    } finally {
-      setActionLoading(false);
-    }
-  };
 
   // Handle print functionality
   const handlePrint = () => {
@@ -1743,7 +1645,7 @@ const AccountLedger = () => {
     if (!ledgerData) return [];
     
     const entries = showOldRecords 
-      ? [...(ledgerData.oldRecords || []), ...(ledgerData.ledgerEntries?.filter(entry => entry.remarks?.includes('Monday Final Settlement')) || [])]
+      ? ledgerData.oldRecords || []
       : ledgerData.ledgerEntries || [];
     
     // For better performance, we'll implement virtual scrolling in the render
@@ -1768,36 +1670,10 @@ const AccountLedger = () => {
     [memoizedDisplayEntries.length]
   );
 
-  // Check if party is already settled for Monday Final
+  // Check if party is already settled
   const isPartySettled = useMemo(() => {
     // TEMPORARILY DISABLED: All parties should show tables
     return false;
-    
-    // Original logic (commented out for now):
-    /*
-    if (!ledgerData || !selectedPartyName) return false;
-    
-    // Skip settlement check for virtual parties (Commission, Give, Company, etc.)
-    const virtualParties = ['commission', 'give', 'company', 'settlement'];
-    if (virtualParties.includes(selectedPartyName.toLowerCase())) {
-      return false;
-    }
-    
-    // Check if there are any Monday Final Settlement entries for the CURRENT party
-    const mondayFinalEntries = ledgerData.oldRecords.filter(entry => 
-      entry.remarks?.includes('Monday Final Settlement') &&
-      entry.partyName === selectedPartyName
-    );
-    
-    // Also check current ledger entries for Monday Final Settlement
-    const currentMondayFinalEntries = ledgerData.ledgerEntries.filter(entry => 
-      entry.remarks?.includes('Monday Final Settlement') &&
-      entry.partyName === selectedPartyName
-    );
-    
-    // Party is settled if there are Monday Final entries for this specific party
-    return mondayFinalEntries.length > 0 || currentMondayFinalEntries.length > 0;
-    */
   }, [ledgerData, selectedPartyName]);
 
   // Show toast when party is settled (TEMPORARILY DISABLED)
@@ -2460,39 +2336,6 @@ const AccountLedger = () => {
                 <span>DC Report</span>
               </button>
               
-                          <button
-              onClick={() => {
-                if (isCompanyParty(selectedPartyName, companyName)) {
-                  toast({
-                    title: "Company Party Restriction",
-                    description: getCompanyPartyRestrictionMessage(),
-                    variant: "destructive"
-                  });
-                  return;
-                }
-                if (isCommissionParty(selectedPartyName)) {
-                  toast({
-                    title: "Commission Party Restriction",
-                    description: getCommissionPartyRestrictionMessage(),
-                    variant: "destructive"
-                  });
-                  return;
-                }
-                setShowMondayFinalModal(true);
-              }}
-              disabled={actionLoading || !isMondayFinalAllowed(selectedPartyName, companyName)}
-              className={`w-full px-4 py-3 rounded-lg text-sm font-medium disabled:opacity-50 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2 ${
-                isCompanyParty(selectedPartyName, companyName) || isCommissionParty(selectedPartyName)
-                  ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white'
-              }`}
-              title={isCompanyParty(selectedPartyName, companyName) ? getCompanyPartyRestrictionMessage() : isCommissionParty(selectedPartyName) ? getCommissionPartyRestrictionMessage() : ''}
-            >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span>Monday Final</span>
-              </button>
               
               <button
                 onClick={() => setShowOldRecords(!showOldRecords)}
@@ -2543,7 +2386,7 @@ const AccountLedger = () => {
                   const displayEntries = showOldRecords ? ledgerData?.oldRecords : ledgerData?.ledgerEntries;
                   const entry = displayEntries?.find(e => (e.id || e._id || e.ti || '').toString() === entryId);
                   return entry?.is_old_record === true;
-                }) ? "Cannot modify old records. Delete Monday Final entry first to unsettle transactions." : ""}
+                }) ? "Cannot modify old records." : ""}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -2581,7 +2424,7 @@ const AccountLedger = () => {
                   const displayEntries = showOldRecords ? ledgerData?.oldRecords : ledgerData?.ledgerEntries;
                   const entry = displayEntries?.find(e => (e.id || e._id || e.ti || '').toString() === entryId);
                   return entry?.is_old_record === true;
-                }) ? "Cannot delete old records. Delete Monday Final entry first to unsettle transactions." : ""}
+                }) ? "Cannot delete old records." : ""}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -2626,57 +2469,6 @@ const AccountLedger = () => {
 
       </div>
 
-      {/* Monday Final Modal - Temporary Simple Version */}
-      {showMondayFinalModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">Monday Final Settlement</h3>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to process Monday Final settlement for selected entries?
-            </p>
-            <div className="flex space-x-3">
-              <button
-                onClick={() => setShowMondayFinalModal(false)}
-                disabled={actionLoading}
-                className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleMondayFinal}
-                disabled={actionLoading}
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
-              >
-                {actionLoading ? 'Processing...' : 'Confirm Settlement'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Original AlertDialog - Commented Out for Testing */}
-      {/* <AlertDialog open={showMondayFinalModal}         onOpenChange={(open) => {
-          setShowMondayFinalModal(open);
-        }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Monday Final Settlement</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to process Monday Final settlement for selected entries?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={actionLoading}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleMondayFinal}
-              disabled={actionLoading}
-              className="bg-green-600 hover:bg-green-700 text-white"
-            >
-              {actionLoading ? 'Processing...' : 'Confirm Settlement'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog> */}
 
       {/* Modify Entry Modal */}
       <AlertDialog open={showModifyModal} onOpenChange={(open) => {
