@@ -1369,7 +1369,7 @@ const AccountLedger = () => {
           if (partyLedgerResponse.success) {
             // Ensure data is an array before filtering
             const partyData = partyLedgerResponse.data;
-            const partyEntries = Array.isArray(partyData) ? partyData : (partyData?.ledgerEntries || []);
+            const partyEntries = Array.isArray(partyData) ? partyData : ((partyData as any)?.ledgerEntries || []);
             
             // Find entries with same date and related amounts
             const relatedEntries = partyEntries.filter(entry => {
