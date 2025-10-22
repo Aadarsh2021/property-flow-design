@@ -113,6 +113,8 @@ export interface NewPartyData {
   balanceLimit: string;
   mCommission: 'No Commission' | 'With Commission';
   rate: string;
+  mondayFinal: 'Yes' | 'No';
+
 }
 
 export interface NewParty extends NewPartyData {
@@ -135,6 +137,7 @@ export interface Party {
   rate?: string;
   commiSystem?: string;
   companyName?: string; // Backend field
+
 }
 
 export interface LedgerEntry {

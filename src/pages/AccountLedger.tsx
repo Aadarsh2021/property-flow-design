@@ -475,9 +475,9 @@ const AccountLedger = () => {
     }
 
     // Get commission rate
-    let commissionRate = 0;
-    if (selectedParty.mCommission === 'With Commission' && selectedParty.rate) {
-      commissionRate = parseFloat(selectedParty.rate) || 0;
+          let commissionRate = 0;
+          if (selectedParty.mCommission === 'With Commission' && selectedParty.rate) {
+            commissionRate = parseFloat(selectedParty.rate) || 0;
     } else {
       // Default 3% if no commission settings
       commissionRate = 3;
@@ -495,7 +495,9 @@ const AccountLedger = () => {
         
         // Include only non-commission transactions
         return entryPartyName === selectedPartyName && 
-               !remarks.toLowerCase().includes('commission');
+               !remarks.toLowerCase().includes('commission') &&
+               !remarks.includes('Monday Final Settlement') &&
+               !remarks.includes('Monday Settlement');
       });
 
       // Calculate total amount based on commission system
@@ -535,21 +537,21 @@ const AccountLedger = () => {
 
     // Set commission amount based on commission system
     let finalAmount = commissionAmount;
-    if (selectedParty.commiSystem === 'Take') {
+          if (selectedParty.commiSystem === 'Take') {
       // Take System: Company takes commission → Negative amount (DR)
-      finalAmount = -commissionAmount;
-    } else if (selectedParty.commiSystem === 'Give') {
+            finalAmount = -commissionAmount;
+          } else if (selectedParty.commiSystem === 'Give') {
       // Give System: Company gives commission → Positive amount (CR)
-      finalAmount = commissionAmount;
+            finalAmount = commissionAmount;
     } else {
       // Default: Positive amount (CR)
       finalAmount = commissionAmount;
-    }
-
+          }
+          
     // Set the calculated amount
     setNewEntry(prev => ({
-      ...prev,
-      amount: finalAmount.toString()
+              ...prev, 
+              amount: finalAmount.toString()
     }));
 
     // Show success message with transaction details
@@ -558,12 +560,12 @@ const AccountLedger = () => {
       const transactionType = selectedParty.commiSystem === 'Take' ? 'CR' : 
                             selectedParty.commiSystem === 'Give' ? 'DR' : 'All';
       message += ` - Based on ${transactionCount} ${transactionType} transaction${transactionCount > 1 ? 's' : ''}`;
-    } else {
+        } else {
       message += ` - Using default base amount (no transactions found)`;
     }
     message += ` - ${selectedParty.commiSystem || 'Default'} System`;
 
-    toast({
+        toast({
       title: "Commission Calculated",
       description: message
     });
@@ -856,11 +858,11 @@ const AccountLedger = () => {
         return entryId === id ? { ...entry, chk: checked } : entry;
       });
       
-      // Update ledger entries
-      const updatedLedgerEntries = ledgerData.ledgerEntries.map(entry => {
-        const entryId = entry.id || entry._id || entry.ti;
-        return entryId === id ? { ...entry, chk: checked } : entry;
-      });
+        // Update ledger entries
+        const updatedLedgerEntries = ledgerData.ledgerEntries.map(entry => {
+          const entryId = entry.id || entry._id || entry.ti;
+          return entryId === id ? { ...entry, chk: checked } : entry;
+        });
 
       setLedgerData({
         ...ledgerData,
@@ -885,10 +887,10 @@ const AccountLedger = () => {
   const handleCheckAll = () => {
     if (!ledgerData) return;
 
-    // Get the appropriate entries based on current view
-    const entriesToToggle = showOldRecords 
-      ? ledgerData.oldRecords
-      : ledgerData.ledgerEntries;
+      // Get the appropriate entries based on current view
+      const entriesToToggle = showOldRecords 
+        ? ledgerData.oldRecords
+        : ledgerData.ledgerEntries;
 
     // Check if all entries are currently checked
     const allChecked = entriesToToggle.every(entry => entry.chk);
@@ -924,15 +926,15 @@ const AccountLedger = () => {
         return updatedEntry || entry;
       });
       
-      // Update ledger entries
-      const updatedLedgerEntries = ledgerData.ledgerEntries.map(entry => {
-        const entryId = entry.id || entry._id || entry.ti;
-        const updatedEntry = updatedEntries.find(e => {
-          const eId = e.id || e._id || e.ti;
-          return eId === entryId;
+        // Update ledger entries
+        const updatedLedgerEntries = ledgerData.ledgerEntries.map(entry => {
+          const entryId = entry.id || entry._id || entry.ti;
+          const updatedEntry = updatedEntries.find(e => {
+            const eId = e.id || e._id || e.ti;
+            return eId === entryId;
+          });
+          return updatedEntry || entry;
         });
-        return updatedEntry || entry;
-      });
 
       setLedgerData({
         ...ledgerData,
@@ -966,14 +968,14 @@ const AccountLedger = () => {
         description: "Please enter a valid amount",
         variant: "destructive"
       });
-      return;
+            return;
     }
 
     if (!newEntry.partyName || newEntry.partyName.trim() === '') {
       toast({
         title: "Error",
         description: "Please enter party name for transaction",
-        variant: "destructive"
+              variant: "destructive"
       });
       return;
     }
@@ -997,10 +999,10 @@ const AccountLedger = () => {
         toast({
           title: "Error",
           description: `Party "${newEntry.partyName.trim()}" not found`,
-          variant: "destructive"
-        });
-        return;
-      }
+            variant: "destructive"
+          });
+          return;
+        }
 
       // Check if this is a special party (Company/Commission) - same transaction type
       const isSpecialParty = newEntry.partyName.trim().toLowerCase() === 'commission' || 
@@ -1008,25 +1010,25 @@ const AccountLedger = () => {
                             newEntry.partyName.trim().toLowerCase() === companyName.toLowerCase();
 
       // Create 2 entries for dual-party transaction
-      const entries = [];
+        const entries = [];
 
       // 1. Entry for selected party (current party)
-      entries.push({
-        partyName: selectedPartyName,
+        entries.push({
+          partyName: selectedPartyName,
         amount: transactionAmount,
         remarks: finalRemarks, // Target party name (remarks) or just party name
         tnsType: tnsType,
         credit: tnsType === 'CR' ? transactionAmount : 0,
         debit: tnsType === 'DR' ? transactionAmount : 0,
         date: new Date().toISOString().split('T')[0],
-        ti: `${Date.now()}::`,
+          ti: `${Date.now()}::`,
         involvedParty: newEntry.partyName.trim()
-      });
+        });
 
       // 2. Entry for target party
       const targetRemarks = remarks ? `${selectedPartyName} (${remarks})` : selectedPartyName;
       
-      entries.push({
+        entries.push({
         partyName: newEntry.partyName.trim(),
         amount: transactionAmount,
         remarks: targetRemarks, // Current party name (remarks) or just party name
@@ -1034,48 +1036,48 @@ const AccountLedger = () => {
         credit: isSpecialParty ? (tnsType === 'CR' ? transactionAmount : 0) : (tnsType === 'CR' ? 0 : transactionAmount),
         debit: isSpecialParty ? (tnsType === 'DR' ? transactionAmount : 0) : (tnsType === 'CR' ? transactionAmount : 0),
         date: new Date().toISOString().split('T')[0],
-        ti: `${Date.now() + 1}::`,
+          ti: `${Date.now() + 1}::`,
         involvedParty: selectedPartyName
-      });
+        });
 
-      // Add both entries
-      let successCount = 0;
-      for (const entryData of entries) {
-        try {
-          const response = await partyLedgerAPI.addEntry(entryData);
-          if (response.success) {
-            successCount++;
+        // Add both entries
+        let successCount = 0;
+        for (const entryData of entries) {
+          try {
+            const response = await partyLedgerAPI.addEntry(entryData);
+      if (response.success) {
+              successCount++;
+            }
+          } catch (error) {
+            console.error('Failed to add entry:', entryData, error);
           }
-        } catch (error) {
-          console.error('Failed to add entry:', entryData, error);
         }
-      }
 
-      if (successCount === entries.length) {
+        if (successCount === entries.length) {
         // Success message
-        toast({
-          title: "Success",
+          toast({
+            title: "Success",
           description: `Dual-party transaction completed: ${selectedPartyName} ↔ ${newEntry.partyName.trim()}`
         });
-        
-        // Clear form after successful transaction
-        setNewEntry({
-          amount: '',
-          partyName: '',
-          remarks: ''
-        });
+          
+          // Clear form after successful transaction
+          setNewEntry({
+            amount: '',
+            partyName: '',
+            remarks: ''
+          });
         
         // Refresh ledger data
         await loadLedgerData(false, true);
-        
-        // Force UI update
-        setForceUpdate(prev => prev + 1);
-      } else {
+          
+          // Force UI update
+          setForceUpdate(prev => prev + 1);
+        } else {
         toast({
           title: "Partial Success",
           description: `${successCount}/${entries.length} entries added successfully`,
-          variant: "destructive"
-        });
+            variant: "destructive"
+          });
       }
 
     } catch (error: any) {
@@ -1172,11 +1174,11 @@ const AccountLedger = () => {
       } else {
         // Handle specific error codes
         if (response.code === 'OLD_RECORD_PROTECTED') {
-        toast({
-            title: "Old Record Protected",
-            description: "This entry cannot be modified.",
-            variant: "destructive"
-          });
+            toast({
+              title: "Old Record Protected",
+              description: "This entry cannot be modified.",
+              variant: "destructive"
+            });
         } else {
           toast({
             title: "Error",
@@ -1326,22 +1328,22 @@ const AccountLedger = () => {
           const deleteResponse = await partyLedgerAPI.deleteEntry(entryId as string);
           
           if (deleteResponse.success) {
-            successCount++;
+              successCount++;
             console.log('✅ Entry deleted successfully:', entryId);
-          } else {
-            errorCount++;
+            } else {
+              errorCount++;
             console.error('❌ Failed to delete entry:', deleteResponse.message);
           }
         } catch (error) {
-          errorCount++;
+            errorCount++;
           console.error('❌ Error deleting entry:', error);
         }
       }
       
       // Show success/error messages
       if (successCount > 0 && errorCount === 0) {
-        toast({
-          title: "Success",
+          toast({
+            title: "Success",
           description: `${successCount} entries deleted successfully (including corresponding dual transactions)`
         });
         
@@ -1644,9 +1646,9 @@ const AccountLedger = () => {
   const memoizedDisplayEntries = useMemo(() => {
     if (!ledgerData) return [];
     
-    const entries = showOldRecords 
-      ? ledgerData.oldRecords || []
-      : ledgerData.ledgerEntries || [];
+      const entries = showOldRecords 
+        ? ledgerData.oldRecords || []
+        : ledgerData.ledgerEntries || [];
     
     // For better performance, we'll implement virtual scrolling in the render
     // Return all entries but limit rendering to visible items
