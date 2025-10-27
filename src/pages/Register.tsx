@@ -360,7 +360,7 @@ const Register = () => {
 
               // Firebase user created successfully (Authentication)
 
-      // Step 2: Format phone number
+      // Step 2: Format phone number with validation
       const cleanPhone = formData.phone.replace(/\D/g, '');
       let formattedPhone = cleanPhone;
       
@@ -372,6 +372,13 @@ const Register = () => {
         formattedPhone = cleanPhone;
       } else if (cleanPhone.length === 11 && cleanPhone.startsWith('0')) {
         formattedPhone = cleanPhone.substring(1);
+      }
+      
+      // Validate phone number
+      if (!formattedPhone || formattedPhone.length < 10 || formattedPhone.length > 10) {
+        setError('Please enter a valid 10-digit phone number');
+        setLoading(false);
+        return;
       }
       
       // Step 3: Create user with direct Supabase

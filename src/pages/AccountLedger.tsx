@@ -17,6 +17,7 @@ import {
 import { partyLedgerAPI } from '@/lib/api';
 import { Party, LedgerEntry, LedgerData } from '@/types';
 import { useCompanyName } from '@/hooks/useCompanyName';
+import { clearCacheByPattern } from '@/lib/apiCache';
 
 // Optimized memoized table row component with better performance
 const TableRow = memo(({ 
@@ -53,11 +54,13 @@ const TableRow = memo(({
       onClick={handleRowClick}
     >
       <td className="px-4 py-3 text-gray-700">
-        {entry.date}
+        {/* XSS Protection: React automatically escapes content */}
+        {String(entry.date || '')}
       </td>
       <td className="px-4 py-3 text-gray-800 font-medium">
         <div className="flex items-center space-x-2">
-          <span>{entry.remarks}</span>
+          {/* XSS Protection: React automatically escapes content */}
+          <span>{String(entry.remarks || '')}</span>
           {entry.is_old_record && (
             <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full font-medium">
               Old Record
@@ -161,6 +164,8 @@ const AccountLedger = () => {
   // Performance tracking refs
   const lastRequestTime = useRef<Map<string, number>>(new Map());
   const requestThrottleRef = useRef<NodeJS.Timeout | null>(null);
+  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const optimisticUpdateRef = useRef<boolean>(false);
   
   // Loading states for better user experience
   const [loading, setLoading] = useState(false);
@@ -688,8 +693,17 @@ const AccountLedger = () => {
   const loadLedgerData = useCallback(async (showLoading = true, forceRefresh = false) => {
     if (!selectedPartyName) return;
     
+    console.log('📡 loadLedgerData called:', {
+      party: selectedPartyName,
+      showLoading,
+      forceRefresh,
+      currentEntriesCount: ledgerData?.ledgerEntries?.length || 0,
+      hasOptimisticUpdate: optimisticUpdateRef.current
+    });
+    
     // Prevent multiple simultaneous calls only if not forcing refresh
     if (loading && !forceRefresh) {
+      console.log('⏭️ Skipping loadLedgerData - already loading and not forced');
       return;
     }
     
@@ -698,7 +712,7 @@ const AccountLedger = () => {
     const lastLoad = lastRequestTime.current.get(selectedPartyName) || 0;
     const timeSinceLastLoad = now - lastLoad;
     
-    if (timeSinceLastLoad < 500 && !forceRefresh) { // Throttle to max 2 requests per second per party
+    if (timeSinceLastLoad < 100 && !forceRefresh) { // Throttle to max 10 requests per second per party (reduced from 2)
       if (requestThrottleRef.current) {
         clearTimeout(requestThrottleRef.current);
       }
@@ -706,7 +720,7 @@ const AccountLedger = () => {
       return new Promise<void>((resolve) => {
         requestThrottleRef.current = setTimeout(() => {
           loadLedgerData(showLoading, forceRefresh).then(resolve);
-        }, 500 - timeSinceLastLoad);
+        }, 100 - timeSinceLastLoad);
       });
     }
     
@@ -717,7 +731,27 @@ const AccountLedger = () => {
     }
     
     try {
-      const response = await partyLedgerAPI.getPartyLedger(selectedPartyName);
+      // Fetch ledger data from API  
+      console.log('📞 Making API call to get party ledger for:', selectedPartyName, {
+        forceRefresh,
+        showLoading
+      });
+      
+      // Use force refresh parameters to bypass cache completely with cache-busting
+      const queryParams = forceRefresh ? { 
+        _force: true, 
+        _fresh: Date.now(),
+        _cache: Date.now() // Additional cache-busting parameter
+      } : undefined;
+      const response = await partyLedgerAPI.getPartyLedger(selectedPartyName, queryParams);
+      
+      console.log('📞 API response received:', {
+        success: response.success,
+        dataSize: response.data ? JSON.stringify(response.data).length : 0,
+        message: response.message,
+        hasLedgerEntries: (response.data as any)?.ledgerEntries?.length || 0,
+        hasOldRecords: (response.data as any)?.oldRecords?.length || 0
+      });
       
       if (response.success && response.data) {
         const responseData = response.data as any;
@@ -753,6 +787,13 @@ const AccountLedger = () => {
             totalEntries: responseData.summary?.totalEntries || 0
           }
         };
+        
+        console.log('📊 Setting new ledger data:', {
+          newEntriesCount: transformedData.ledgerEntries?.length || 0,
+          newOldRecordsCount: transformedData.oldRecords?.length || 0,
+          previousCount: ledgerData?.ledgerEntries?.length || 0,
+          partyName: selectedPartyName
+        });
         
         setLedgerData(transformedData);
         
@@ -812,7 +853,6 @@ const AccountLedger = () => {
     // Extract actual party name from display format
     const actualPartyName = extractPartyNameFromDisplay(trimmedName);
     
-    
     setSelectedPartyName(actualPartyName);
     setTypingPartyName(trimmedName); // Keep display format for typing
     
@@ -833,6 +873,9 @@ const AccountLedger = () => {
         description: `Using "${actualPartyName}" as new party`,
       });
     }
+    
+    // Load fresh data in background (will replace cached data if different)
+    setTimeout(() => loadLedgerData(true, true), 100);
   };
 
   // Handle commission auto-fill when commission is selected
@@ -953,6 +996,7 @@ const AccountLedger = () => {
 
   // Handle adding new ledger entry
   const handleAddEntry = async () => {
+    console.log('🚀 Starting handleAddEntry...');
     if (!selectedPartyName) {
       toast({
         title: "Error",
@@ -1043,23 +1087,111 @@ const AccountLedger = () => {
 
         // Add both entries
         let successCount = 0;
+        console.log('📝 Adding entries to backend:', entries);
         for (const entryData of entries) {
           try {
+            console.log('🚀 Sending entry to backend:', {
+              party: entryData.partyName,
+              amount: entryData.amount,
+              type: entryData.tnsType,
+              remarks: entryData.remarks
+            });
+            
             const response = await partyLedgerAPI.addEntry(entryData);
-      if (response.success) {
+            console.log('📡 API response for entry:', entryData.partyName, {
+              success: response.success,
+              message: response.message,
+              hasData: !!response.data
+            });
+            
+            if (response.success) {
               successCount++;
+              console.log('✅ Entry successfully added to backend:', entryData.partyName);
+            } else {
+              console.error('❌ Backend rejected entry:', entryData.partyName, response.message);
             }
           } catch (error) {
-            console.error('Failed to add entry:', entryData, error);
+            console.error('❌ Failed to add entry:', entryData.partyName, error);
           }
         }
 
-        if (successCount === entries.length) {
-        // Success message
-          toast({
-            title: "Success",
-          description: `Dual-party transaction completed: ${selectedPartyName} ↔ ${newEntry.partyName.trim()}`
+        console.log('📊 Entry addition summary:', {
+          totalEntries: entries.length,
+          successfulEntries: successCount,
+          allSuccessful: successCount === entries.length
         });
+
+        if (successCount === entries.length) {
+          // Optimistic UI update - Add entries to local state immediately
+          if (ledgerData) {
+            // Find the entry for the current selected party
+            const currentPartyEntry = entries.find(entry => entry.partyName === selectedPartyName);
+            
+            if (currentPartyEntry) {
+              // Create properly structured entry for UI that matches LedgerEntry type
+              const newUIEntry = {
+                id: currentPartyEntry.ti,
+                _id: currentPartyEntry.ti,
+                ti: currentPartyEntry.ti,
+                partyName: currentPartyEntry.partyName,
+                amount: currentPartyEntry.amount.toString(), // Convert to string for LedgerEntry type
+                remarks: currentPartyEntry.remarks,
+                tnsType: currentPartyEntry.tnsType,
+                credit: currentPartyEntry.credit || 0,
+                debit: currentPartyEntry.debit || 0,
+                balance: 0, // Will be recalculated by backend
+                date: currentPartyEntry.date,
+                chk: false,
+                mondayFinal: 'No' as const,
+                involvedParty: currentPartyEntry.involvedParty || '',
+                is_old_record: false,
+                isOldRecord: false,
+                settlementDate: null,
+                settlementMondayFinalId: null,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+              };
+              
+              // Set optimistic update flag
+              optimisticUpdateRef.current = true;
+              
+              // Update local state immediately for faster UI response
+              setLedgerData(prevData => {
+                const updatedData = {
+                  ...prevData,
+                  // Add new entry to ledgerEntries (will be sorted by memoizedDisplayEntries)
+                  ledgerEntries: [...prevData.ledgerEntries, newUIEntry]
+                };
+                console.log('📊 Updated ledgerData state (OPTIMISTIC):', {
+                  previousCount: prevData.ledgerEntries.length,
+                  newCount: updatedData.ledgerEntries.length,
+                  newEntry: newUIEntry,
+                  optimistic: true
+                });
+                return updatedData;
+              });
+              
+              console.log('✅ Optimistically added entry to UI:', newUIEntry);
+              
+              // Show success message immediately with optimistic update
+              toast({
+                title: "Success",
+                description: `Entry added instantly! ${selectedPartyName} ↔ ${newEntry.partyName.trim()}`,
+              });
+              
+              // Navigate to last page to show the new entry (will be sorted to end)
+              setTimeout(() => {
+                const newTotalEntries = (ledgerData?.ledgerEntries?.length || 0) + 1;
+                const newTotalPages = Math.ceil(newTotalEntries / ITEMS_PER_PAGE);
+                const lastPage = Math.max(0, newTotalPages - 1);
+                console.log('📄 Navigating to last page to show new entry:', lastPage);
+                setCurrentPage(lastPage);
+                
+                // Force component re-render to ensure the table updates
+                setForceUpdate(prev => prev + 1);
+              }, 0);
+            }
+          }
           
           // Clear form after successful transaction
           setNewEntry({
@@ -1068,11 +1200,18 @@ const AccountLedger = () => {
             remarks: ''
           });
         
-        // Refresh ledger data
-        await loadLedgerData(false, true);
-          
-          // Force UI update
-          setForceUpdate(prev => prev + 1);
+        // Clear cache for this party to ensure fresh data
+        console.log('🗑️ Clearing cache for party:', selectedPartyName);
+        if (selectedPartyName) {
+          const user = JSON.parse(localStorage.getItem('user') || '{}');
+          const userId = user.id || 'anonymous';
+          const cachePattern = `party-ledger-${userId}-${selectedPartyName}`;
+          console.log('🧹 Force clearing cache pattern:', cachePattern);
+          clearCacheByPattern(cachePattern);
+        }
+        
+        // No background refresh needed - optimistic update already has correct balance
+        console.log('✅ Entry added successfully - no refresh needed');
         } else {
         toast({
           title: "Partial Success",
@@ -1094,14 +1233,51 @@ const AccountLedger = () => {
   };
 
 
-  // Enhanced balance refresh function
+  // Debounced refresh function to prevent multiple rapid API calls
+  const debouncedRefresh = useCallback(() => {
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+    }
+    
+    refreshTimeoutRef.current = setTimeout(async () => {
+      try {
+        // Get fresh state values at execution time
+        const currentState = {
+          entriesCount: ledgerData?.ledgerEntries?.length || 0,
+          hasOptimistic: optimisticUpdateRef.current,
+          partyName: selectedPartyName
+        };
+        
+        console.log('🔄 Debounced refresh executing...', currentState);
+        
+        // Clear optimistic flag before refresh
+        optimisticUpdateRef.current = false;
+        
+        // Clear ALL cache entries for this party to ensure fresh data
+        if (selectedPartyName) {
+          const user = JSON.parse(localStorage.getItem('user') || '{}');
+          const userId = user.id || 'anonymous';
+          const cachePattern = `party-ledger-${userId}-${selectedPartyName}`;
+          console.log('🗑️ Clearing cache for pattern:', cachePattern);
+          clearCacheByPattern(cachePattern);
+        }
+        
+        // Force a fresh data fetch
+        console.log('📡 Forcing fresh data load...');
+        await loadLedgerData(false, true);
+        
+        console.log('✅ Debounced refresh completed');
+      } catch (error) {
+        console.error('❌ Debounced refresh error:', error);
+      }
+    }, 500); // Reduced to 500ms for faster response while still ensuring backend processing is complete
+  }, []);
+
+  // Enhanced balance refresh function with optimistic update
   const refreshBalanceColumn = async () => {
     try {
-      // Reload ledger data to get updated balances
+      // Reload ledger data silently in background
       await loadLedgerData(false, true); // Force refresh to bypass loading check
-      
-      // Force table re-render
-      // Removed setForceUpdate to prevent unnecessary re-renders
     } catch (error) {
       console.error('❌ Balance refresh error:', error);
     }
@@ -1193,6 +1369,44 @@ const AccountLedger = () => {
       ]);
 
       if (mainResponse.success && correspondingResponse.success) {
+        // Optimistic UI update - Update entry in local state immediately
+        if (ledgerData && editingEntry) {
+          const mainEntryId = (editingEntry.id || editingEntry._id || editingEntry.ti || '').toString();
+          setLedgerData(prevData => {
+            // Update the entry in both arrays
+            const updatedLedgerEntries = prevData.ledgerEntries.map(entry => {
+              const entryId = (entry.id || entry._id || entry.ti || '').toString();
+              if (entryId === mainEntryId) {
+                return {
+                  ...entry,
+                  ...mainUpdateData,
+                  updatedAt: new Date().toISOString()
+                };
+              }
+              return entry;
+            });
+            
+            const updatedOldRecords = prevData.oldRecords.map(entry => {
+              const entryId = (entry.id || entry._id || entry.ti || '').toString();
+              if (entryId === mainEntryId) {
+                return {
+                  ...entry,
+                  ...mainUpdateData,
+                  updatedAt: new Date().toISOString()
+                };
+              }
+              return entry;
+            });
+            
+            // Sorting will be handled by memoizedDisplayEntries
+            return {
+              ...prevData,
+              ledgerEntries: updatedLedgerEntries,
+              oldRecords: updatedOldRecords
+            };
+          });
+        }
+        
         toast({
           title: "Success",
           description: "Transaction modified successfully"
@@ -1203,9 +1417,8 @@ const AccountLedger = () => {
         setEditingEntry(null);
         setSelectedEntries([]);
 
-        // Refresh data
-        await loadLedgerData(false, true);
-        setForceUpdate(prev => prev + 1);
+        // No refresh needed - optimistic update already applied
+        console.log('✅ Modify operation completed - no refresh needed');
 
       } else {
         toast({
@@ -1339,6 +1552,13 @@ const AccountLedger = () => {
       // Process each selected entry
       for (const selectedEntry of entriesToDelete) {
         try {
+          console.log('🔍 Processing entry for deletion:', {
+            id: selectedEntry.id || selectedEntry._id || selectedEntry.ti,
+            party: selectedEntry.partyName,
+            remarks: selectedEntry.remarks,
+            amount: selectedEntry.credit || selectedEntry.debit
+          });
+          
           // Find corresponding dual transaction
           const correspondingEntry = await findCorrespondingEntry(selectedEntry);
           
@@ -1346,6 +1566,7 @@ const AccountLedger = () => {
           const mainEntryId = selectedEntry.id || selectedEntry._id || selectedEntry.ti;
           if (mainEntryId) {
             allEntriesToDelete.add(mainEntryId);
+            console.log('➕ Added main entry to delete list:', mainEntryId);
           }
           
           // Add corresponding entry to deletion list if found
@@ -1353,34 +1574,105 @@ const AccountLedger = () => {
             const correspondingEntryId = correspondingEntry.id || correspondingEntry._id || correspondingEntry.ti;
             if (correspondingEntryId) {
               allEntriesToDelete.add(correspondingEntryId);
+              console.log('➕ Added corresponding entry to delete list:', correspondingEntryId, correspondingEntry.partyName);
             }
+          } else {
+            console.log('⚠️ No corresponding entry found for:', selectedEntry.partyName);
+            // Still proceed with deleting the main entry even if no corresponding entry found
           }
           
         } catch (error) {
-          console.error('Error finding corresponding entry:', error);
+          console.error('❌ Error finding corresponding entry:', error);
         }
       }
+      
+      console.log('📝 Total entries to delete:', Array.from(allEntriesToDelete));
+      
+      if (allEntriesToDelete.size === 0) {
+        console.log('⚠️ No entries found to delete, this should not happen');
+        toast({
+          title: "Error", 
+          description: "No entries to delete. Please try again.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      console.log('💡 Debug info:', {
+        selectedEntriesCount: entriesToDelete.length,
+        totalEntriesToDelete: allEntriesToDelete.size,
+        selectedEntryIds: entriesToDelete.map(e => e.id || e._id || e.ti),
+        allDeleteIds: Array.from(allEntriesToDelete)
+      });
       
       // Delete all entries (main + corresponding)
       for (const entryId of allEntriesToDelete) {
         try {
+          console.log('🗑️ Attempting to delete entry:', entryId);
           const deleteResponse = await partyLedgerAPI.deleteEntry(entryId as string);
           
           if (deleteResponse.success) {
-              successCount++;
-            console.log('✅ Entry deleted successfully:', entryId);
-            } else {
-              errorCount++;
-            console.error('❌ Failed to delete entry:', deleteResponse.message);
+            successCount++;
+            console.log('✅ Entry deleted successfully:', entryId, deleteResponse.message);
+          } else {
+            errorCount++;
+            console.error('❌ Backend failed to delete entry:', entryId, deleteResponse.message);
           }
         } catch (error) {
-            errorCount++;
-          console.error('❌ Error deleting entry:', error);
+          errorCount++;
+          console.error('❌ Error deleting entry:', entryId, error);
         }
       }
       
+      console.log('📊 Delete operation summary:', {
+        totalToDelete: allEntriesToDelete.size,
+        successfulDeletes: successCount,
+        failedDeletes: errorCount,
+        allSuccessful: successCount === allEntriesToDelete.size
+      });
+      
       // Show success/error messages
       if (successCount > 0 && errorCount === 0) {
+        // Optimistic UI update - Remove entries from local state immediately
+        if (ledgerData) {
+          const deletedIds = Array.from(allEntriesToDelete).map(id => id.toString());
+          console.log('🧹 Removing entries from local state:', deletedIds);
+          
+          setLedgerData(prevData => {
+            const beforeCount = prevData.ledgerEntries.length;
+            
+            // Filter out deleted entries
+            const filteredLedgerEntries = prevData.ledgerEntries.filter(entry => {
+              const entryId = (entry.id || entry._id || entry.ti || '').toString();
+              const shouldKeep = !deletedIds.includes(entryId);
+              
+              if (!shouldKeep) {
+                console.log('🗑️ Removing from UI:', entryId, entry.partyName);
+              }
+              
+              return shouldKeep;
+            });
+            
+            const filteredOldRecords = prevData.oldRecords.filter(entry => {
+              const entryId = (entry.id || entry._id || entry.ti || '').toString();
+              return !deletedIds.includes(entryId);
+            });
+            
+            console.log('📊 Local state updated:', {
+              beforeCount,
+              afterCount: filteredLedgerEntries.length,
+              removedCount: beforeCount - filteredLedgerEntries.length
+            });
+            
+            // Keep entries sorted after deletion (they should already be sorted)
+            return {
+              ...prevData,
+              ledgerEntries: filteredLedgerEntries,
+              oldRecords: filteredOldRecords
+            };
+          });
+        }
+        
           toast({
             title: "Success",
           description: `${successCount} entries deleted successfully (including corresponding dual transactions)`
@@ -1389,11 +1681,8 @@ const AccountLedger = () => {
         // Clear selected entries
         setSelectedEntries([]);
         
-        // Refresh data
-        await loadLedgerData(false, true);
-        
-        // Force UI update
-        setForceUpdate(prev => prev + 1);
+        // No debounced refresh needed for delete - balances already accurate
+        console.log('✅ Delete operation completed - no refresh needed');
       } else if (successCount > 0 && errorCount > 0) {
         toast({
           title: "Partial Success",
@@ -1475,16 +1764,34 @@ const AccountLedger = () => {
 
   // Helper function to find corresponding dual transaction using Transaction ID
   const findCorrespondingEntry = async (mainEntry: any) => {
+    console.log('🔍 Finding corresponding entry for:', {
+      id: mainEntry.id || mainEntry._id || mainEntry.ti,
+      party: mainEntry.partyName,
+      remarks: mainEntry.remarks,
+      ti: mainEntry.ti
+    });
+    
     try {
       // Get all parties to search for corresponding entries
       const allParties = allPartiesForTransaction || [];
+      console.log('👥 Searching across', allParties.length, 'parties');
       
       for (const party of allParties) {
+        // Skip searching in the same party
+        if (party.name === mainEntry.partyName) {
+          console.log('⏭️ Skipping same party:', party.name);
+          continue;
+        }
+        
         try {
+          console.log('🔍 Searching in party:', party.name);
           const partyLedgerResponse = await partyLedgerAPI.getPartyLedger(party.name);
+          
           if (partyLedgerResponse.success) {
             const partyData = partyLedgerResponse.data;
             const partyEntries = Array.isArray(partyData) ? partyData : ((partyData as any)?.ledgerEntries || []);
+            
+            console.log('📄 Found', partyEntries.length, 'entries in', party.name);
             
             // Find corresponding entry using Transaction ID matching
             const correspondingEntry = partyEntries.find(entry => {
@@ -1502,14 +1809,30 @@ const AccountLedger = () => {
                 const entryTime = parseInt(entryTimestamp);
                 const timeDiff = Math.abs(mainTime - entryTime);
                 
+                console.log('⏱️ Checking timestamps:', {
+                  mainTi,
+                  entryTi,
+                  mainTime,
+                  entryTime,
+                  timeDiff,
+                  withinRange: timeDiff <= 2000
+                });
+                
                 // If timestamps are very close (within 2 seconds), they're likely paired
                 if (timeDiff <= 2000) {
                   // Additional validation: Cross-reference party names in remarks
                   const mainPartyName = mainEntry.partyName;
                   const entryRemarks = entry.remarks || '';
                   
+                  console.log('🔗 Checking remarks match:', {
+                    mainParty: mainPartyName,
+                    entryRemarks,
+                    remarksContainParty: entryRemarks.includes(mainPartyName)
+                  });
+                  
                   // Check if main party name appears in entry remarks
                   if (entryRemarks.includes(mainPartyName)) {
+                    console.log('✅ Found matching entry!');
                     return true;
                   }
                 }
@@ -1519,17 +1842,25 @@ const AccountLedger = () => {
             });
             
             if (correspondingEntry) {
+              console.log('🎯 Corresponding entry found in', party.name, ':', {
+                id: correspondingEntry.id || correspondingEntry._id || correspondingEntry.ti,
+                party: correspondingEntry.partyName,
+                remarks: correspondingEntry.remarks
+              });
               return correspondingEntry;
             }
+          } else {
+            console.log('❌ Failed to get ledger for party:', party.name);
           }
         } catch (error) {
-          console.error(`Error searching party ${party.name}:`, error);
+          console.error(`❌ Error searching party ${party.name}:`, error);
         }
       }
       
+      console.log('❌ No corresponding entry found');
       return null;
     } catch (error) {
-      console.error('Error finding corresponding entry:', error);
+      console.error('❌ Error finding corresponding entry:', error);
       return null;
     }
   };
@@ -1602,6 +1933,50 @@ const AccountLedger = () => {
       const response = await partyLedgerAPI.updateMondayFinal([selectedPartyName]);
 
       if (response.success) {
+        // Optimistic UI update - Move current transactions to old records
+        if (ledgerData) {
+          const mondayFinalUIEntry = {
+            ...mondayFinalEntry,
+            id: mondayFinalEntry.ti,
+            amount: mondayFinalAmount.toString(), // Convert to string for TypeScript
+            balance: mondayFinalAmount,
+            chk: false,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          
+          // Move current transactions to old records and add Monday Final entry
+          setLedgerData(prevData => {
+            // Combine old records, current entries, and Monday Final entry
+            const allOldRecords = [
+              ...prevData.oldRecords, 
+              ...prevData.ledgerEntries, 
+              mondayFinalUIEntry
+            ];
+            
+            // Sort old records in ascending order (old to new)
+            const sortedOldRecords = allOldRecords.sort((a, b) => {
+              const dateA = new Date(a.date || a.createdAt || '1970-01-01');
+              const dateB = new Date(b.date || b.createdAt || '1970-01-01');
+              
+              if (dateA.getTime() !== dateB.getTime()) {
+                return dateA.getTime() - dateB.getTime();
+              }
+              
+              const timeA = a.ti || a.createdAt || '0';
+              const timeB = b.ti || b.createdAt || '0';
+              
+              return timeA.localeCompare(timeB);
+            });
+            
+            return {
+              ...prevData,
+              ledgerEntries: [], // Clear current entries as they're settled
+              oldRecords: sortedOldRecords
+            };
+          });
+        }
+        
         toast({
           title: "Monday Final Success",
           description: `Settlement completed! ${currentTransactions.length} transactions settled. Net amount: ₹${mondayFinalAmount.toLocaleString()} (${mondayFinalType})`
@@ -1610,12 +1985,11 @@ const AccountLedger = () => {
         // Close modal
         setShowMondayFinalModal(false);
 
-        // Refresh data
-        await loadLedgerData(false, true);
-        setForceUpdate(prev => prev + 1);
-
-        // Show old records
+        // Show old records automatically
         setShowOldRecords(true);
+
+        // Refresh data in background for accurate state
+        debouncedRefresh();
 
       } else {
         toast({
@@ -1748,6 +2122,14 @@ const AccountLedger = () => {
         clearTimeout(requestThrottleRef.current);
       }
       
+      // Clear any pending refresh requests
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+      
+      // Clear optimistic update flag
+      optimisticUpdateRef.current = false;
+      
       // Clear performance tracking
       lastRequestTime.current.clear();
       
@@ -1830,10 +2212,37 @@ const AccountLedger = () => {
         ? ledgerData.oldRecords || []
         : ledgerData.ledgerEntries || [];
     
-    // For better performance, we'll implement virtual scrolling in the render
-    // Return all entries but limit rendering to visible items
-    return entries;
-  }, [ledgerData, showOldRecords]);
+    // Sort entries by date and time in ASCENDING ORDER (old to new)
+    // This handles all scenarios: add, delete, modify, Monday Final
+    const sortedEntries = [...entries].sort((a, b) => {
+      // First sort by date (YYYY-MM-DD format)
+      const dateA = new Date(a.date || a.createdAt || '1970-01-01');
+      const dateB = new Date(b.date || b.createdAt || '1970-01-01');
+      
+      if (dateA.getTime() !== dateB.getTime()) {
+        return dateA.getTime() - dateB.getTime(); // Ascending order
+      }
+      
+      // If dates are same, sort by creation time (ti field contains timestamp)
+      const timeA = a.ti || a.createdAt || '0';
+      const timeB = b.ti || b.createdAt || '0';
+      
+      return timeA.localeCompare(timeB);
+    });
+    
+    console.log('🔄 Entries sorted in ascending order (old→new):', {
+      showOldRecords,
+      entriesCount: sortedEntries.length,
+      ledgerEntriesCount: ledgerData.ledgerEntries?.length || 0,
+      oldRecordsCount: ledgerData.oldRecords?.length || 0,
+      firstEntryDate: sortedEntries[0]?.date,
+      lastEntryDate: sortedEntries[sortedEntries.length - 1]?.date,
+      sortOrder: 'ASCENDING (oldest first)'
+    });
+    
+    // Return sorted entries for rendering
+    return sortedEntries;
+  }, [ledgerData, showOldRecords, forceUpdate]);
   
   // Virtual scrolling configuration
   const ITEMS_PER_PAGE = 50; // Reduced from 100 for better performance
@@ -1843,7 +2252,18 @@ const AccountLedger = () => {
   const visibleEntries = useMemo(() => {
     const startIndex = currentPage * ITEMS_PER_PAGE;
     const endIndex = startIndex + ITEMS_PER_PAGE;
-    return memoizedDisplayEntries.slice(startIndex, endIndex);
+    const sliced = memoizedDisplayEntries.slice(startIndex, endIndex);
+    
+    console.log('👁️ Visible entries calculated:', {
+      currentPage,
+      startIndex,
+      endIndex,
+      totalEntries: memoizedDisplayEntries.length,
+      visibleCount: sliced.length,
+      lastEntryDate: sliced[sliced.length - 1]?.date
+    });
+    
+    return sliced;
   }, [memoizedDisplayEntries, currentPage]);
   
   // Calculate total pages for pagination

@@ -154,11 +154,12 @@ const apiCall = async <T>(endpoint: string, options: RequestInit = {}): Promise<
             // Check if this is a revoked user response
             if (errorData && errorData.isRevoked) {
               console.log('🚫 User is revoked, clearing auth and redirecting');
-              // User is revoked, clear auth and redirect to login
-              localStorage.removeItem('token');
-              localStorage.removeItem('user');
-              window.location.href = '/login';
-              throw new Error('Your account has been revoked by the admin. Please contact support for assistance.');
+            // User is revoked, clear auth and redirect to login
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            // Fix: Use secure redirect to prevent open redirect attack
+            window.location.href = `${window.location.origin}/login`;
+            throw new Error('Your account has been revoked by the admin. Please contact support for assistance.');
             }
             // Check if this is a pending approval response
             if (errorData && errorData.requiresApproval) {
