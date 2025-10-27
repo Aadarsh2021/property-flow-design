@@ -33,14 +33,14 @@ const TableRow = memo(({
 }) => {
   const entryId = entry.id || entry._id || entry.ti || `entry_${index}`;
   
-  // Memoize click handler to prevent unnecessary re-renders
-  const handleRowClick = useCallback(() => {
-    onCheckboxChange(entryId, !isSelected);
-  }, [onCheckboxChange, entryId, isSelected]);
-  
   const handleCheckboxChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     onCheckboxChange(entryId, e.target.checked);
   }, [onCheckboxChange, entryId]);
+  
+  // Handle row click to toggle checkbox
+  const handleRowClick = useCallback(() => {
+    onCheckboxChange(entryId, !isSelected);
+  }, [onCheckboxChange, entryId, isSelected]);
   
   const handleCheckboxClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -178,16 +178,14 @@ const AccountLedger = () => {
   const [typingPartyName, setTypingPartyName] = useState(initialPartyName || 'Test Company 1');
   const [availableParties, setAvailableParties] = useState<Party[]>([]);
   
-  // Handle URL parameter changes
+  // Handle URL parameter changes - only for initial load
   useEffect(() => {
-    if (initialPartyName && initialPartyName !== selectedPartyName) {
+    if (initialPartyName && initialPartyName !== selectedPartyName && !initializationRef.current) {
       const decodedPartyName = decodeURIComponent(initialPartyName);
       setSelectedPartyName(decodedPartyName);
       setTypingPartyName(decodedPartyName);
-      // Load ledger data for the new party
-      loadLedgerData(true, true);
     }
-  }, [initialPartyName, selectedPartyName]);
+  }, [initialPartyName]);
   
   // Main ledger data state
   const [ledgerData, setLedgerData] = useState<{
@@ -690,6 +688,14 @@ const AccountLedger = () => {
   };
 
   // Optimized load ledger data with throttling and performance monitoring
+  // Ref to track the party for which data is currently loading
+  const loadingForPartyRef = useRef<string | null>(null);
+  
+  // Ref to track polling interval for real-time updates
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastDataHashRef = useRef<string>('');
+  const isUserActionInProgressRef = useRef<boolean>(false);
+  
   const loadLedgerData = useCallback(async (showLoading = true, forceRefresh = false) => {
     if (!selectedPartyName) return;
     
@@ -698,12 +704,28 @@ const AccountLedger = () => {
       showLoading,
       forceRefresh,
       currentEntriesCount: ledgerData?.ledgerEntries?.length || 0,
-      hasOptimisticUpdate: optimisticUpdateRef.current
+      hasOptimisticUpdate: optimisticUpdateRef.current,
+      currentlyLoadingFor: loadingForPartyRef.current
     });
     
-    // Prevent multiple simultaneous calls only if not forcing refresh
+    // Skip if already loading for this party
+    if (loadingForPartyRef.current === selectedPartyName && !forceRefresh) {
+      console.log('⏭️ Skipping loadLedgerData - already loading for this party:', selectedPartyName);
+      return;
+    }
+    
+    // Set the loading party
+    loadingForPartyRef.current = selectedPartyName;
+    
+    // Prevent multiple simultaneous calls for the same party
     if (loading && !forceRefresh) {
       console.log('⏭️ Skipping loadLedgerData - already loading and not forced');
+      return;
+    }
+    
+    // Skip if no party selected
+    if (!selectedPartyName) {
+      console.log('⏭️ Skipping loadLedgerData - no party selected');
       return;
     }
     
@@ -788,17 +810,26 @@ const AccountLedger = () => {
           }
         };
         
+        // Calculate data hash for change detection
+        const dataHash = JSON.stringify(transformedData.ledgerEntries || []).substring(0, 100);
+        const hasChanged = lastDataHashRef.current !== dataHash;
+        
         console.log('📊 Setting new ledger data:', {
           newEntriesCount: transformedData.ledgerEntries?.length || 0,
           newOldRecordsCount: transformedData.oldRecords?.length || 0,
           previousCount: ledgerData?.ledgerEntries?.length || 0,
-          partyName: selectedPartyName
+          partyName: selectedPartyName,
+          hasChanged
         });
         
-        setLedgerData(transformedData);
-        
-        // Force UI update by triggering a re-render
-        setForceUpdate(prev => prev + 1);
+        // Only update if data actually changed (for polling)
+        if (hasChanged || !showLoading) {
+          lastDataHashRef.current = dataHash;
+          setLedgerData(transformedData);
+          
+          // Force UI update by triggering a re-render
+          setForceUpdate(prev => prev + 1);
+        }
           
         // Auto-enable old records view if all transactions are settled
         if (transformedData.ledgerEntries.length === 0 && transformedData.oldRecords.length > 0) {
@@ -834,6 +865,10 @@ const AccountLedger = () => {
       if (showLoading || forceRefresh) {
         setLoading(false);
       }
+      // Clear the loading party ref when done
+      if (loadingForPartyRef.current === selectedPartyName) {
+        loadingForPartyRef.current = null;
+      }
     }
   }, [selectedPartyName]);
 
@@ -852,6 +887,30 @@ const AccountLedger = () => {
     
     // Extract actual party name from display format
     const actualPartyName = extractPartyNameFromDisplay(trimmedName);
+    
+    // IMPORTANT: Clear previous party's ledger data and any pending timers
+    console.log('🔄 Clearing previous party data:', selectedPartyName);
+    
+    // Clear any pending refresh timeouts
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+      refreshTimeoutRef.current = null;
+    }
+    
+    // Clear request throttle
+    if (requestThrottleRef.current) {
+      clearTimeout(requestThrottleRef.current);
+      requestThrottleRef.current = null;
+    }
+    
+    // Clear optimistic update flag
+    optimisticUpdateRef.current = false;
+    
+    // Clear previous party's data and reset loading state
+    setLedgerData(null);
+    setSelectedEntries([]);
+    setLoading(true);
+    setCurrentPage(0);
     
     setSelectedPartyName(actualPartyName);
     setTypingPartyName(trimmedName); // Keep display format for typing
@@ -874,8 +933,11 @@ const AccountLedger = () => {
       });
     }
     
-    // Load fresh data in background (will replace cached data if different)
-    setTimeout(() => loadLedgerData(true, true), 100);
+    // Load fresh data for the new party - with proper deduplication
+    if (loadingForPartyRef.current !== actualPartyName) {
+      loadingForPartyRef.current = actualPartyName;
+      loadLedgerData(true, true);
+    }
   };
 
   // Handle commission auto-fill when commission is selected
@@ -997,12 +1059,17 @@ const AccountLedger = () => {
   // Handle adding new ledger entry
   const handleAddEntry = async () => {
     console.log('🚀 Starting handleAddEntry...');
+    
+    // Pause polling during user action
+    isUserActionInProgressRef.current = true;
+    
     if (!selectedPartyName) {
       toast({
         title: "Error",
         description: "Please select a party first",
         variant: "destructive"
       });
+      isUserActionInProgressRef.current = false;
       return;
     }
 
@@ -1229,6 +1296,8 @@ const AccountLedger = () => {
       });
     } finally {
       setLoading(false);
+      // Resume polling after user action completes
+      isUserActionInProgressRef.current = false;
     }
   };
 
@@ -1286,12 +1355,16 @@ const AccountLedger = () => {
   // Handle modifying an existing ledger entry
   // Handle modify entry functionality
   const handleModifyEntry = async () => {
+    // Pause polling during user action
+    isUserActionInProgressRef.current = true;
+    
     if (!editingEntry) {
       toast({
         title: "Error",
         description: "No entry selected for modification",
         variant: "destructive"
       });
+      isUserActionInProgressRef.current = false;
       return;
     }
 
@@ -1437,6 +1510,8 @@ const AccountLedger = () => {
       });
     } finally {
       setActionLoading(false);
+      // Resume polling after user action completes
+      isUserActionInProgressRef.current = false;
     }
   };
 
@@ -1516,6 +1591,9 @@ const AccountLedger = () => {
 
   // Handle deleting multiple ledger entries
   const handleDeleteEntry = async () => {
+    // Pause polling during user action
+    isUserActionInProgressRef.current = true;
+    
     // Get all selected entries from selectedEntries state
     const entriesToDelete = (ledgerData?.ledgerEntries || []).filter(entry => 
       selectedEntries.includes((entry.id || entry._id || entry.ti || '').toString())
@@ -1715,6 +1793,8 @@ const AccountLedger = () => {
       });
     } finally {
       setActionLoading(false);
+      // Resume polling after user action completes
+      isUserActionInProgressRef.current = false;
     }
   };
 
@@ -2133,10 +2213,54 @@ const AccountLedger = () => {
       // Clear performance tracking
       lastRequestTime.current.clear();
       
+      // Clear polling interval
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      
       // Clear any pending transitions
       console.log('🧹 Cleaning up on unmount');
     };
   }, []);
+  
+  // Real-time polling effect - check for changes every 5 seconds
+  useEffect(() => {
+    if (!selectedPartyName || !ledgerData) return;
+    
+    // Clear existing interval
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+    
+    console.log('🔄 Starting real-time polling for:', selectedPartyName);
+    
+    // Poll every 5 seconds for real-time updates
+    pollingIntervalRef.current = setInterval(() => {
+      if (!selectedPartyName) return;
+      
+      // Skip if user is performing an action
+      if (isUserActionInProgressRef.current) {
+        console.log('⏭️ Polling paused - user action in progress');
+        return;
+      }
+      
+      console.log('🔄 Real-time poll checking for changes...');
+      
+      // Silent refresh to check for changes
+      loadLedgerData(false, true).catch(error => {
+        console.error('Real-time poll error:', error);
+      });
+    }, 5000); // Check every 5 seconds
+    
+    // Cleanup on dependency change or unmount
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+  }, [selectedPartyName, ledgerData, loadLedgerData]);
 
   // Handle click outside to close dropdown
   useEffect(() => {
