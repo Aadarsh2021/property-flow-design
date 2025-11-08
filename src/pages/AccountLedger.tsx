@@ -1,17 +1,21 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../hooks/redux';
 import { ledgerSlice } from '../store/slices/ledgerSlice';
 import { partiesSlice } from '../store/slices/partiesSlice';
 import { uiSlice } from '../store/slices/uiSlice';
-import { partyLedgerAPI, unsettleTransactions } from '../lib/api';
-import { hasCommission, getCommissionRate, calculateCommissionAmount } from '../utils/partyUtils';
+import { partyLedgerAPI } from '../lib/api';
+import {
+  deleteLedgerEntries,
+  applyOptimisticDelete
+} from '../store/services/ledgerService';
+import { filterParties } from '../store/services/partiesService';
+import { loadAccountLedgerPage } from '../store/services/accountLedgerService';
 import { useToast } from '@/hooks/use-toast';
 import TopNavigation from '@/components/TopNavigation';
 import LedgerTable from '@/components/LedgerTable';
-import TransactionForm from '@/components/TransactionForm';
 import ActionButtons from '@/components/ActionButtons';
-import PartySelector from '@/components/PartySelector';
+import TransactionAddForm from '@/components/TransactionAddForm';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,8 +52,7 @@ const AccountLedgerComponent = () => {
     selectedPartyName = initialPartyName || '',
     filters = { showOldRecords: false }
   } = ledgerState || {};
-  
-  console.log('🔍 Main component ledgerData from Redux:', ledgerData);
+
   const {
     availableParties = [],
     filteredTopParties = [],
@@ -63,16 +66,6 @@ const AccountLedgerComponent = () => {
     topAutoCompleteText = '',
     showTopInlineSuggestion = false,
     topHighlightedIndex = -1,
-    // Transaction form states
-    newEntryPartyName = '',
-    newEntryAmount = '',
-    newEntryRemarks = '',
-    showTransactionPartyDropdown = false,
-    transactionFilteredParties = [],
-    transactionHighlightedIndex = -1,
-    transactionAutoCompleteText = '',
-    showTransactionInlineSuggestion = false,
-    isAddingEntry = false
   } = uiState || {};
 
   // Show loading if Redux state is not properly initialized - temporarily disabled
@@ -96,57 +89,50 @@ const AccountLedgerComponent = () => {
   const [refreshKey, setRefreshKey] = useState(0);
 
   // Extract showOldRecords with default
-  const showOldRecords = filters?.showOldRecords || false;
+  const showOldRecords = filters?.showOldRecords ?? false;
 
 
 
 
-  // Load available parties on component mount
-  const loadAvailableParties = useCallback(async () => {
-    if (!companyName) return;
+  const hasBootstrappedRef = useRef(false);
+  const lastLoadedPartyRef = useRef<string | null>(null);
 
-    dispatch(partiesSlice.actions.setPartiesLoading(true));
+  const initializeAccountLedger = useCallback(async (partyToLoad?: string) => {
     try {
-      const response = await partyLedgerAPI.getAllParties();
-      if (response.success) {
-        // Convert API Party type to Redux Party type
-        const convertedParties = (response.data || []).map(party => ({
-          _id: party._id || party.id || '',
-          name: party.name || '',
-          party_name: party.party_name || party.partyName || party.name || '',
-          srNo: String(party.srNo || ''),
-          status: (party.status as 'A' | 'I') || 'A',
-          mCommission: party.mCommission || '',
-          rate: party.rate || '',
-          commiSystem: (party.commiSystem as 'Take' | 'Give') || 'Give',
-          mondayFinal: (party.mondayFinal as 'Yes' | 'No') || 'No',
-          companyName: party.companyName || '',
-        }));
-        dispatch(partiesSlice.actions.setAvailableParties(convertedParties));
-        dispatch(partiesSlice.actions.setAllPartiesForTransaction(convertedParties));
-      } else {
-        dispatch(partiesSlice.actions.setPartiesError(response.message || 'Failed to load parties'));
-      }
-    } catch (error) {
-      dispatch(partiesSlice.actions.setPartiesError('Failed to load parties'));
-    } finally {
-      dispatch(partiesSlice.actions.setPartiesLoading(false));
-    }
-  }, [companyName, dispatch]);
+      const result = await dispatch(
+        loadAccountLedgerPage({
+          partyName: partyToLoad,
+          forceRefresh: true
+        })
+      ).unwrap();
 
+      hasBootstrappedRef.current = true;
+      if (result?.selectedPartyName) {
+        lastLoadedPartyRef.current = result.selectedPartyName;
+      } else if (partyToLoad) {
+        lastLoadedPartyRef.current = partyToLoad;
+      } else {
+        lastLoadedPartyRef.current = null;
+      }
+
+      setRefreshKey(prev => prev + 1);
+    } catch (error) {
+      hasBootstrappedRef.current = true;
+      console.error('❌ Failed to initialize account ledger page:', error);
+    }
+  }, [dispatch]);
 
   // Initialize data on component mount
   useEffect(() => {
-    if (initialPartyName) {
-      const decodedPartyName = decodeURIComponent(initialPartyName);
+    const decodedPartyName = initialPartyName ? decodeURIComponent(initialPartyName) : undefined;
+
+    if (decodedPartyName) {
       dispatch(ledgerSlice.actions.setSelectedPartyName(decodedPartyName));
       dispatch(uiSlice.actions.setTypingPartyName(decodedPartyName));
     }
 
-    if (companyName) {
-      loadAvailableParties();
-    }
-  }, [initialPartyName, companyName, loadAvailableParties]);
+    initializeAccountLedger(decodedPartyName);
+  }, [initialPartyName, initializeAccountLedger, dispatch]);
 
   // Update Redux typing state when selected party changes (only if not currently typing)
   useEffect(() => {
@@ -156,45 +142,53 @@ const AccountLedgerComponent = () => {
     }
   }, [selectedPartyName, typingPartyName, showTopPartyDropdown]);
 
-  // Load ledger data when selected party changes
+  // Load ledger data when selected party changes using Redux Thunk
   useEffect(() => {
-    if (selectedPartyName && selectedPartyName !== initialPartyName) {
-      // Load ledger data for the new party
-      const loadLedgerData = async () => {
-        dispatch(ledgerSlice.actions.setLoading(true));
-        try {
-          const response = await partyLedgerAPI.getPartyLedger(selectedPartyName);
-          
-          if (response.success && response.data) {
-            const data = response.data as any;
-            const ledgerEntries = Array.isArray(data) ? data : (data?.ledgerEntries || []);
-            const oldRecords = data?.oldRecords || [];
-            const ledgerData = {
-              ledgerEntries,
-              oldRecords,
-              totalBalance: data?.totalBalance || 0,
-              totalDebit: data?.totalDebit || 0,
-              totalCredit: data?.totalCredit || 0,
-            };
-            dispatch(ledgerSlice.actions.setLedgerData(ledgerData));
-            setRefreshKey(prev => prev + 1); // Force table re-render
-          }
-        } catch (error) {
-          console.error('Error loading ledger data:', error);
-        } finally {
-          dispatch(ledgerSlice.actions.setLoading(false));
-        }
-      };
-      
-      loadLedgerData();
+    if (!selectedPartyName) {
+      return;
     }
-  }, [selectedPartyName, initialPartyName]);
+
+    if (!hasBootstrappedRef.current) {
+      return;
+    }
+
+    if (selectedPartyName === lastLoadedPartyRef.current) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const loadLedgerData = async () => {
+      try {
+        const result = await dispatch(
+          loadAccountLedgerPage({
+            partyName: selectedPartyName,
+            forceRefresh: false
+          })
+        ).unwrap();
+        if (!isCancelled) {
+          lastLoadedPartyRef.current = result?.selectedPartyName || selectedPartyName;
+          setRefreshKey(prev => prev + 1); // Force table re-render
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          console.error('Error loading ledger data via Redux:', error);
+        }
+      }
+    };
+
+    loadLedgerData();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedPartyName, dispatch]);
 
   // Handle click outside to close dropdowns
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
-      
+
       // Add small delay to ensure focus events happen first
       setTimeout(() => {
         // Handle top section dropdown
@@ -202,13 +196,13 @@ const AccountLedgerComponent = () => {
           dispatch(uiSlice.actions.setShowTopPartyDropdown(false));
           dispatch(uiSlice.actions.setTopAutoCompleteText(''));
           dispatch(uiSlice.actions.setShowTopInlineSuggestion(false));
-          
+
           // If input is empty, restore selected party name
           if (!typingPartyName && selectedPartyName) {
             dispatch(uiSlice.actions.setTypingPartyName(selectedPartyName));
           }
         }
-        
+
         // Handle transaction form dropdown
         if (!target.closest('.transaction-party-dropdown-container')) {
           dispatch(uiSlice.actions.setShowTransactionPartyDropdown(false));
@@ -248,10 +242,10 @@ const AccountLedgerComponent = () => {
         const partyName = party.party_name || party.name;
         const searchLower = value.toLowerCase();
         const partyLower = partyName.toLowerCase();
-        
+
         // Exclude current party
         if (partyName === selectedPartyName) return false;
-        
+
         // Check if party name starts with search term
         return partyLower.startsWith(searchLower);
       });
@@ -261,11 +255,11 @@ const AccountLedgerComponent = () => {
         const aName = (a.party_name || a.name).toLowerCase();
         const bName = (b.party_name || b.name).toLowerCase();
         const searchLower = value.toLowerCase();
-        
+
         // Exact match gets highest priority
         if (aName === searchLower && bName !== searchLower) return -1;
         if (bName === searchLower && aName !== searchLower) return 1;
-        
+
         // Then alphabetical order
         return aName.localeCompare(bName);
       });
@@ -278,10 +272,10 @@ const AccountLedgerComponent = () => {
         const partyName = bestMatch.party_name || bestMatch.name;
         const searchLower = value.toLowerCase();
         const partyLower = partyName.toLowerCase();
-        
+
         // Only show suggestion if it's a meaningful completion
-        if (partyLower.startsWith(searchLower) && 
-            partyLower !== searchLower && 
+        if (partyLower.startsWith(searchLower) &&
+            partyLower !== searchLower &&
             partyName.length > value.length) {
           const autoCompleteText = partyName.substring(value.length);
           dispatch(uiSlice.actions.setTopAutoCompleteText(autoCompleteText));
@@ -327,7 +321,7 @@ const AccountLedgerComponent = () => {
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
     if (!context) return 16; // Default padding
-    
+
     // Use the same font as the input field
     context.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     return context.measureText(text).width + 16; // 16px for padding
@@ -336,7 +330,7 @@ const AccountLedgerComponent = () => {
   const handlePartySelect = (partyName: string) => {
     // Navigate to the new party URL
     navigate(`/account-ledger/${encodeURIComponent(partyName)}`);
-    
+
     // Update Redux state for selected party
     dispatch(ledgerSlice.actions.setSelectedPartyName(partyName));
 
@@ -376,13 +370,13 @@ const AccountLedgerComponent = () => {
     if (showTopInlineSuggestion && topAutoCompleteText) {
       const currentValue = typingPartyName;
       const completedValue = currentValue + topAutoCompleteText;
-      
+
       // Find the party that matches this completed value
       const matchingParty = filteredTopParties.find(party => {
         const partyName = party.party_name || party.name;
         return partyName.toLowerCase() === completedValue.toLowerCase();
       });
-      
+
       if (matchingParty) {
         handlePartySelect(matchingParty.party_name || matchingParty.name);
           } else {
@@ -395,389 +389,7 @@ const AccountLedgerComponent = () => {
     }
   };
 
-  // Transaction Form Party Selection Functions
-  const handleTransactionPartyNameChange = (value: string) => {
-    // Update Redux state for transaction form
-    dispatch(uiSlice.actions.setNewEntryPartyName(value));
-    
-    // Reset highlighted index when typing
-    dispatch(uiSlice.actions.setTransactionHighlightedIndex(-1));
-
-    // Filter parties based on input (exclude current party)
-    if (value.trim()) {
-      const filtered = availableParties.filter(party => {
-        const partyName = party.party_name || party.name;
-        const searchLower = value.toLowerCase();
-        const partyLower = partyName.toLowerCase();
-        
-        // Exclude current party from transaction form
-        if (partyName === selectedPartyName) {
-          return false;
-        }
-        
-        // Check if party name starts with search term
-        return partyLower.startsWith(searchLower);
-      });
-
-      // Sort by relevance (exact matches first, then alphabetical)
-      const sortedFiltered = filtered.sort((a, b) => {
-        const aName = (a.party_name || a.name).toLowerCase();
-        const bName = (b.party_name || b.name).toLowerCase();
-        const searchLower = value.toLowerCase();
-        
-        // Exact match gets highest priority
-        if (aName === searchLower && bName !== searchLower) return -1;
-        if (bName === searchLower && aName !== searchLower) return 1;
-        
-        // Then alphabetical order
-        return aName.localeCompare(bName);
-      });
-
-      dispatch(uiSlice.actions.setTransactionFilteredParties(sortedFiltered));
-
-      // Auto-complete suggestion logic
-      if (sortedFiltered.length > 0) {
-        const bestMatch = sortedFiltered[0];
-        const partyName = bestMatch.party_name || bestMatch.name;
-        const searchLower = value.toLowerCase();
-        const partyLower = partyName.toLowerCase();
-        
-        if (partyLower.startsWith(searchLower) && 
-            partyLower !== searchLower && 
-            partyName.length > value.length) {
-          const autoCompleteText = partyName.substring(value.length);
-          dispatch(uiSlice.actions.setTransactionAutoCompleteText(autoCompleteText));
-          dispatch(uiSlice.actions.setShowTransactionInlineSuggestion(true));
-      } else {
-          dispatch(uiSlice.actions.setTransactionAutoCompleteText(''));
-          dispatch(uiSlice.actions.setShowTransactionInlineSuggestion(false));
-      }
-    } else {
-        dispatch(uiSlice.actions.setTransactionAutoCompleteText(''));
-        dispatch(uiSlice.actions.setShowTransactionInlineSuggestion(false));
-      }
-
-      dispatch(uiSlice.actions.setShowTransactionPartyDropdown(true));
-    } else {
-      // Show all available parties when input is empty
-      dispatch(uiSlice.actions.setTransactionFilteredParties(availableParties));
-      dispatch(uiSlice.actions.setTransactionAutoCompleteText(''));
-      dispatch(uiSlice.actions.setShowTransactionInlineSuggestion(false));
-      dispatch(uiSlice.actions.setShowTransactionPartyDropdown(true));
-    }
-  };
-
-  const handleTransactionPartySelect = (partyName: string) => {
-    // Update Redux state for transaction form
-    dispatch(uiSlice.actions.setNewEntryPartyName(partyName));
-
-    // Close dropdown and clear search
-    dispatch(uiSlice.actions.setShowTransactionPartyDropdown(false));
-
-    // Clear autocomplete
-    dispatch(uiSlice.actions.setTransactionAutoCompleteText(''));
-    dispatch(uiSlice.actions.setShowTransactionInlineSuggestion(false));
-    dispatch(uiSlice.actions.setTransactionHighlightedIndex(-1));
-
-    // Focus on amount input
-    const amountInput = document.querySelector('input[placeholder*="Credit"], input[placeholder*="Debit"]') as HTMLInputElement;
-    if (amountInput) {
-      amountInput.focus();
-    }
-  };
-
-  // Helper function to calculate cumulative commission amount for same party
-  const calculateCumulativeCommission = (partyName: string, currentAmount: number): number => {
-    if (!ledgerData || !Array.isArray(ledgerData)) return 0;
-    
-    // Filter entries for the same party and same day, excluding commission entries
-    const today = new Date().toISOString().split('T')[0];
-    const samePartyEntries = ledgerData.filter((entry: any) => 
-      entry.partyName === partyName && 
-      entry.date === today &&
-      !entry.remarks?.toLowerCase().includes('commission')
-    );
-    
-    // Calculate total amount for the same party today
-    const totalAmount = samePartyEntries.reduce((sum: number, entry: any) => {
-      return sum + Math.abs(entry.amount || 0);
-    }, 0) + Math.abs(currentAmount);
-    
-    return totalAmount;
-  };
-
-  const handleAddEntry = async () => {
-    // Set loading state
-    dispatch(uiSlice.actions.setIsAddingEntry(true));
-    
-    // Validate required fields
-    if (!newEntryPartyName.trim()) {
-      dispatch(uiSlice.actions.setIsAddingEntry(false));
-      toast({
-        title: "Party Name Required",
-        description: "Please select a party for the transaction.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Validate that transaction party is different from current party
-    if (newEntryPartyName.trim() === selectedPartyName) {
-      dispatch(uiSlice.actions.setIsAddingEntry(false));
-      toast({
-        title: "Invalid Transaction",
-        description: "A party cannot make transactions with itself. Please select a different party.",
-        variant: "destructive",
-      });
-            return;
-    }
-
-    if (!newEntryAmount.trim()) {
-      dispatch(uiSlice.actions.setIsAddingEntry(false));
-      toast({
-        title: "Amount Required",
-        description: "Please enter an amount for the transaction.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const amount = parseFloat(newEntryAmount);
-    if (isNaN(amount) || amount === 0) {
-      dispatch(uiSlice.actions.setIsAddingEntry(false));
-      toast({
-        title: "Invalid Amount",
-        description: "Please enter a valid non-zero amount.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    // Find the selected party to check commission
-    const selectedParty = availableParties.find(party => 
-      (party.party_name || party.name) === newEntryPartyName.trim()
-    );
-
-    // Create main transaction entry
-    const newEntry = {
-      _id: `temp_${Date.now()}`, // Temporary ID
-      date: new Date().toISOString().split('T')[0], // Today's date
-      partyName: newEntryPartyName.trim(),
-      remarks: newEntryRemarks.trim(),
-      amount: amount,
-      type: amount > 0 ? 'Credit' : 'Debit',
-      balance: 0, // Will be calculated by backend
-    };
-
-    // Calculate commission if party has commission enabled
-    let commissionEntry = null;
-    if (selectedParty && hasCommission(selectedParty) && amount > 0) {
-      const commissionRate = getCommissionRate(selectedParty);
-      
-      // Calculate cumulative amount for commission calculation
-      const cumulativeAmount = calculateCumulativeCommission(newEntryPartyName.trim(), amount);
-      const totalCommissionAmount = calculateCommissionAmount(cumulativeAmount, selectedParty);
-      
-      // Check if commission entry already exists for today
-      const today = new Date().toISOString().split('T')[0];
-      const existingCommissionEntry = ledgerData && Array.isArray(ledgerData) 
-        ? ledgerData.find((entry: any) => 
-            entry.partyName === newEntryPartyName.trim() && 
-            entry.date === today &&
-            entry.remarks?.toLowerCase().includes('commission')
-          )
-        : null;
-      
-      if (totalCommissionAmount > 0) {
-        const commissionType = selectedParty.commiSystem; // 'Take' or 'Give'
-        
-        // Commission amount based on party's commission type
-        let commissionAmountValue;
-        let commissionTypeLabel;
-        
-        if (commissionType === 'Take') {
-          // Take commission = negative amount (debit)
-          commissionAmountValue = -totalCommissionAmount;
-          commissionTypeLabel = 'Debit';
-      } else {
-          // Give commission = positive amount (credit)
-          commissionAmountValue = totalCommissionAmount;
-          commissionTypeLabel = 'Credit';
-        }
-        
-        // Create or update commission entry
-        if (existingCommissionEntry) {
-          // Update existing commission entry with new total
-          commissionEntry = {
-            ...existingCommissionEntry,
-            remarks: `Commission (${commissionRate}%) - ${commissionType} - Total: ₹${cumulativeAmount.toLocaleString()}`,
-            amount: commissionAmountValue,
-            type: commissionTypeLabel,
-          };
-    } else {
-          // Create new commission entry
-          commissionEntry = {
-            _id: `temp_${Date.now() + 1}`, // Temporary ID
-            date: today,
-            partyName: newEntryPartyName.trim(),
-            remarks: `Commission (${commissionRate}%) - ${commissionType} - Total: ₹${cumulativeAmount.toLocaleString()}`,
-            amount: commissionAmountValue,
-            type: commissionTypeLabel,
-            balance: 0, // Will be calculated by backend
-          };
-        }
-      }
-    }
-
-    // Call API to add main entry
-    const transactionsCreated = [];
-    
-    try {
-      const mainEntryData = {
-        partyName: selectedPartyName,
-        amount: Math.abs(amount),
-        remarks: newEntryRemarks.trim() || `Transaction with ${newEntryPartyName.trim()}`,
-        tnsType: amount > 0 ? 'CR' : 'DR',
-        credit: amount > 0 ? Math.abs(amount) : 0,
-        debit: amount < 0 ? Math.abs(amount) : 0,
-        date: new Date().toISOString().split('T')[0],
-        ti: `GROUP_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, // Transaction group ID
-        involvedParty: newEntryPartyName.trim() // Add involved party for dual transaction
-      };
-
-      const mainResponse = await partyLedgerAPI.addEntry(mainEntryData);
-      
-      if (mainResponse.success) {
-        console.log('✅ Dual party transaction added successfully:', mainResponse.data);
-        transactionsCreated.push(`📤 ${selectedPartyName} ↔ ${newEntryPartyName.trim()}: ${amount > 0 ? 'Credit' : 'Debit'} ₹${Math.abs(amount).toLocaleString()}`);
-        
-        // Add commission transaction if exists (separate transaction group)
-        if (commissionEntry) {
-          const commissionEntryData = {
-            partyName: selectedPartyName,
-            amount: Math.abs(commissionEntry.amount),
-            remarks: commissionEntry.remarks,
-            tnsType: commissionEntry.type === 'Credit' ? 'CR' : 'DR',
-            credit: commissionEntry.type === 'Credit' ? Math.abs(commissionEntry.amount) : 0,
-            debit: commissionEntry.type === 'Debit' ? Math.abs(commissionEntry.amount) : 0,
-            date: commissionEntry.date,
-            ti: `GROUP_${Date.now() + 1}_${Math.random().toString(36).substr(2, 9)}`, // Separate transaction group ID
-            involvedParty: 'Commission' // Commission party as involved party
-          };
-
-          const commissionResponse = await partyLedgerAPI.addEntry(commissionEntryData);
-          
-          if (commissionResponse.success) {
-            console.log('✅ Commission transaction added successfully:', commissionResponse.data);
-            transactionsCreated.push(`💰 Commission: ${commissionEntry.type} ₹${Math.abs(commissionEntry.amount).toLocaleString()}`);
-    } else {
-            console.error('❌ Failed to add commission transaction:', commissionResponse.message);
-          }
-        }
-
-        
-        // Auto-refresh ledger data to show new entries immediately (force refresh)
-        console.log('🔄 Refreshing ledger data after transaction...');
-        console.log('🔍 Current refreshKey before refresh:', refreshKey);
-        
-        // Add longer delay to ensure transaction is fully committed
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        // Try refreshing with retry logic
-        let retryCount = 0;
-        let hasData = false;
-        
-        while (retryCount < 3 && !hasData) {
-          const response = await partyLedgerAPI.getPartyLedger(`${selectedPartyName}&_t=${Date.now()}&_r=${Math.random()}`);
-          
-          if (response.success && response.data) {
-            const data = response.data as any;
-            hasData = data.ledgerEntries && data.ledgerEntries.length > 0;
-            
-            if (hasData) {
-              // Update Redux state with the fresh data
-              const ledgerEntries = Array.isArray(data) ? data : (data?.ledgerEntries || []);
-              const oldRecords = data?.oldRecords || [];
-              
-              const ledgerData = {
-                ledgerEntries,
-                oldRecords,
-                totalBalance: data?.closingBalance || 0,
-                totalDebit: data?.summary?.totalDebit || 0,
-                totalCredit: data?.summary?.totalCredit || 0,
-              };
-              
-              dispatch(ledgerSlice.actions.setLedgerData(ledgerData));
-              setRefreshKey(prev => prev + 1);
-              console.log('✅ Found data and updated Redux state');
-            }
-          }
-          
-          if (!hasData && retryCount < 2) {
-            console.log(`🔄 No data found, retrying... (attempt ${retryCount + 1}/3)`);
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            retryCount++;
-          } else {
-            break;
-          }
-        }
-        
-        console.log('✅ Ledger data refreshed');
-        console.log('🔍 Current refreshKey after refresh:', refreshKey);
-        
-    } else {
-        console.error('❌ Failed to add main entry:', mainResponse.message);
-        dispatch(uiSlice.actions.setIsAddingEntry(false));
-      toast({
-          title: "Error",
-          description: mainResponse.message || "Failed to add transaction",
-          variant: "destructive",
-        });
-        return;
-      }
-    } catch (error: any) {
-      console.error('❌ Error adding entry:', error);
-      dispatch(uiSlice.actions.setIsAddingEntry(false));
-      toast({
-        title: "Error",
-        description: error.message || "Failed to add transaction",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Show success message with all transactions created
-    let successMessage = `Dual party transaction: ${selectedPartyName} ↔ ${newEntryPartyName}`;
-    
-    if (commissionEntry) {
-      successMessage += ` | Commission: ${commissionEntry.type} ₹${Math.abs(commissionEntry.amount).toLocaleString()}`;
-    }
-    
-    if (transactionsCreated.length > 0) {
-      successMessage += `\n\n📋 Transactions created:\n${transactionsCreated.join('\n')}`;
-    }
-
-      toast({
-      title: "Transaction Added Successfully",
-      description: successMessage,
-    });
-
-    // Clear form
-    dispatch(uiSlice.actions.setNewEntryPartyName(''));
-    dispatch(uiSlice.actions.setNewEntryAmount(''));
-    dispatch(uiSlice.actions.setNewEntryRemarks(''));
-    dispatch(uiSlice.actions.setIsAddingEntry(false));
-
-    // Focus back to party name input for next entry
-    setTimeout(() => {
-      const partyInput = document.querySelector('input[placeholder*="Search party name"]') as HTMLInputElement;
-      if (partyInput) {
-        partyInput.focus();
-      }
-    }, 100);
-  };
-
-  // Delete selected entries handler
+  // Delete selected entries handler with real-time updates
   const handleDeleteSelected = async () => {
     if (selectedEntries.length === 0) {
       toast({
@@ -809,43 +421,73 @@ const AccountLedgerComponent = () => {
     setIsDeleting(true);
 
     try {
-      const deletePromises = selectedEntries.map(entryId => 
-        partyLedgerAPI.deleteEntry(entryId)
-      );
-      
-      const results = await Promise.all(deletePromises);
-      
-      // Check if all deletions were successful
-      const successfulDeletions = results.filter(result => result.success);
-      const failedDeletions = results.filter(result => !result.success);
+      // Use Redux Thunk action for deleting entries with optimistic updates
 
-      if (successfulDeletions.length > 0) {
-        // Clear selected entries
-        dispatch(uiSlice.actions.clearSelectedEntries());
-        
-        // Auto-refresh ledger data to show updated entries immediately (force refresh)
-        await handleRefresh(true);
-        
+      // Apply optimistic delete immediately
+      await dispatch(applyOptimisticDelete({
+        deletedIds: selectedEntries,
+        showOldRecords
+      }));
+
+
+      // Clear selected entries immediately
+      dispatch(uiSlice.actions.clearSelectedEntries());
+
+
+      // Call API to delete entries via Redux Thunk
+      const result = await dispatch(deleteLedgerEntries({
+        entryIds: selectedEntries,
+        showOldRecords
+      }));
+
+      if (deleteLedgerEntries.fulfilled.match(result)) {
+        console.log('✅ Entries deleted successfully via Redux:', result.payload);
+
+          // Auto-refresh after successful deletion to ensure data consistency
+          // Note: Disabled auto-refresh to prevent data loss due to backend caching issues
+          // setTimeout(async () => {
+          //   console.log('🔄 Auto-refreshing after deletion to ensure data consistency');
+          //   await handleRefresh(true);
+          // }, 2000); // Wait 2 seconds before refresh to allow backend transaction to commit
+
         toast({
           title: "Entries Deleted",
-          description: `Successfully deleted ${successfulDeletions.length} entries.`,
+          description: `Successfully deleted ${result.payload.successfulCount} entries.`,
+          duration: 2000,
         });
-      }
+      } else {
+        console.error('❌ Failed to delete entries via Redux:', result.payload);
 
-      if (failedDeletions.length > 0) {
+        // Revert optimistic update if deletion failed with auto-refresh
+        // Note: Disabled auto-refresh to prevent data loss due to backend caching issues
+        // setTimeout(async () => {
+        //   console.log('🔄 Auto-refreshing after delete failure to ensure data consistency');
+        //   await handleRefresh(true);
+        // }, 1000); // Wait 1 second before refresh
+
         toast({
-          title: "Some Deletions Failed",
-          description: `Failed to delete ${failedDeletions.length} entries. They might be old records or have other restrictions.`,
+          title: "Deletion Failed",
+          description: result.payload as string || "Failed to delete entries. They might be old records or have other restrictions.",
           variant: "destructive",
+          duration: 3000,
         });
       }
 
     } catch (error: any) {
       console.error('❌ Error deleting entries:', error);
+
+      // Revert optimistic update on error with auto-refresh
+      // Note: Disabled auto-refresh to prevent data loss due to backend caching issues
+      // setTimeout(async () => {
+      //   console.log('🔄 Auto-refreshing after delete error to ensure data consistency');
+      //   await handleRefresh(true);
+      // }, 1000); // Wait 1 second before refresh
+
       toast({
         title: "Error",
         description: error.message || "Failed to delete entries",
         variant: "destructive",
+        duration: 3000,
       });
     } finally {
       setIsDeleting(false);
@@ -870,7 +512,7 @@ const AccountLedgerComponent = () => {
   const handleCheckAll = () => {
     // Determine which entries to display (same logic as displayEntries)
     const entriesToDisplay = ledgerData ? (showOldRecords ? (ledgerData.oldRecords || []) : (ledgerData.ledgerEntries || [])) : [];
-    
+
     if (entriesToDisplay.length === 0) {
       toast({
         title: "No Entries",
@@ -888,11 +530,34 @@ const AccountLedgerComponent = () => {
 
     // Select all entries
     dispatch(uiSlice.actions.setSelectedEntries(allEntryIds));
-    
+
     toast({
       title: "All Entries Selected",
       description: `${allEntryIds.length} entries selected.`,
     });
+  };
+
+  const handleToggleOldRecords = async () => {
+    if (!selectedPartyName) {
+      toast({
+        title: "No Party Selected",
+        description: "Please select a party first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const nextValue = !showOldRecords;
+    dispatch(ledgerSlice.actions.setFilters({ showOldRecords: nextValue }));
+
+    toast({
+      title: nextValue ? "Viewing Old Records" : "Viewing Current Entries",
+      description: nextValue
+        ? 'Showing transactions settled in previous Monday Finals.'
+        : 'Showing active ledger transactions.',
+    });
+
+    await handleRefresh(true);
   };
 
   // Handle Monday Final button click
@@ -912,15 +577,30 @@ const AccountLedgerComponent = () => {
       if (ledgerData?.mondayFinalData?.id) {
         // Delete existing Monday Final to unsettle transactions
         const response = await partyLedgerAPI.deleteMondayFinalEntry(ledgerData.mondayFinalData.id);
-        
+
         if (response.success) {
+          let unsettled = response.data?.unsettledTransactions ?? 0;
+          const settlementDate = response.data?.settlementDate;
+
+          if (unsettled === 0 && settlementDate) {
+            try {
+              const fallback = await partyLedgerAPI.unsettleTransactions(selectedPartyName, settlementDate);
+              if (fallback?.success) {
+                unsettled = fallback.data?.unsettledCount ?? unsettled;
+              }
+            } catch (fallbackError) {
+              console.error('❌ Fallback unsettle failed:', fallbackError);
+            }
+          }
+
           toast({
             title: "Monday Final Deleted",
-            description: `Monday Final entry deleted. ${response.data.unsettledTransactions} transactions unsettled and moved to current records.`,
+            description: `Monday Final entry deleted. ${unsettled} transactions unsettled and moved to current records.`,
           });
-          
-          // Auto-refresh ledger data to show unsettled transactions immediately
-          await handleRefresh(true);
+
+          setTimeout(() => {
+            handleRefresh(true).catch(err => console.error('🔁 Refresh after Monday Final delete failed:', err));
+          }, 1000);
       } else {
         toast({
           title: "Error",
@@ -931,7 +611,7 @@ const AccountLedgerComponent = () => {
       } else {
         // Create new Monday Final
         const currentEntries = ledgerData?.ledgerEntries || [];
-        
+
         if (currentEntries.length === 0) {
       toast({
             title: "No Current Entries",
@@ -941,15 +621,15 @@ const AccountLedgerComponent = () => {
           return;
         }
 
-        const response = await unsettleTransactions([selectedPartyName]);
-      
-      if (response.success) {
-        toast({
+        const response = await partyLedgerAPI.updateMondayFinal([selectedPartyName]);
+
+        if (response.success) {
+          const settledCount = response.data?.settledEntries ?? currentEntries.length;
+          toast({
             title: "Monday Final Created",
-            description: `${currentEntries.length} transactions settled and moved to old records.`,
+            description: `${settledCount} transactions settled and moved to old records.`,
           });
-          
-          // Auto-refresh ledger data to show settled transactions immediately
+
           await handleRefresh(true);
       } else {
         toast({
@@ -969,70 +649,144 @@ const AccountLedgerComponent = () => {
     }
   };
 
-  const handleRefresh = async (forceRefresh = false) => {
-    if (selectedPartyName) {
-      dispatch(ledgerSlice.actions.setLoading(true));
-      try {
-        // Add timestamp to force cache busting for real-time updates
-        const partyNameWithTimestamp = forceRefresh 
-          ? `${selectedPartyName}&_t=${Date.now()}&_r=${Math.random()}` 
-          : selectedPartyName;
-        const response = await partyLedgerAPI.getPartyLedger(partyNameWithTimestamp);
-        console.log('🔍 Raw API response:', response);
-        console.log('🔍 Response success:', response.success);
-        console.log('🔍 Response errors:', response.errors);
-      if (response.success) {
-          // Convert API response to LedgerData format
-          const data = response.data as any;
-          console.log('🔍 Raw API data:', data);
-          console.log('🔍 Data type:', typeof data, 'Is Array:', Array.isArray(data));
-          console.log('🔍 Data keys:', data ? Object.keys(data) : 'null');
-          
-          const ledgerEntries = Array.isArray(data) ? data : (data?.ledgerEntries || []);
-          const oldRecords = data?.oldRecords || [];
-          
-          console.log('🔍 Processed ledgerEntries:', ledgerEntries);
-          console.log('🔍 Processed oldRecords:', oldRecords);
 
-          const ledgerData = {
-            ledgerEntries,
-            oldRecords,
-            totalBalance: data?.closingBalance || 0,
-            totalDebit: data?.summary?.totalDebit || 0,
-            totalCredit: data?.summary?.totalCredit || 0,
-          };
-          console.log('📊 Updating Redux with new ledger data:', ledgerData);
-          dispatch(ledgerSlice.actions.setLedgerData(ledgerData));
-          setRefreshKey(prev => {
-            const newKey = prev + 1;
-            console.log('🔄 Incrementing refreshKey:', prev, '->', newKey);
-            return newKey;
-          }); // Force table re-render
-          console.log('✅ Redux state updated');
+  const handleRefresh = useCallback(async (forceRefresh = false) => {
+    if (!selectedPartyName) {
+      console.log('⚠️ No party selected, cannot refresh ledger data');
+      toast({
+        title: "No Party Selected",
+        description: "Please select a party first to refresh ledger data.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      console.log('🔄 handleRefresh called', { forceRefresh, selectedPartyName });
+      const result = await dispatch(
+        loadAccountLedgerPage({
+          partyName: selectedPartyName,
+          forceRefresh: forceRefresh !== false
+        })
+      ).unwrap();
+
+      lastLoadedPartyRef.current = result?.selectedPartyName || selectedPartyName;
+      setRefreshKey(prev => prev + 1);
+    } catch (error: any) {
+      console.error('❌ Error refreshing ledger data:', error);
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to refresh ledger data. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [selectedPartyName, dispatch, toast]);
+
+  const partySuggestions = useMemo((): string[] => {
+    const names = (availableParties as Array<{ party_name?: string | null; name?: string | null }>)
+      .reduce<string[]>((list, party) => {
+        const rawName = party.party_name ?? party.name;
+        if (typeof rawName === 'string') {
+          const trimmed = rawName.trim();
+          if (trimmed.length > 0) {
+            list.push(trimmed);
+          }
+        }
+        return list;
+      }, []);
+
+    const unique = Array.from(new Set<string>(names));
+    return unique.sort((a, b) => a.localeCompare(b));
+  }, [availableParties]);
+
+  const handleTransactionAdded = useCallback(async (newPayload?: any) => {
+    try {
+      console.log('🧩 handleTransactionAdded payload:', newPayload);
+      if (newPayload?.mainEntry) {
+        const normalizeEntry = (entry: any) => {
+          if (!entry) return null;
+          const normalized = { ...entry };
+          normalized.id = entry.id || entry._id || entry.ti;
+          normalized._id = normalized.id;
+          normalized.ti = entry.ti || normalized.id;
+          normalized.tnsType = entry.tnsType || entry.tns_type || entry.transactionType || entry.type;
+          normalized.credit = typeof entry.credit === 'number' ? entry.credit : Number(entry.credit || 0);
+          normalized.debit = typeof entry.debit === 'number' ? entry.debit : Number(entry.debit || 0);
+          normalized.balance = typeof entry.balance === 'number' ? entry.balance : Number(entry.balance || 0);
+          normalized.partyName = entry.partyName || entry.party_name;
+          normalized.transactionPartyName = entry.transactionPartyName || entry.transaction_party_name || entry.involvedParty || '';
+          normalized.date = entry.date;
+          normalized.created_at = entry.created_at || new Date().toISOString();
+          return normalized;
+        };
+
+        const normalizedEntry = normalizeEntry(newPayload.mainEntry);
+        const normalizedPartyName = normalizedEntry?.partyName?.toLowerCase().trim();
+        const currentPartyName = selectedPartyName?.toLowerCase().trim();
+
+        if (normalizedEntry && normalizedPartyName && normalizedPartyName === currentPartyName) {
+          const existingData = ledgerData || { ledgerEntries: [], oldRecords: [], totalBalance: 0, totalCredit: 0, totalDebit: 0 };
+          const existingEntries = existingData.ledgerEntries || [];
+          console.log('📊 Existing entries before merge:', existingEntries.map((entry: any) => entry.ti || entry.id));
+          const duplicate = existingEntries.some((entry: any) => {
+            const entryId = entry.ti || entry.id || entry._id;
+            const newId = normalizedEntry.ti || normalizedEntry.id || normalizedEntry._id;
+            return entryId && newId && entryId === newId;
+          });
+
+          if (!duplicate) {
+            const updatedEntries = [...existingEntries, normalizedEntry];
+            const sortedEntries = updatedEntries.sort((a, b) => {
+              const dateA = a.date ? new Date(a.date).getTime() : 0;
+              const dateB = b.date ? new Date(b.date).getTime() : 0;
+              if (dateA !== dateB) {
+                return dateA - dateB;
+              }
+              const createdA = a.created_at ? new Date(a.created_at).getTime() : 0;
+              const createdB = b.created_at ? new Date(b.created_at).getTime() : 0;
+              return createdA - createdB;
+            });
+
+            console.log('✅ Merged entries after insert:', sortedEntries.map((entry: any) => entry.ti || entry.id));
+
+            const totalCredit = sortedEntries.reduce((sum, entry) => sum + (Number(entry.credit) || 0), 0);
+            const totalDebit = sortedEntries.reduce((sum, entry) => sum + (Number(entry.debit) || 0), 0);
+            const totalBalance = sortedEntries.length > 0 ? Number(sortedEntries[sortedEntries.length - 1].balance || 0) : 0;
+
+            dispatch(ledgerSlice.actions.setLedgerData({
+              ...existingData,
+              ledgerEntries: sortedEntries,
+              totalCredit,
+              totalDebit,
+              totalBalance,
+            }));
+            setRefreshKey(prev => prev + 1);
+          } else {
+            console.log('⚠️ Duplicate entry detected, skipping local merge');
+          }
+        } else {
+          console.log('ℹ️ Skipping local merge: normalizedPartyName', normalizedPartyName, 'currentPartyName', currentPartyName);
+        }
       } else {
-          console.error('❌ API call failed:', response);
-          dispatch(ledgerSlice.actions.setError(response.message || (response.errors && response.errors.length > 0 ? response.errors[0] : 'Unknown error') || 'Failed to refresh ledger data'));
+        console.log('ℹ️ handleTransactionAdded called without mainEntry');
       }
-    } catch (error) {
-        console.error('❌ Error refreshing ledger data:', error);
-        dispatch(ledgerSlice.actions.setError(`Failed to refresh ledger data: ${error.message || error}`));
-        
-        // Show user-friendly error message
-        toast({
-          title: "Error Loading Data",
-          description: "Unable to load ledger data. Please try refreshing the page or contact support if the issue persists.",
-          variant: "destructive",
-        });
-    } finally {
-        dispatch(ledgerSlice.actions.setLoading(false));
-      }
-    }
 
-    // Also refresh parties
-    if (companyName) {
-      loadAvailableParties();
+      console.log('🆕 Transaction added. Triggering immediate refresh...');
+      await handleRefresh(true);
+
+      const retryDelays = [1000, 2500];
+      retryDelays.forEach(delay => {
+        setTimeout(() => {
+          console.log(`⏱️ Triggering follow-up refresh after ${delay}ms`);
+          handleRefresh(true).catch(error => {
+            console.error('❌ Follow-up refresh failed:', error);
+          });
+        }, delay);
+      });
+    } catch (error) {
+      console.error('❌ Error refreshing after transaction add:', error);
     }
-  };
+  }, [dispatch, handleRefresh, ledgerData, selectedPartyName]);
 
 
   const handleShowOldRecords = (checked: boolean) => {
@@ -1061,12 +815,12 @@ const AccountLedgerComponent = () => {
 
   // Determine which entries to display
   const displayEntries = ledgerData ? (showOldRecords ? (ledgerData.oldRecords || []) : (ledgerData.ledgerEntries || [])) : [];
-  
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
         <TopNavigation />
-      
+
       {/* Main Content Area */}
       <div className="flex flex-col h-screen">
           {/* Top Section - Party Information */}
@@ -1125,8 +879,8 @@ const AccountLedgerComponent = () => {
                     {/* VS Code style inline suggestion */}
                     {showTopInlineSuggestion && topAutoCompleteText && (
                       <div className="absolute inset-y-0 left-0 text-gray-400 pointer-events-none z-0 flex items-center">
-                        <span 
-                          style={{ 
+                        <span
+                          style={{
                             marginLeft: `${calculateTextWidth(typingPartyName)}px`,
                             color: '#9CA3AF',
                             fontSize: '14px',
@@ -1139,7 +893,7 @@ const AccountLedgerComponent = () => {
                       </div>
                     )}
                   </div>
-                  
+
                   {showTopPartyDropdown && filteredTopParties.length > 0 && (
                     <div className="absolute top-full left-0 mt-1 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
                       {filteredTopParties.slice(0, 10).map((party, index) => {
@@ -1147,19 +901,19 @@ const AccountLedgerComponent = () => {
                         const searchTerm = typingPartyName.toLowerCase();
                         const partyNameLower = partyName.toLowerCase();
                         const isHighlighted = index === topHighlightedIndex;
-                        
+
                         // Highlight matching text
                         const matchIndex = partyNameLower.indexOf(searchTerm);
                         const beforeMatch = partyName.substring(0, matchIndex);
                         const matchText = partyName.substring(matchIndex, matchIndex + searchTerm.length);
                         const afterMatch = partyName.substring(matchIndex + searchTerm.length);
-                        
+
                         return (
                           <div
                             key={party._id}
                             className={`px-4 py-2 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors duration-150 ${
-                              isHighlighted 
-                                ? 'bg-blue-100 border-blue-200' 
+                              isHighlighted
+                                ? 'bg-blue-100 border-blue-200'
                                 : 'hover:bg-blue-50'
                             }`}
                             onClick={() => handlePartySelect(partyName)}
@@ -1191,6 +945,19 @@ const AccountLedgerComponent = () => {
                   {companyName}
                 </span>
               </div>
+
+              <div className="flex items-center space-x-3">
+                <label className="text-sm font-semibold text-gray-700">Closing Balance:</label>
+                <span className={`text-lg font-bold px-3 py-1 rounded-lg ${
+                  (ledgerData?.totalBalance || 0) > 0
+                    ? 'text-green-600 bg-green-50'
+                    : (ledgerData?.totalBalance || 0) < 0
+                      ? 'text-red-600 bg-red-50'
+                      : 'text-gray-600 bg-gray-50'
+                }`}>
+                  ₹{(ledgerData?.totalBalance || 0).toLocaleString()}
+                </span>
+              </div>
               </div>
 
             </div>
@@ -1220,12 +987,16 @@ const AccountLedgerComponent = () => {
                   </div>
                 </div>
               </div>
-              
+
               {/* Transaction Form - Right after table */}
-                <TransactionForm
+              <div className="mt-6">
+                <TransactionAddForm
                   selectedPartyName={selectedPartyName}
-                onAddEntry={handleAddEntry}
-              />
+                  partySuggestions={partySuggestions}
+                  onTransactionAdded={handleTransactionAdded}
+                />
+              </div>
+
           </div>
         </div>
 
@@ -1235,7 +1006,8 @@ const AccountLedgerComponent = () => {
               onRefresh={() => handleRefresh(true)}
               onDCReport={() => {}}
               onMondayFinal={handleMondayFinal}
-              onOldRecord={() => {}}
+              onOldRecord={handleToggleOldRecords}
+              showOldRecords={showOldRecords}
               onModify={() => {}}
               onDelete={handleDeleteClick}
               onPrint={() => {}}
@@ -1244,7 +1016,7 @@ const AccountLedgerComponent = () => {
             />
             </div>
           </div>
-          
+
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
@@ -1256,8 +1028,8 @@ const AccountLedgerComponent = () => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              className="bg-red-600 hover:bg-red-700" 
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
               onClick={handleDeleteSelected}
               disabled={isDeleting}
             >
