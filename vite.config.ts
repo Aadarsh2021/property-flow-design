@@ -102,6 +102,8 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "use-sync-external-store/shim": path.resolve(__dirname, "./src/lib/useSyncExternalStoreShim.ts"),
+      "use-sync-external-store/shim/index.js": path.resolve(__dirname, "./src/lib/useSyncExternalStoreShim.ts"),
     },
   },
   optimizeDeps: {
