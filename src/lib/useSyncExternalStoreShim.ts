@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type Dispatch,
+  type MutableRefObject,
   type SetStateAction,
 } from 'react'
 
@@ -17,7 +18,7 @@ const objectIs: typeof Object.is =
         (value !== value && nextValue !== nextValue)
 
 function handleStoreChange<T>(
-  instRef: React.MutableRefObject<StoreRef<T>>,
+  instRef: MutableRefObject<StoreRef<T>>,
   setState: Dispatch<SetStateAction<StoreRef<T>>>,
 ) {
   const { getSnapshot } = instRef.current
@@ -29,7 +30,7 @@ function handleStoreChange<T>(
 
 function subscribeToStore<T>(
   subscribe: (listener: () => void) => () => void,
-  instRef: React.MutableRefObject<StoreRef<T>>,
+  instRef: MutableRefObject<StoreRef<T>>,
   setState: Dispatch<SetStateAction<StoreRef<T>>>,
 ) {
   return subscribe(() => {

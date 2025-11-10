@@ -4,6 +4,7 @@
  */
 
 import React from 'react';
+import useSyncExternalStoreShim from './useSyncExternalStoreShim';
 
 // CRITICAL: Ensure React is available globally before any components load
 if (typeof window !== 'undefined') {
@@ -30,7 +31,7 @@ if (typeof window !== 'undefined') {
     useImperativeHandle: React.useImperativeHandle,
     Fragment: React.Fragment,
     StrictMode: React.StrictMode,
-    Suspense: React.Suspense
+    Suspense: React.Suspense,
   });
   
   // Also ensure globalThis has the same
@@ -44,6 +45,10 @@ if (typeof window !== 'undefined') {
     reactKeys: Object.keys((window as any).React || {}),
     timestamp: new Date().toISOString()
   });
+}
+
+if (typeof React.useSyncExternalStore !== 'function') {
+  (React as any).useSyncExternalStore = useSyncExternalStoreShim;
 }
 
 // Export React for modules that might need it
