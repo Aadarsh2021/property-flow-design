@@ -1,6 +1,3 @@
-import './react-shim'
-import React from 'react'
-import 'use-sync-external-store/shim'
 import { createRoot } from 'react-dom/client'
 import { Provider } from 'react-redux'
 import App from './App.tsx'
