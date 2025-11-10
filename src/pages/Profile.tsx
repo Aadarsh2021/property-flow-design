@@ -238,7 +238,7 @@ const Profile = () => {
     city: '',
     state: '',
     pincode: '',
-    profile_picture: ''
+    profilePicture: ''
   });
   
   // Profile photo states
@@ -272,7 +272,7 @@ const Profile = () => {
         city: user.city || '',
         state: user.state || '',
         pincode: user.pincode || '',
-        profile_picture: user.profilePicture || ''
+        profilePicture: user.profilePicture || ''
       });
       
       // Set profile photo
@@ -320,18 +320,31 @@ const Profile = () => {
           // Use token from context or user object
           const currentToken = token || user?.token;
           if (currentToken) {
-            login(currentToken, userData);
+            // Preserve existing profilePicture if API doesn't return it, returns empty, or returns same as current
+            // If current user has a profilePicture and API returns empty/null, keep the current one
+            const apiProfilePicture = userData.profilePicture || userData.profile_picture || '';
+            const currentProfilePicture = user?.profilePicture || '';
+            
+            // Use API value if it exists and is different, otherwise preserve current
+            const finalProfilePicture = apiProfilePicture || currentProfilePicture;
+            
+            const updatedUserData = {
+              ...userData,
+              profilePicture: finalProfilePicture
+            };
+            
+            login(currentToken, updatedUserData);
             
             // Update form data with fresh data
             setFormData({
-              fullname: userData.name || userData.fullname || '',
-              email: userData.email || '',
-              phone: userData.phone || '',
-              address: userData.address || '',
-              city: userData.city || '',
-              state: userData.state || '',
-              pincode: userData.pincode || '',
-              profile_picture: userData.profilePicture || userData.profile_picture || ''
+              fullname: updatedUserData.name || updatedUserData.fullname || '',
+              email: updatedUserData.email || '',
+              phone: updatedUserData.phone || '',
+              address: updatedUserData.address || '',
+              city: updatedUserData.city || '',
+              state: updatedUserData.state || '',
+              pincode: updatedUserData.pincode || '',
+              profilePicture: updatedUserData.profilePicture || ''
             });
           } else {
             console.error('No token available for profile refresh');
@@ -480,22 +493,47 @@ const Profile = () => {
         // Update local state only (avoid calling login function)
         setProfilePhoto(uploadResult.url);
         
-        // Update localStorage directly to persist the change
+        // Update formData to keep it in sync
+        setFormData(prev => ({ ...prev, profilePicture: uploadResult.url }));
+        
+        // Update localStorage and AuthContext immediately for instant UI update
         try {
           const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
           const updatedUser = { ...currentUser, profilePicture: uploadResult.url };
           localStorage.setItem('user', JSON.stringify(updatedUser));
+          
+          // Update AuthContext immediately so navbar shows the new picture instantly
+          const currentToken = token || user?.token || localStorage.getItem('token');
+          if (currentToken) {
+            login(currentToken, updatedUser);
+            console.log('✅ AuthContext updated immediately - navbar will show new picture');
+          }
           console.log('✅ Local storage updated with new profile picture');
         } catch (error) {
           console.warn('Failed to update localStorage:', error);
         }
         
-        // Also update the backend user profile
+        // Also update the backend user profile (this will sync with backend and update again if needed)
         try {
           const profileUpdateResult = await authAPI.updateProfile({
-            profile_picture: uploadResult.url
+            profilePicture: uploadResult.url
           });
           console.log('✅ Backend profile updated:', profileUpdateResult);
+          
+          // Update AuthContext user state with the updated data from backend
+          if (profileUpdateResult.success && profileUpdateResult.data) {
+            const currentToken = token || user?.token || localStorage.getItem('token');
+            if (currentToken) {
+              // Update user state in context with fresh data from backend
+              const updatedUserData = {
+                ...user,
+                ...profileUpdateResult.data,
+                profilePicture: profileUpdateResult.data.profilePicture || uploadResult.url
+              };
+              login(currentToken, updatedUserData);
+              console.log('✅ AuthContext updated with new profile picture');
+            }
+          }
         } catch (error) {
           console.warn('Backend profile update failed:', error);
           // Continue even if backend update fails - image is already uploaded and displayed

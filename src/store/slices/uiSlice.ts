@@ -44,6 +44,7 @@ interface UIState {
   transactionAutoCompleteText: string;
   showTransactionInlineSuggestion: boolean;
   isAddingEntry: boolean;
+  skipNextCommissionAutofill: boolean;
   
   // Toast notifications
   toasts: ToastMessage[];
@@ -98,6 +99,7 @@ const initialState: UIState = {
   transactionAutoCompleteText: '',
   showTransactionInlineSuggestion: false,
   isAddingEntry: false,
+  skipNextCommissionAutofill: false,
   
   // Toast notifications
   toasts: [],
@@ -221,6 +223,9 @@ export const uiSlice = createSlice({
     setNewEntryRemarks: (state, action: PayloadAction<string>) => {
       state.newEntryRemarks = action.payload;
     },
+    setSkipNextCommissionAutofill: (state, action: PayloadAction<boolean>) => {
+      state.skipNextCommissionAutofill = action.payload;
+    },
     setShowTransactionPartyDropdown: (state, action: PayloadAction<boolean>) => {
       state.showTransactionPartyDropdown = action.payload;
     },
@@ -329,6 +334,7 @@ export const {
   setTransactionAutoCompleteText,
   setShowTransactionInlineSuggestion,
   setIsAddingEntry,
+  setSkipNextCommissionAutofill,
   
   // Selected entries management
   addSelectedEntry,

@@ -1,25 +1,39 @@
 import React from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 
-// Helper function to format party name display
-const formatPartyNameDisplay = (remarks: string) => {
+// Helper function to format party name display for old transactions
+// Handles legacy formats like "PartyName: Remarks" or just party name in remarks
+const formatPartyNameDisplay = (remarks: string, partyName?: string) => {
+  if (!remarks && !partyName) return '';
+  
+  // If partyName is available, use it as primary source
+  if (partyName) {
+    // If remarks exist and don't contain ":" (old format indicator), show PartyName(Remarks)
+    if (remarks && remarks.trim() && !remarks.includes(':')) {
+      return `${partyName}(${remarks.trim()})`;
+    }
+    // If no remarks or remarks contain ":" (legacy format), just show party name
+    return partyName;
+  }
+  
+  // Fallback: Handle legacy formats in remarks
   if (!remarks) return '';
   
-  // Check if remarks contains party name format "PartyName: Remarks"
+  // Check if remarks contains old format "PartyName: Remarks"
   if (remarks.includes(':')) {
-    const [partyName, partyRemarks] = remarks.split(':', 2);
-    const cleanRemarks = partyRemarks.trim();
+    const [legacyPartyName, legacyRemarks] = remarks.split(':', 2);
+    const cleanRemarks = legacyRemarks.trim();
     
     // If there are actual remarks, show "PartyName(Remarks)" format
-    if (cleanRemarks && cleanRemarks !== partyName.trim()) {
-      return `${partyName.trim()}(${cleanRemarks})`;
+    if (cleanRemarks && cleanRemarks !== legacyPartyName.trim()) {
+      return `${legacyPartyName.trim()}(${cleanRemarks})`;
     }
     
     // If no meaningful remarks, just show party name
-    return partyName.trim();
+    return legacyPartyName.trim();
   }
   
-  // If no ":" found, return as is (for backward compatibility)
+  // If remarks don't contain ":", treat as party name only (for backward compatibility)
   return remarks;
 };
 
@@ -37,6 +51,25 @@ const TableRow = ({
 }) => {
   const entryId = entry.id || entry._id || entry.ti || `entry_${index}`;
   
+  // Format date
+  const formattedDate = entry.date ? new Date(entry.date).toLocaleDateString('en-GB') : '-';
+  
+  // CSS classes for type
+  const typeClasses = `px-2 py-1 rounded-full text-xs font-medium ${
+    (entry.tnsType || entry.tns_type || entry.type) === 'CR' 
+      ? 'bg-green-100 text-green-800' 
+      : 'bg-red-100 text-red-800'
+  }`;
+  
+  // CSS classes for balance
+  const balanceClasses = `px-3 py-1 rounded-full text-sm font-medium ${
+    (entry.balance || 0) > 0 
+      ? 'bg-green-100 text-green-800' 
+      : (entry.balance || 0) < 0 
+        ? 'bg-red-100 text-red-800'
+        : 'bg-gray-100 text-gray-800'
+  }`;
+  
   return (
     <tr 
       className={`hover:bg-blue-50 cursor-pointer transition-colors duration-150 ${
@@ -46,32 +79,62 @@ const TableRow = ({
       }`}
       onClick={() => onCheckboxChange(entryId, !isSelected)}
     >
-      <td className="px-4 py-3">
+      <td className="px-4 py-3 text-gray-700">
+        {formattedDate}
+      </td>
+      <td className="px-4 py-3 text-gray-800 font-medium">
+        <div className="flex items-center space-x-2">
+          <span>
+            {(() => {
+              // Priority: transactionPartyName (user-selected) > partyName/party_name (ledger owner)
+              const displayPartyName = entry.transactionPartyName || entry.partyName || entry.party_name;
+              const remarks = entry.remarks || '';
+              
+              if (displayPartyName) {
+                // Show remarks if they exist and are actual user remarks (not old format)
+                // Remarks are user-provided actual remarks, not party names
+                const remarksTrimmed = remarks.trim();
+                if (remarksTrimmed && !remarksTrimmed.includes(':')) {
+                  // Show PartyName(Remarks) format if remarks are provided
+                  return `${displayPartyName}(${remarksTrimmed})`;
+                }
+                // Otherwise just show party name
+                return displayPartyName;
+              } else {
+                // Fallback for very old entries
+                return formatPartyNameDisplay(remarks, entry.partyName || entry.party_name);
+              }
+            })()}
+          </span>
+        </div>
+      </td>
+      <td className="px-4 py-3 text-center">
+        <span className={typeClasses}>
+          {entry.tnsType || entry.tns_type || entry.type || '-'}
+        </span>
+      </td>
+      <td className="px-4 py-3 text-center font-medium text-green-600">
+        {entry.credit || 0}
+      </td>
+      <td className="px-4 py-3 text-center font-medium text-red-600">
+        {entry.debit || 0}
+      </td>
+      <td className="px-4 py-3 text-center font-semibold">
+        <span className={balanceClasses}>
+          ₹{(entry.balance || 0).toLocaleString()}
+        </span>
+      </td>
+      <td className="px-4 py-3 text-center">
         <input
           type="checkbox"
           checked={isSelected}
           onChange={(e) => onCheckboxChange(entryId, e.target.checked)}
-          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
           onClick={(e) => e.stopPropagation()}
+          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
         />
       </td>
-      <td className="px-4 py-3 text-sm text-gray-900">
-        {entry.date ? new Date(entry.date).toLocaleDateString() : '-'}
-      </td>
-      <td className="px-4 py-3 text-sm font-medium text-gray-900">
-        {formatPartyNameDisplay(entry.remarks || '')}
-      </td>
-      <td className="px-4 py-3 text-sm text-gray-900">
-        {entry.tns_type || entry.type || '-'}
-      </td>
-      <td className="px-4 py-3 text-sm font-medium text-green-600">
-        {entry.credit && entry.credit > 0 ? `₹${entry.credit.toLocaleString()}` : '-'}
-      </td>
-      <td className="px-4 py-3 text-sm font-medium text-red-600">
-        {entry.debit && entry.debit > 0 ? `₹${entry.debit.toLocaleString()}` : '-'}
-      </td>
-      <td className="px-4 py-3 text-sm font-bold text-gray-900">
-        {entry.balance !== undefined ? `₹${entry.balance.toLocaleString()}` : '-'}
+      <td className="px-4 py-3 text-center text-gray-500 text-xs">
+        {entry.ti || index}
       </td>
     </tr>
   );
@@ -92,7 +155,6 @@ const LedgerTable: React.FC<LedgerTableProps> = ({
   onEntrySelect,
   loading = false
 }) => {
-  console.log('📋 LedgerTable rendering with:', { ledgerData, loading, hasEntries: ledgerData?.ledgerEntries?.length });
   
   if (loading) {
     return (
@@ -105,60 +167,43 @@ const LedgerTable: React.FC<LedgerTableProps> = ({
     );
   }
 
-  // Always show table structure, even if no data
-  if (!ledgerData) {
-    return (
-      <div className="text-center py-8">
-        <p className="text-gray-500">No ledger data available</p>
-      </div>
-    );
-  }
-
-  // Determine which entries to show
-  const entriesToShow = showOldRecords 
-    ? (ledgerData.oldRecords || [])
-    : (ledgerData.ledgerEntries || []);
+  // Determine which entries to show - handle null ledgerData
+  const entriesToShow = ledgerData 
+    ? (showOldRecords 
+        ? (ledgerData.oldRecords || [])
+        : (ledgerData.ledgerEntries || []))
+    : [];
 
   // Show table even if no entries, with empty message in body
   const hasEntries = entriesToShow.length > 0;
 
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-        <thead className="bg-gray-50 border-b border-gray-200">
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 sticky top-0">
           <tr>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Select
-            </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Date
-            </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Party Name
-            </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Type
-            </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Credit
-            </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Debit
-            </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Balance
-            </th>
+            <th className="border-b border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Date</th>
+            <th className="border-b border-gray-200 px-4 py-3 text-left font-semibold text-gray-700">Party Name</th>
+            <th className="border-b border-gray-200 px-4 py-3 text-center font-semibold text-gray-700">Type</th>
+            <th className="border-b border-gray-200 px-4 py-3 text-center font-semibold text-gray-700">Credit</th>
+            <th className="border-b border-gray-200 px-4 py-3 text-center font-semibold text-gray-700">Debit</th>
+            <th className="border-b border-gray-200 px-4 py-3 text-center font-semibold text-gray-700">Balance</th>
+            <th className="border-b border-gray-200 px-4 py-3 text-center font-semibold text-gray-700">Select</th>
+            <th className="border-b border-gray-200 px-4 py-3 text-center font-semibold text-gray-700">ID</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-200">
+        <tbody className="divide-y divide-gray-100">
           {hasEntries ? (
             entriesToShow.map((entry: any, index: number) => {
+              // Use combination of ID and index to ensure unique keys
               const entryId = entry.id || entry._id || entry.ti || `entry_${index}`;
+              // Create unique key combining ID with index to prevent duplicate key warnings
+              const uniqueKey = `${entryId}_${index}`;
               const isSelected = selectedEntries.includes(entryId);
               
               return (
                 <TableRow
-                  key={entryId}
+                  key={uniqueKey}
                   entry={entry}
                   index={index}
                   isSelected={isSelected}
@@ -168,8 +213,12 @@ const LedgerTable: React.FC<LedgerTableProps> = ({
             })
           ) : (
             <tr>
-              <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
-                {showOldRecords ? 'No old records available' : 'No current entries available'}
+              <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                {!ledgerData 
+                  ? 'No ledger data loaded. Please select a party to view transactions.'
+                  : showOldRecords 
+                    ? 'No old records available' 
+                    : 'No current entries available. Add your first transaction to get started.'}
               </td>
             </tr>
           )}

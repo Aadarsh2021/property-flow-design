@@ -17,7 +17,7 @@
  * @version 1.0.0
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TopNavigation from '../components/TopNavigation';
 import { Link } from 'react-router-dom';
 import { Settings, FileText, BarChart3, Users, TrendingUp, DollarSign, LogIn, UserPlus, ArrowRight, Plus, Calculator } from 'lucide-react';
@@ -144,7 +144,66 @@ const Index = () => {
     }
   }, [parties, allEntries]); // Remove calculateDashboardStats from dependencies
   // Pagination removed - recent activity feature removed - cleaned up
-  const { companyName } = useCompanyName(user?.id);
+  const { companyName, refreshCompanyName } = useCompanyName(user?.id);
+  
+  // Track if company name event was received recently
+  const recentCompanyNameEventRef = useRef<{ time: number; name: string } | null>(null);
+  
+  // Check localStorage for recent company name update on mount
+  useEffect(() => {
+    if (user?.id) {
+      const updateTimestamp = localStorage.getItem('companyNameUpdateTimestamp');
+      const updateValue = localStorage.getItem('companyNameUpdateValue');
+      
+      if (updateTimestamp && updateValue) {
+        const timeSinceUpdate = Date.now() - parseInt(updateTimestamp);
+        // If update was within last 5 seconds, skip mount refresh and use the value
+        if (timeSinceUpdate < 5000) {
+          recentCompanyNameEventRef.current = {
+            time: parseInt(updateTimestamp),
+            name: updateValue
+          };
+          console.log('⏭️ Dashboard: Recent company name update detected in localStorage, skipping mount refresh:', updateValue);
+          // Clear the flag after using it
+          localStorage.removeItem('companyNameUpdateTimestamp');
+          localStorage.removeItem('companyNameUpdateValue');
+          return; // Don't refresh on mount
+        } else {
+          // Clear old flag
+          localStorage.removeItem('companyNameUpdateTimestamp');
+          localStorage.removeItem('companyNameUpdateValue');
+        }
+      }
+      
+      // Only refresh if no recent update detected
+      refreshCompanyName();
+    }
+  }, [user?.id, refreshCompanyName]);
+  
+  // Listen for company name change events
+  useEffect(() => {
+    const handleCompanyNameChange = (event: CustomEvent) => {
+      const newCompanyName = event.detail?.companyName;
+      if (newCompanyName && user?.id) {
+        // Track recent event
+        recentCompanyNameEventRef.current = {
+          time: Date.now(),
+          name: newCompanyName
+        };
+        // Clear localStorage flag if event received
+        localStorage.removeItem('companyNameUpdateTimestamp');
+        localStorage.removeItem('companyNameUpdateValue');
+        console.log('🔄 Dashboard: Company name change event received:', newCompanyName);
+      }
+    };
+
+    window.addEventListener('companyNameChanged', handleCompanyNameChange as EventListener);
+    
+    return () => {
+      window.removeEventListener('companyNameChanged', handleCompanyNameChange as EventListener);
+    };
+  }, [user?.id]);
+  
 
   // Load parties and entries via API
   const loadPartiesData = useCallback(async () => {

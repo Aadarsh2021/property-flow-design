@@ -178,16 +178,33 @@ export const useLedgerData = ({
       debit: debit,
       balance: balance,
       chk: entry.chk || false,
-      partyName: entry.partyName || entry.party_name || selectedPartyName,
+      partyName: entry.partyName || entry.party_name || '', // Ledger owner party (which ledger this belongs to)
+      transactionPartyName: entry.transactionPartyName || undefined, // User-selected transaction party (for display)
       is_old_record: entry.is_old_record || false,
       ti: entry.ti || entry.id || entry._id
     };
+    
+    // Debug logging for transactionPartyName (for all entries with ti to debug issue)
+    if (transformedEntry.ti) {
+      console.log(`🔍 Entry transformed:`, {
+        partyName: transformedEntry.partyName,
+        transactionPartyName: transformedEntry.transactionPartyName,
+        ti: transformedEntry.ti,
+        hasTransactionPartyName: !!transformedEntry.transactionPartyName,
+        rawEntry: entry.transactionPartyName ? '✅ Has transactionPartyName from backend' : '❌ Missing transactionPartyName from backend'
+      });
+    }
+    
+    return transformedEntry;
   }, [selectedPartyName]);
 
   // Load ledger data - ULTRA optimized for speed with throttling
   const loadLedgerData = useCallback(async (showLoading = true, forceRefresh = false, partyName?: string) => {
     const currentPartyName = partyName || selectedPartyName;
-    if (!currentPartyName) return;
+    
+    if (!currentPartyName) {
+      return;
+    }
     
     // CRITICAL FIX: Prevent any simultaneous API calls
     if (loadingRef.current) {
@@ -231,8 +248,17 @@ export const useLedgerData = ({
     loadingRef.current = true;
     
     try {
-      // Get ledger entries using API
-      const response = await partyLedgerAPI.getPartyLedger(currentPartyName);
+      // Force refresh to bypass cache and get fresh data with transactionPartyName
+      // Add cache busting parameters
+      const cacheBustParams = {
+        _t: Date.now(),
+        _r: Math.random().toString(36).substr(2, 9),
+        _force: 'true'
+      };
+      
+      // Get ledger entries using API with force refresh
+      const response = await partyLedgerAPI.getPartyLedger(currentPartyName, cacheBustParams);
+      
       const entries = response.success ? response.data : [];
       
       if (entries && entries.length > 0) {
@@ -263,16 +289,17 @@ export const useLedgerData = ({
         };
         
         if (Array.isArray(responseData)) {
-          // If it's an array of LedgerEntry, create a basic LedgerData structure
+          // If it's an array of LedgerEntry, transform each entry and create a basic LedgerData structure
+          const transformedEntries = responseData.map(entry => transformEntry(entry));
           transformedData = {
-            ledgerEntries: responseData,
+            ledgerEntries: transformedEntries,
             oldRecords: [],
             closingBalance: 0,
             summary: {
-              totalCredit: responseData.reduce((sum, entry) => sum + (entry.credit || 0), 0),
-              totalDebit: responseData.reduce((sum, entry) => sum + (entry.debit || 0), 0),
+              totalCredit: transformedEntries.reduce((sum, entry) => sum + (entry.credit || 0), 0),
+              totalDebit: transformedEntries.reduce((sum, entry) => sum + (entry.debit || 0), 0),
               calculatedBalance: 0,
-              totalEntries: responseData.length
+              totalEntries: transformedEntries.length
             },
             mondayFinalData: {
               transactionCount: 0,
@@ -285,9 +312,13 @@ export const useLedgerData = ({
         } else {
           // If it's already in LedgerData format
           const ledgerData = responseData as any; // Type assertion for flexibility
+          // Transform entries to ensure transactionPartyName is preserved
+          const transformedLedgerEntries = (ledgerData.ledgerEntries || []).map((entry: any) => transformEntry(entry));
+          const transformedOldRecords = (ledgerData.oldRecords || []).map((entry: any) => transformEntry(entry));
+          
           transformedData = {
-            ledgerEntries: ledgerData.ledgerEntries || [],
-            oldRecords: ledgerData.oldRecords || [],
+            ledgerEntries: transformedLedgerEntries,
+            oldRecords: transformedOldRecords,
             closingBalance: ledgerData.closingBalance || 0,
             summary: {
               totalCredit: ledgerData.summary?.totalCredit || 0,

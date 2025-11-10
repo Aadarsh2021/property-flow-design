@@ -50,15 +50,46 @@ const VirtualRow = memo(({
         {new Date(entry.date).toLocaleDateString('en-GB')}
       </div>
       
-      {/* Remarks */}
+      {/* Party Name - Format: PartyName(Remarks) if remarks exist, otherwise just PartyName */}
+      {/* Handles both new transactions and old legacy formats */}
       <div className="flex-1 px-4 py-3 text-gray-800 font-medium">
         <div className="flex items-center space-x-2">
-          <span className="truncate">{entry.remarks || entry.partyName || entry.party_name || ''}</span>
-          {entry.is_old_record && (
-            <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full font-medium flex-shrink-0">
-              Old Record
-            </span>
-          )}
+          <span className="truncate">
+            {(() => {
+              // Priority: transactionPartyName (user-selected) > partyName/party_name (ledger owner)
+              const displayPartyName = entry.transactionPartyName || entry.partyName || entry.party_name;
+              const remarks = entry.remarks || '';
+              
+              // If displayPartyName exists
+              if (displayPartyName) {
+                // Show remarks if they exist and are actual user remarks (not old format)
+                // Remarks are user-provided actual remarks, not party names
+                const remarksTrimmed = remarks.trim();
+                if (remarksTrimmed && !remarksTrimmed.includes(':')) {
+                  // Show PartyName(Remarks) format if remarks are provided
+                  return `${displayPartyName}(${remarksTrimmed})`;
+                }
+                // No remarks, show just party name
+                return displayPartyName;
+              }
+              
+              // No partyName: Handle legacy formats in remarks
+              if (!remarks) return '';
+              
+              // Legacy format: "PartyName: Remarks"
+              if (remarks.includes(':')) {
+                const [legacyPartyName, legacyRemarks] = remarks.split(':', 2);
+                const cleanRemarks = legacyRemarks.trim();
+                if (cleanRemarks && cleanRemarks !== legacyPartyName.trim()) {
+                  return `${legacyPartyName.trim()}(${cleanRemarks})`;
+                }
+                return legacyPartyName.trim();
+              }
+              
+              // Fallback: show remarks as is (for very old transactions)
+              return remarks;
+            })()}
+          </span>
         </div>
       </div>
       
@@ -159,7 +190,7 @@ export const VirtualizedLedgerTable: React.FC<VirtualizedLedgerTableProps> = ({
       <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 rounded-t-lg">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900">
-            {showOldRecords ? 'Old Records' : 'Current Entries'}
+            Ledger Entries
           </h3>
           <div className="flex items-center space-x-4">
             <Checkbox
@@ -192,7 +223,7 @@ export const VirtualizedLedgerTable: React.FC<VirtualizedLedgerTableProps> = ({
       <div className="relative">
         {currentEntries.length === 0 ? (
           <div className="px-6 py-8 text-center text-gray-500">
-            {showOldRecords ? 'No old records found' : 'No current entries found'}
+            No entries found.
           </div>
         ) : (
           <FixedSizeList

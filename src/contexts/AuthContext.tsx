@@ -202,8 +202,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           if (response.success && response.data) {
             const updatedUser = {
               ...userData,
+              ...response.data,
               is_approved: response.data.is_approved || true,
-              requiresApproval: response.data.is_approved === false
+              requiresApproval: response.data.is_approved === false,
+              // Preserve profilePicture if it exists in localStorage and API doesn't return it
+              profilePicture: response.data.profilePicture || userData.profilePicture || null
             };
             
             // Update localStorage with fresh data

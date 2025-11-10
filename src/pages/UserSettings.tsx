@@ -40,8 +40,14 @@ const UserSettings = () => {
   const updateSupabaseSettings = useCallback(async (newSettings: UserSettings) => {
     setLoading(true);
     try {
-      // Use the existing userSettingsAPI
-      const response = await import('@/lib/api').then(api => api.userSettingsAPI.update(newSettings));
+      if (!user?.id) {
+        throw new Error('User ID is required to update settings');
+      }
+      
+      // Use the existing userSettingsAPI with correct method name and userId
+      const { userSettingsAPI } = await import('@/lib/api');
+      const response = await userSettingsAPI.updateSettings(user.id, newSettings);
+      
       if (response.success) {
         setSupabaseSettings(newSettings);
         return response.data;
@@ -54,7 +60,7 @@ const UserSettings = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id]);
   
   const [settings, setSettings] = useState({
     companyName: ''
@@ -114,14 +120,38 @@ const UserSettings = () => {
         companyName: settings.companyName
       };
       
-      await updateSupabaseSettings({ company_account: settings.companyName });
+      const updateResponse = await updateSupabaseSettings({ company_account: settings.companyName });
       
-      // Refresh company name globally after successful update
-      await refreshCompanyName();
+      // Get the updated company name from API response (most reliable)
+      const updatedCompanyName = updateResponse?.company_account || settings.companyName;
+      console.log('✅ Update response received:', { updatedCompanyName, responseData: updateResponse });
+      
+      // Clear API cache for settings to force fresh data on next fetch
+      const { clearCacheByPattern } = await import('@/lib/apiCache');
+      clearCacheByPattern('settings');
+      console.log('🗑️ Cleared settings cache after update');
+      
+      // Set flag in localStorage to indicate recent company name update
+      // This helps dashboard detect recent update even if event listener isn't ready yet
+      localStorage.setItem('companyNameUpdateTimestamp', Date.now().toString());
+      localStorage.setItem('companyNameUpdateValue', updatedCompanyName);
+      console.log('📝 Set company name update flag in localStorage:', updatedCompanyName);
+      
+      // Dispatch event immediately with the new company name from API response
+      window.dispatchEvent(new CustomEvent('companyNameChanged', { 
+        detail: { companyName: updatedCompanyName } 
+      }));
+      console.log('🔄 Company name change event dispatched:', updatedCompanyName);
+      
+      // Refresh company name from API after a delay to ensure database is updated
+      // Use setTimeout to avoid race conditions with database updates and cache
+      setTimeout(async () => {
+        await refreshCompanyName();
+      }, 2000); // 2 second delay to ensure database update is complete and cache is cleared
       
       // Dispatch event to refresh parties list (for company party creation)
       window.dispatchEvent(new CustomEvent('partiesRefreshed', { 
-        detail: { reason: 'company_settings_updated', companyName: settings.companyName } 
+        detail: { reason: 'company_settings_updated', companyName: updatedCompanyName } 
       }));
       console.log('🔄 Parties refresh event dispatched after company settings update');
       

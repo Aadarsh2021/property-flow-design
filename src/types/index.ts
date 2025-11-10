@@ -154,8 +154,9 @@ export interface LedgerEntry {
   chk: boolean;
   ti: string;
   createdAt?: string;
-  partyName?: string; // Frontend field
-  party_name?: string; // Backend field
+  partyName?: string; // Frontend field - ledger owner party
+  party_name?: string; // Backend field - ledger owner party
+  transactionPartyName?: string; // User-selected transaction party (for display)
   mondayFinal?: string;
   is_old_record?: boolean; // Indicates if entry is settled in Monday Final
   settlement_date?: string; // Date when entry was settled
@@ -169,6 +170,8 @@ export interface LedgerEntryInput {
   tnsType: 'CR' | 'DR' | 'Monday S...' | string;
   credit: number;
   debit: number;
+  involvedParty?: string; // Required by backend - the other party involved in transaction
+  date?: string; // Transaction date
   ti: string;
 }
 
