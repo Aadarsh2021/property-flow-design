@@ -26,7 +26,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Loader2 } from 'lucide-react';
+import { Loader2, TrendingUp, TrendingDown, Activity, History, IndianRupee, ShieldCheck } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 
 
@@ -50,7 +51,10 @@ const AccountLedgerComponent = () => {
     data: ledgerData,
     isLoading: loading = false,
     selectedPartyName = initialPartyName || '',
-    filters = { showOldRecords: false }
+    filters = { showOldRecords: false },
+    stats: pageStats = null,
+    performance: pagePerformance = null,
+    userSettings: pageUserSettings = null
   } = ledgerState || {};
 
   const {
@@ -91,13 +95,50 @@ const AccountLedgerComponent = () => {
   // Extract showOldRecords with default
   const showOldRecords = filters?.showOldRecords ?? false;
 
-
-
-
   const hasBootstrappedRef = useRef(false);
   const lastLoadedPartyRef = useRef<string | null>(null);
+  const [showMondayFinalDialog, setShowMondayFinalDialog] = useState(false);
+  const [pendingMondayFinalAction, setPendingMondayFinalAction] = useState<'create' | 'delete' | null>(null);
+
+  const derivedCompanyName = companyName || pageUserSettings?.company_account || 'Company';
+  const numberFormatter = useMemo(() => new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }), []);
+  const formatCurrency = useCallback((value: number) => `₹${numberFormatter.format(value)}`, [numberFormatter]);
+  const formatDate = useCallback((value?: string | null) => {
+    if (!value) return '—';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return parsed.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  }, []);
+
+  const summaryMetrics = useMemo(() => {
+    const totalCredit = pageStats?.totalCredit ?? ledgerData?.totalCredit ?? 0;
+    const totalDebit = pageStats?.totalDebit ?? ledgerData?.totalDebit ?? 0;
+    const netBalance =
+      pageStats?.netBalance ??
+      (typeof ledgerData?.totalBalance === 'number' ? ledgerData.totalBalance : totalCredit - totalDebit);
+    const totalTransactions =
+      pageStats?.totalTransactions ??
+      ledgerData?.summary?.totalEntries ??
+      (ledgerData?.ledgerEntries?.length ?? 0);
+
+    return {
+      totalCredit,
+      totalDebit,
+      netBalance,
+      totalTransactions,
+    };
+  }, [pageStats, ledgerData]);
+
+  const mondayFinalData = ledgerData?.mondayFinalData;
+  const hasActiveMondayFinal = Boolean(mondayFinalData?.latestEntryId);
+  const mondayFinalTransactions = mondayFinalData?.transactionCount ?? 0;
+  const mondayFinalLastDate = mondayFinalData?.latestSettlementDate ?? null;
+  const mondayFinalNet = mondayFinalData?.finalBalance ?? 0;
+  const recentTransactions = pageStats?.recentTransactions ?? [];
+  const globalBusy = loading || actionLoading;
 
   const initializeAccountLedger = useCallback(async (partyToLoad?: string) => {
+    dispatch(uiSlice.actions.setActionLoading(true));
     try {
       const result = await dispatch(
         loadAccountLedgerPage({
@@ -119,6 +160,8 @@ const AccountLedgerComponent = () => {
     } catch (error) {
       hasBootstrappedRef.current = true;
       console.error('❌ Failed to initialize account ledger page:', error);
+    } finally {
+      dispatch(uiSlice.actions.setActionLoading(false));
     }
   }, [dispatch]);
 
@@ -560,8 +603,8 @@ const AccountLedgerComponent = () => {
     await handleRefresh(true);
   };
 
-  // Handle Monday Final button click
-  const handleMondayFinal = async () => {
+  // Handle Monday Final button click (confirmation first)
+  const handleMondayFinalClick = () => {
     if (!selectedPartyName) {
       toast({
         title: "No Party Selected",
@@ -571,74 +614,91 @@ const AccountLedgerComponent = () => {
       return;
     }
 
+    if (hasActiveMondayFinal) {
+      setPendingMondayFinalAction('delete');
+    } else {
+      setPendingMondayFinalAction('create');
+    }
+    setShowMondayFinalDialog(true);
+  };
 
+  const executeMondayFinal = useCallback(async () => {
+    if (!selectedPartyName || !pendingMondayFinalAction) {
+      setShowMondayFinalDialog(false);
+      return;
+    }
+
+    dispatch(uiSlice.actions.setActionLoading(true));
     try {
-      // Check if Monday Final already exists
-      if (ledgerData?.mondayFinalData?.id) {
-        // Delete existing Monday Final to unsettle transactions
-        const response = await partyLedgerAPI.deleteMondayFinalEntry(ledgerData.mondayFinalData.id);
-
-        if (response.success) {
-          let unsettled = response.data?.unsettledTransactions ?? 0;
-          const settlementDate = response.data?.settlementDate;
-
-          if (unsettled === 0 && settlementDate) {
-            try {
-              const fallback = await partyLedgerAPI.unsettleTransactions(selectedPartyName, settlementDate);
-              if (fallback?.success) {
-                unsettled = fallback.data?.unsettledCount ?? unsettled;
-              }
-            } catch (fallbackError) {
-              console.error('❌ Fallback unsettle failed:', fallbackError);
-            }
-          }
-
+      if (pendingMondayFinalAction === 'delete') {
+        const entryId = ledgerData?.mondayFinalData?.latestEntryId;
+        if (!entryId) {
           toast({
-            title: "Monday Final Deleted",
-            description: `Monday Final entry deleted. ${unsettled} transactions unsettled and moved to current records.`,
+            title: "No Monday Final Found",
+            description: "There is no Monday Final entry to delete.",
+            variant: "destructive",
           });
+          return;
+        }
 
-          setTimeout(() => {
-            handleRefresh(true).catch(err => console.error('🔁 Refresh after Monday Final delete failed:', err));
-          }, 1000);
-      } else {
-        toast({
-          title: "Error",
+        const response = await partyLedgerAPI.deleteMondayFinalEntry(entryId);
+        if (!response.success) {
+          toast({
+            title: "Error",
             description: response.message || "Failed to delete Monday Final entry",
             variant: "destructive",
           });
+          return;
         }
+
+        let unsettled = response.data?.unsettledTransactions ?? 0;
+        const settlementDate = response.data?.settlementDate;
+
+        if (unsettled === 0 && settlementDate) {
+          try {
+            const fallback = await partyLedgerAPI.unsettleTransactions(selectedPartyName, settlementDate);
+            if (fallback?.success) {
+              unsettled = fallback.data?.unsettledCount ?? unsettled;
+            }
+          } catch (fallbackError) {
+            console.error('❌ Fallback unsettle failed:', fallbackError);
+          }
+        }
+
+        toast({
+          title: "Monday Final Deleted",
+          description: `${unsettled} transactions moved back to current records.`,
+        });
       } else {
-        // Create new Monday Final
         const currentEntries = ledgerData?.ledgerEntries || [];
 
         if (currentEntries.length === 0) {
-      toast({
+          toast({
             title: "No Current Entries",
-            description: "No current transactions to settle. Add some transactions first.",
+            description: "Add transactions before creating a Monday Final.",
             variant: "destructive",
           });
           return;
         }
 
         const response = await partyLedgerAPI.updateMondayFinal([selectedPartyName]);
-
-        if (response.success) {
-          const settledCount = response.data?.settledEntries ?? currentEntries.length;
+        if (!response.success) {
           toast({
-            title: "Monday Final Created",
-            description: `${settledCount} transactions settled and moved to old records.`,
-          });
-
-          await handleRefresh(true);
-      } else {
-        toast({
-          title: "Error",
+            title: "Error",
             description: response.message || "Failed to create Monday Final",
             variant: "destructive",
+          });
+          return;
+        }
+
+        const settledCount = response.data?.settledEntries ?? currentEntries.length;
+        toast({
+          title: "Monday Final Created",
+          description: `${settledCount} transactions settled and archived as old records.`,
         });
       }
-      }
+
+      await handleRefresh(true);
     } catch (error: any) {
       console.error('❌ Error with Monday Final:', error);
       toast({
@@ -646,27 +706,32 @@ const AccountLedgerComponent = () => {
         description: error.message || "Failed to process Monday Final",
         variant: "destructive",
       });
+    } finally {
+      dispatch(uiSlice.actions.setActionLoading(false));
+      setShowMondayFinalDialog(false);
+      setPendingMondayFinalAction(null);
     }
-  };
+  }, [dispatch, handleRefresh, ledgerData, pendingMondayFinalAction, selectedPartyName, toast, hasActiveMondayFinal]);
 
 
   const handleRefresh = useCallback(async (forceRefresh = false) => {
     if (!selectedPartyName) {
-      console.log('⚠️ No party selected, cannot refresh ledger data');
-      toast({
-        title: "No Party Selected",
-        description: "Please select a party first to refresh ledger data.",
-        variant: "destructive",
-      });
+      if (forceRefresh) {
+        toast({
+          title: "No Party Selected",
+          description: "Select a party to refresh ledger data.",
+          variant: "destructive",
+        });
+      }
       return;
     }
 
+    dispatch(uiSlice.actions.setActionLoading(true));
     try {
-      console.log('🔄 handleRefresh called', { forceRefresh, selectedPartyName });
       const result = await dispatch(
         loadAccountLedgerPage({
           partyName: selectedPartyName,
-          forceRefresh: forceRefresh !== false
+          forceRefresh
         })
       ).unwrap();
 
@@ -679,8 +744,10 @@ const AccountLedgerComponent = () => {
         description: error?.message || "Failed to refresh ledger data. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      dispatch(uiSlice.actions.setActionLoading(false));
     }
-  }, [selectedPartyName, dispatch, toast]);
+  }, [dispatch, selectedPartyName, toast]);
 
   const partySuggestions = useMemo((): string[] => {
     const names = (availableParties as Array<{ party_name?: string | null; name?: string | null }>)
@@ -699,94 +766,9 @@ const AccountLedgerComponent = () => {
     return unique.sort((a, b) => a.localeCompare(b));
   }, [availableParties]);
 
-  const handleTransactionAdded = useCallback(async (newPayload?: any) => {
-    try {
-      console.log('🧩 handleTransactionAdded payload:', newPayload);
-      if (newPayload?.mainEntry) {
-        const normalizeEntry = (entry: any) => {
-          if (!entry) return null;
-          const normalized = { ...entry };
-          normalized.id = entry.id || entry._id || entry.ti;
-          normalized._id = normalized.id;
-          normalized.ti = entry.ti || normalized.id;
-          normalized.tnsType = entry.tnsType || entry.tns_type || entry.transactionType || entry.type;
-          normalized.credit = typeof entry.credit === 'number' ? entry.credit : Number(entry.credit || 0);
-          normalized.debit = typeof entry.debit === 'number' ? entry.debit : Number(entry.debit || 0);
-          normalized.balance = typeof entry.balance === 'number' ? entry.balance : Number(entry.balance || 0);
-          normalized.partyName = entry.partyName || entry.party_name;
-          normalized.transactionPartyName = entry.transactionPartyName || entry.transaction_party_name || entry.involvedParty || '';
-          normalized.date = entry.date;
-          normalized.created_at = entry.created_at || new Date().toISOString();
-          return normalized;
-        };
-
-        const normalizedEntry = normalizeEntry(newPayload.mainEntry);
-        const normalizedPartyName = normalizedEntry?.partyName?.toLowerCase().trim();
-        const currentPartyName = selectedPartyName?.toLowerCase().trim();
-
-        if (normalizedEntry && normalizedPartyName && normalizedPartyName === currentPartyName) {
-          const existingData = ledgerData || { ledgerEntries: [], oldRecords: [], totalBalance: 0, totalCredit: 0, totalDebit: 0 };
-          const existingEntries = existingData.ledgerEntries || [];
-          console.log('📊 Existing entries before merge:', existingEntries.map((entry: any) => entry.ti || entry.id));
-          const duplicate = existingEntries.some((entry: any) => {
-            const entryId = entry.ti || entry.id || entry._id;
-            const newId = normalizedEntry.ti || normalizedEntry.id || normalizedEntry._id;
-            return entryId && newId && entryId === newId;
-          });
-
-          if (!duplicate) {
-            const updatedEntries = [...existingEntries, normalizedEntry];
-            const sortedEntries = updatedEntries.sort((a, b) => {
-              const dateA = a.date ? new Date(a.date).getTime() : 0;
-              const dateB = b.date ? new Date(b.date).getTime() : 0;
-              if (dateA !== dateB) {
-                return dateA - dateB;
-              }
-              const createdA = a.created_at ? new Date(a.created_at).getTime() : 0;
-              const createdB = b.created_at ? new Date(b.created_at).getTime() : 0;
-              return createdA - createdB;
-            });
-
-            console.log('✅ Merged entries after insert:', sortedEntries.map((entry: any) => entry.ti || entry.id));
-
-            const totalCredit = sortedEntries.reduce((sum, entry) => sum + (Number(entry.credit) || 0), 0);
-            const totalDebit = sortedEntries.reduce((sum, entry) => sum + (Number(entry.debit) || 0), 0);
-            const totalBalance = sortedEntries.length > 0 ? Number(sortedEntries[sortedEntries.length - 1].balance || 0) : 0;
-
-            dispatch(ledgerSlice.actions.setLedgerData({
-              ...existingData,
-              ledgerEntries: sortedEntries,
-              totalCredit,
-              totalDebit,
-              totalBalance,
-            }));
-            setRefreshKey(prev => prev + 1);
-          } else {
-            console.log('⚠️ Duplicate entry detected, skipping local merge');
-          }
-        } else {
-          console.log('ℹ️ Skipping local merge: normalizedPartyName', normalizedPartyName, 'currentPartyName', currentPartyName);
-        }
-      } else {
-        console.log('ℹ️ handleTransactionAdded called without mainEntry');
-      }
-
-      console.log('🆕 Transaction added. Triggering immediate refresh...');
-      await handleRefresh(true);
-
-      const retryDelays = [1000, 2500];
-      retryDelays.forEach(delay => {
-        setTimeout(() => {
-          console.log(`⏱️ Triggering follow-up refresh after ${delay}ms`);
-          handleRefresh(true).catch(error => {
-            console.error('❌ Follow-up refresh failed:', error);
-          });
-        }, delay);
-      });
-    } catch (error) {
-      console.error('❌ Error refreshing after transaction add:', error);
-    }
-  }, [dispatch, handleRefresh, ledgerData, selectedPartyName]);
+  const handleTransactionAdded = useCallback(async () => {
+    await handleRefresh(true);
+  }, [handleRefresh]);
 
 
   const handleShowOldRecords = (checked: boolean) => {
@@ -942,24 +924,158 @@ const AccountLedgerComponent = () => {
               <div className="flex items-center space-x-3">
                 <label className="text-sm font-semibold text-gray-700">Company:</label>
                 <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
-                  {companyName}
+                  {derivedCompanyName}
                 </span>
               </div>
 
               <div className="flex items-center space-x-3">
-                <label className="text-sm font-semibold text-gray-700">Closing Balance:</label>
+                <label className="text-sm font-semibold text-gray-700">Net Balance:</label>
                 <span className={`text-lg font-bold px-3 py-1 rounded-lg ${
-                  (ledgerData?.totalBalance || 0) > 0
+                  summaryMetrics.netBalance > 0
                     ? 'text-green-600 bg-green-50'
-                    : (ledgerData?.totalBalance || 0) < 0
+                    : summaryMetrics.netBalance < 0
                       ? 'text-red-600 bg-red-50'
                       : 'text-gray-600 bg-gray-50'
                 }`}>
-                  ₹{(ledgerData?.totalBalance || 0).toLocaleString()}
+                  {formatCurrency(summaryMetrics.netBalance)}
                 </span>
+                <Badge
+                  variant={hasActiveMondayFinal ? 'destructive' : 'secondary'}
+                  className="text-xs"
+                >
+                  {hasActiveMondayFinal ? 'Monday Final Applied' : 'Monday Final Pending'}
+                </Badge>
               </div>
               </div>
 
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="relative overflow-hidden rounded-2xl border border-blue-100 bg-white/80 p-4 shadow-sm">
+              <div className="absolute -top-6 -right-6 h-24 w-24 rounded-full bg-blue-100 opacity-40" />
+              <div className="relative flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">Total Credit</p>
+                  <p className="mt-2 text-2xl font-bold text-blue-800">{formatCurrency(summaryMetrics.totalCredit)}</p>
+                </div>
+                <div className="rounded-full bg-blue-100 p-2 text-blue-600">
+                  <TrendingUp className="h-5 w-5" />
+                </div>
+              </div>
+            </div>
+            <div className="relative overflow-hidden rounded-2xl border border-rose-100 bg-white/80 p-4 shadow-sm">
+              <div className="absolute -top-6 -right-6 h-24 w-24 rounded-full bg-rose-100 opacity-40" />
+              <div className="relative flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-rose-600">Total Debit</p>
+                  <p className="mt-2 text-2xl font-bold text-rose-700">{formatCurrency(summaryMetrics.totalDebit)}</p>
+                </div>
+                <div className="rounded-full bg-rose-100 p-2 text-rose-600">
+                  <TrendingDown className="h-5 w-5" />
+                </div>
+              </div>
+            </div>
+            <div className="relative overflow-hidden rounded-2xl border border-emerald-100 bg-white/80 p-4 shadow-sm">
+              <div className="absolute -top-6 -right-6 h-24 w-24 rounded-full bg-emerald-100 opacity-40" />
+              <div className="relative flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600">Net Balance</p>
+                  <p className={`mt-2 text-2xl font-bold ${
+                    summaryMetrics.netBalance > 0
+                      ? 'text-emerald-600'
+                      : summaryMetrics.netBalance < 0
+                        ? 'text-red-600'
+                        : 'text-gray-700'
+                  }`}>
+                    {formatCurrency(summaryMetrics.netBalance)}
+                  </p>
+                </div>
+                <div className="rounded-full bg-emerald-100 p-2 text-emerald-600">
+                  <IndianRupee className="h-5 w-5" />
+                </div>
+              </div>
+            </div>
+            <div className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-white/80 p-4 shadow-sm">
+              <div className="absolute -top-6 -right-6 h-24 w-24 rounded-full bg-indigo-100 opacity-40" />
+              <div className="relative flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600">Transactions</p>
+                  <p className="mt-2 text-2xl font-bold text-indigo-700">{summaryMetrics.totalTransactions.toLocaleString()}</p>
+                </div>
+                <div className="rounded-full bg-indigo-100 p-2 text-indigo-600">
+                  <Activity className="h-5 w-5" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-4 lg:grid-cols-3">
+            <div className="rounded-2xl border border-gray-200 bg-white/90 p-4 shadow-sm lg:col-span-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <History className="h-4 w-4 text-blue-600" />
+                  <h3 className="text-sm font-semibold text-gray-700">Recent Transactions</h3>
+                </div>
+                <span className="text-xs text-gray-500">
+                  Showing last {Math.min(recentTransactions.length, 5)} entries
+                </span>
+              </div>
+              {recentTransactions.length === 0 ? (
+                <p className="mt-3 text-sm text-gray-500">No recent transactions recorded.</p>
+              ) : (
+                <ul className="mt-3 space-y-2">
+                  {recentTransactions.slice(0, 5).map((txn: any, index: number) => (
+                    <li
+                      key={`${txn?.id || txn?.ti || index}`}
+                      className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm"
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-medium text-gray-700">{txn?.party_name || txn?.partyName || 'Unknown Party'}</span>
+                        <span className="text-xs text-gray-500">
+                          {formatDate(txn?.date)} · {txn?.tns_type || txn?.tnsType}
+                        </span>
+                      </div>
+                      <span className={`font-semibold ${txn?.tns_type === 'CR' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {formatCurrency(Number(txn?.credit || txn?.debit || 0))}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="rounded-2xl border border-gray-200 bg-white/90 p-4 shadow-sm flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-indigo-600" />
+                  <h3 className="text-sm font-semibold text-gray-700">Monday Final Status</h3>
+                </div>
+              </div>
+              <div className="rounded-xl border border-dashed border-indigo-200 bg-indigo-50/60 p-4 text-sm">
+                <p className="font-semibold text-indigo-800">
+                  {hasActiveMondayFinal ? 'Settlement Applied' : 'Settlement Pending'}
+                </p>
+                <p className="mt-1 text-xs text-indigo-700">
+                  {hasActiveMondayFinal
+                    ? `${mondayFinalTransactions} transactions were settled on ${formatDate(mondayFinalLastDate)}.`
+                    : 'No Monday Final has been created for the current entries yet.'}
+                </p>
+                {hasActiveMondayFinal && (
+                  <p className="mt-2 text-xs text-indigo-700">
+                    Settled Balance: <span className="font-semibold">{formatCurrency(mondayFinalNet)}</span>
+                  </p>
+                )}
+              </div>
+              {pagePerformance && (
+                <div className="rounded-xl border border-gray-100 bg-white p-3 text-xs text-gray-600">
+                  <p className="font-semibold text-gray-700">Last refresh performance</p>
+                  <div className="mt-1 grid grid-cols-2 gap-2">
+                    <span>Total Time: <strong>{pagePerformance.totalTime ?? '-'} ms</strong></span>
+                    <span>Queries: <strong>{pagePerformance.queriesExecuted ?? '-'}</strong></span>
+                    <span>Cache Hit: <strong>{pagePerformance.cacheHit ? 'Yes' : 'No'}</strong></span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -981,10 +1097,6 @@ const AccountLedgerComponent = () => {
                     onEntrySelect={handleEntrySelect}
                     loading={loading}
                   />
-                  {/* Debug info */}
-                  <div className="text-xs text-gray-400 mt-2">
-                    Debug: refreshKey={refreshKey}, party={selectedPartyName}
-                  </div>
                 </div>
               </div>
 
@@ -993,7 +1105,8 @@ const AccountLedgerComponent = () => {
                 <TransactionAddForm
                   selectedPartyName={selectedPartyName}
                   partySuggestions={partySuggestions}
-                  onTransactionAdded={handleTransactionAdded}
+                onTransactionAdded={handleTransactionAdded}
+                disabled={globalBusy}
                 />
               </div>
 
@@ -1005,14 +1118,14 @@ const AccountLedgerComponent = () => {
             <ActionButtons
               onRefresh={() => handleRefresh(true)}
               onDCReport={() => {}}
-              onMondayFinal={handleMondayFinal}
+              onMondayFinal={handleMondayFinalClick}
               onOldRecord={handleToggleOldRecords}
               showOldRecords={showOldRecords}
               onModify={() => {}}
               onDelete={handleDeleteClick}
               onPrint={() => {}}
               onCheckAll={handleCheckAll}
-              onExit={() => {}}
+              onExit={handleExit}
             />
             </div>
           </div>
@@ -1041,6 +1154,41 @@ const AccountLedgerComponent = () => {
               ) : (
                 'Delete'
               )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Monday Final Confirmation Dialog */}
+      <AlertDialog open={showMondayFinalDialog} onOpenChange={setShowMondayFinalDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingMondayFinalAction === 'delete' ? 'Delete Monday Final Settlement' : 'Create Monday Final Settlement'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingMondayFinalAction === 'delete'
+                ? 'This will unsettle the latest Monday Final and move the transactions back to current records.'
+                : 'This will settle the current transactions and move them to old records.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={actionLoading}
+              onClick={() => setPendingMondayFinalAction(null)}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className={pendingMondayFinalAction === 'delete' ? 'bg-red-600 hover:bg-red-700' : 'bg-orange-600 hover:bg-orange-700'}
+              onClick={executeMondayFinal}
+              disabled={actionLoading}
+            >
+              {actionLoading
+                ? 'Working…'
+                : pendingMondayFinalAction === 'delete'
+                  ? 'Delete Monday Final'
+                  : 'Create Monday Final'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

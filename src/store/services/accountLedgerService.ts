@@ -9,7 +9,7 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import { accountLedgerAPI } from '@/lib/api';
 import { setParties } from '../slices/partiesSlice';
 import { setCompanyName } from '../slices/authSlice';
-import { setLedgerData, setSelectedPartyName } from '../slices/ledgerSlice';
+import { setLedgerData, setSelectedPartyName, setLoading, setPageMetadata } from '../slices/ledgerSlice';
 import { setTypingPartyName } from '../slices/uiSlice';
 
 type LoadAccountLedgerArgs = {
@@ -81,6 +81,7 @@ export const loadAccountLedgerPage = createAsyncThunk(
   'accountLedger/loadPage',
   async ({ partyName, forceRefresh }: LoadAccountLedgerArgs, { dispatch, rejectWithValue }) => {
     try {
+      dispatch(setLoading(true));
       const response = await accountLedgerAPI.getPageData(partyName, { forceRefresh });
 
       if (!response.success) {
@@ -105,6 +106,21 @@ export const loadAccountLedgerPage = createAsyncThunk(
 
       const ledgerData = normalizeLedgerData(payload.ledgerData);
       dispatch(setLedgerData(ledgerData));
+      dispatch(
+        setPageMetadata({
+          stats: payload.stats
+            ? {
+                totalTransactions: payload.stats.totalTransactions ?? payload.stats.total_transactions ?? 0,
+                totalCredit: payload.stats.totalCredit ?? payload.stats.total_credit ?? ledgerData.totalCredit,
+                totalDebit: payload.stats.totalDebit ?? payload.stats.total_debit ?? ledgerData.totalDebit,
+                netBalance: payload.stats.netBalance ?? payload.stats.net_balance ?? ledgerData.totalBalance,
+                recentTransactions: payload.stats.recentTransactions ?? [],
+              }
+            : null,
+          userSettings: payload.userSettings || null,
+          performance: payload.performance || null,
+        }),
+      );
 
       if (effectivePartyName) {
         dispatch(setSelectedPartyName(effectivePartyName));
@@ -120,6 +136,8 @@ export const loadAccountLedgerPage = createAsyncThunk(
     } catch (error: any) {
       console.error('❌ Error loading account ledger page data:', error);
       return rejectWithValue(error.message || 'Failed to load account ledger data');
+    } finally {
+      dispatch(setLoading(false));
     }
   }
 );

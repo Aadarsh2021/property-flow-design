@@ -42,7 +42,24 @@ export interface LedgerData {
     totalDebit: number;
     startingBalance: number;
     finalBalance: number;
+    latestEntryId?: string | null;
+    latestSettlementDate?: string | null;
+    lastUpdatedAt?: string | null;
   };
+}
+
+interface LedgerStats {
+  totalTransactions: number;
+  totalCredit: number;
+  totalDebit: number;
+  netBalance: number;
+  recentTransactions: any[];
+}
+
+interface LedgerPerformance {
+  totalTime?: number;
+  queriesExecuted?: number;
+  cacheHit?: boolean;
 }
 
 interface LedgerState {
@@ -61,6 +78,9 @@ interface LedgerState {
     itemsPerPage: number;
     totalItems: number;
   };
+  stats: LedgerStats | null;
+  userSettings: Record<string, any> | null;
+  performance: LedgerPerformance | null;
 }
 
 const initialState: LedgerState = {
@@ -76,6 +96,9 @@ const initialState: LedgerState = {
     itemsPerPage: 50,
     totalItems: 0,
   },
+  stats: null,
+  userSettings: null,
+  performance: null,
 };
 
 export const ledgerSlice = createSlice({
@@ -166,12 +189,29 @@ export const ledgerSlice = createSlice({
       state.pagination.currentPage = 1;
     },
     
+    setPageMetadata: (
+      state,
+      action: PayloadAction<{
+        stats?: LedgerStats | null;
+        userSettings?: Record<string, any> | null;
+        performance?: LedgerPerformance | null;
+      }>,
+    ) => {
+      const { stats, userSettings, performance } = action.payload;
+      state.stats = stats ?? null;
+      state.userSettings = userSettings ?? null;
+      state.performance = performance ?? null;
+    },
+    
     // Clear state
     clearLedgerData: (state) => {
       state.data = null;
       state.error = null;
       state.pagination.currentPage = 1;
       state.pagination.totalItems = 0;
+      state.stats = null;
+      state.userSettings = null;
+      state.performance = null;
     },
     clearError: (state) => {
       state.error = null;
@@ -448,6 +488,7 @@ export const {
   clearFilters,
   setCurrentPage,
   setItemsPerPage,
+  setPageMetadata,
   clearLedgerData,
   clearError,
 } = ledgerSlice.actions;

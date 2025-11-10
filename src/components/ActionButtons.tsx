@@ -8,6 +8,7 @@ interface ActionButtonsProps {
   onDCReport: () => void;
   onMondayFinal: () => void;
   onOldRecord: () => void;
+  showOldRecords: boolean;
   onModify: () => void;
   onDelete: () => void;
   onPrint: () => void;
@@ -20,6 +21,7 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({
   onDCReport,
   onMondayFinal,
   onOldRecord,
+  showOldRecords,
   onModify,
   onDelete,
   onPrint,
@@ -37,7 +39,7 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({
     data: ledgerData
   } = useAppSelector(state => state.ledger);
 
-  const hasMondayFinal = ledgerData?.mondayFinalData?.id;
+  const hasMondayFinal = ledgerData?.mondayFinalData?.latestEntryId;
   const hasSelectedEntries = selectedEntries.length > 0;
 
   return (
@@ -53,6 +55,7 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({
           <RefreshCw className={`w-4 h-4 ${actionLoading ? 'animate-spin' : ''}`} />
           <span>Refresh All</span>
         </Button>
+
 
         {/* DC Report */}
         <Button
@@ -85,7 +88,7 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({
           className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
         >
           <Clock className="w-4 h-4" />
-          <span>Old Record</span>
+          <span>{showOldRecords ? 'Show Current Records' : 'Show Old Records'}</span>
         </Button>
 
         {/* Modify */}
