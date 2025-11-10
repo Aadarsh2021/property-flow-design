@@ -1,5 +1,10 @@
-import React from 'react'
+import * as React from 'react'
 import 'use-sync-external-store/shim'
+
+if (typeof window !== 'undefined') {
+  // Ensure React is globally accessible for legacy shims
+  ;(window as any).React = React
+}
 import { createRoot } from 'react-dom/client'
 import { Provider } from 'react-redux'
 import App from './App.tsx'
