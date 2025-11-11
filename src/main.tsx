@@ -1,4 +1,3 @@
-import './lib/react-polyfill'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { Provider } from 'react-redux'
@@ -7,7 +6,9 @@ import { store } from './store'
 import './index.css'
 
 // Performance optimization: Use requestIdleCallback for better performance
-const renderApp = () => {
+const renderApp = async () => {
+  await import('./setup/reactPolyfills')
+
   const root = createRoot(document.getElementById("root")!);
   root.render(
     <Provider store={store}>

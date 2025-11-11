@@ -25,8 +25,71 @@
     <meta name="twitter:description" content="Professional account ledger software for efficient financial management">
     <meta name="twitter:image" content="https://escrow-account-ledger.web.app/og-image.svg?v=5&t=2024">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  </head>
+    <script>
+      (function () {
+        let reactSetter;
+        Object.defineProperty(window, "React", {
+          configurable: true,
+          enumerable: true,
+          get() {
+            return this.__reactInstance;
+          },
+          set(value) {
+            this.__reactInstance = value;
+            reactSetter?.(value);
+          },
+        });
 
+        window.__awaitReact = new Promise((resolve) => {
+          if (window.__reactInstance) return resolve(window.__reactInstance);
+          reactSetter = resolve;
+        });
+
+        window.__awaitReact.then((React) => {
+          if (typeof React.useSyncExternalStore !== "function") {
+            React.useSyncExternalStore = (subscribe, getSnapshot, getServerSnapshot) => {
+              const getSnapshotSafe = () => {
+                try {
+                  return getSnapshot();
+                } catch (err) {
+                  console.error("useSyncExternalStore snapshot error", err);
+                  return typeof getServerSnapshot === "function" ? getServerSnapshot() : undefined;
+                }
+              };
+
+              const [state, setState] = React.useState(() => ({ value: getSnapshotSafe() }));
+              const stateRef = React.useRef(state.value);
+
+              React.useEffect(() => {
+                stateRef.current = state.value;
+              }, [state.value]);
+
+              React.useEffect(() => {
+                const checkForUpdates = () => {
+                  const nextValue = getSnapshotSafe();
+                  if (!Object.is(stateRef.current, nextValue)) {
+                    setState({ value: nextValue });
+                  }
+                };
+
+                const unsubscribe = subscribe(checkForUpdates);
+                checkForUpdates();
+                return () => {
+                  try {
+                    unsubscribe && unsubscribe();
+                  } catch (err) {
+                    console.warn("useSyncExternalStore unsubscribe error", err);
+                  }
+                };
+              }, [subscribe, getSnapshotSafe]);
+
+              return state.value;
+            };
+          }
+        });
+      })();
+    </script>
+  </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
