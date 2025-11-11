@@ -125,10 +125,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         id: newUser.id || newUser._id || ''
       };
       
+      const approvalFlag = userWithId.is_approved as unknown;
+      const isExplicitlyUnapproved =
+        approvalFlag === false ||
+        approvalFlag === 0 ||
+        approvalFlag === '0' ||
+        approvalFlag === 'false';
+
       setToken(newToken);
       setUser(userWithId);
-      setIsApproved(userWithId.is_approved || true); // Use Supabase field name
-      setRequiresApproval(userWithId.is_approved === false); // Only true if explicitly false
+      setIsApproved(!isExplicitlyUnapproved); // Respect explicit false from backend
+      setRequiresApproval(isExplicitlyUnapproved); // Only true if explicitly false
       setIsRevoked(userWithId.status === 'rejected'); // Check if user is revoked
       localStorage.setItem('token', newToken);
       localStorage.setItem('user', JSON.stringify(userWithId));

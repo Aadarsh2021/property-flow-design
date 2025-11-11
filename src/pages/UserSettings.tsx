@@ -114,13 +114,26 @@ const UserSettings = () => {
         });
         return;
       }
+
+      if (!supabaseSettings) {
+        toast({
+          title: "Error",
+          description: "Unable to load current settings. Please try again in a moment.",
+          variant: "destructive"
+        });
+        return;
+      }
       
       // Clean settings data - only send required fields
-      const cleanSettings: Partial<UserSettings> = {
-        companyName: settings.companyName
-      };
       
-      const updateResponse = await updateSupabaseSettings({ company_account: settings.companyName });
+      const updatedSettings: UserSettings = {
+        ...supabaseSettings,
+        companyName: settings.companyName,
+        company_name: settings.companyName,
+        company_account: settings.companyName
+      };
+
+      const updateResponse = await updateSupabaseSettings(updatedSettings);
       
       // Get the updated company name from API response (most reliable)
       const updatedCompanyName = updateResponse?.company_account || settings.companyName;

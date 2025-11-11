@@ -629,7 +629,10 @@ const Profile = () => {
             return;
           }
           
-          const response = await authAPI.setupPassword({ password: passwordData.newPassword });
+          const response = await authAPI.changePassword({
+            currentPassword: passwordData.currentPassword,
+            newPassword: passwordData.newPassword,
+          });
           if (response.success) {
             // Update Firebase password as well (this will auto-sync with database)
             const firebaseResult = await updateUserPassword(passwordData.newPassword);
@@ -641,39 +644,6 @@ const Profile = () => {
               toast({
                 title: "✅ Password Changed",
                 description: "Your password has been changed successfully in both Firebase and database",
-              });
-            } else {
-              // Database updated but Firebase failed
-              toast({
-                title: "⚠️ Partial Success",
-                description: "Password changed in database but failed to update Firebase. Please try logging in.",
-                variant: "destructive"
-              });
-            }
-            
-            setPasswordData({
-              currentPassword: '',
-              newPassword: '',
-              confirmPassword: ''
-            });
-          } else {
-            setError(response.message || 'Failed to change password');
-          }
-        } else if (hasPassword) {
-          // User has password - change password
-          const response = await authAPI.setupPassword({ password: passwordData.newPassword });
-          
-          if (response.success) {
-            // Update Firebase password as well
-            const firebaseResult = await updateUserPassword(passwordData.newPassword);
-            
-            if (firebaseResult.success) {
-              // Refresh user profile to get updated data
-              await refreshUserProfile();
-              
-              toast({
-                title: "✅ Password Changed",
-                description: "Your password has been changed successfully in both systems",
               });
             } else {
               // Database updated but Firebase failed
