@@ -127,6 +127,24 @@ export const loadAccountLedgerPage = createAsyncThunk(
         dispatch(setTypingPartyName(effectivePartyName));
       }
 
+      if (typeof window !== 'undefined') {
+        try {
+          const cacheKey = `ledger-cache-${effectivePartyName || 'default'}`;
+          const cachePayload = {
+            timestamp: Date.now(),
+            selectedPartyName: effectivePartyName,
+            parties,
+            ledgerData,
+            stats: payload.stats ?? null,
+            userSettings: payload.userSettings ?? null,
+            companyName: payload.userSettings?.company_account ?? null,
+          };
+          window.sessionStorage.setItem(cacheKey, JSON.stringify(cachePayload));
+        } catch (cacheError) {
+          console.warn('⚠️ Unable to cache ledger data:', cacheError);
+        }
+      }
+
       return {
         ...payload,
         selectedPartyName: effectivePartyName,

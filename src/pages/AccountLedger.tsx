@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../hooks/redux';
-import { ledgerSlice } from '../store/slices/ledgerSlice';
+import { ledgerSlice, setPageMetadata } from '../store/slices/ledgerSlice';
 import { partiesSlice } from '../store/slices/partiesSlice';
 import { uiSlice } from '../store/slices/uiSlice';
 import { partyLedgerAPI } from '../lib/api';
@@ -9,9 +9,9 @@ import {
   deleteLedgerEntries,
   applyOptimisticDelete
 } from '../store/services/ledgerService';
-import { filterParties } from '../store/services/partiesService';
 import { loadAccountLedgerPage } from '../store/services/accountLedgerService';
 import { useToast } from '@/hooks/use-toast';
+import { setCompanyName } from '../store/slices/authSlice';
 import TopNavigation from '@/components/TopNavigation';
 import LedgerTable from '@/components/LedgerTable';
 import ActionButtons from '@/components/ActionButtons';
@@ -26,8 +26,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Loader2, TrendingUp, TrendingDown, Activity, History, IndianRupee, ShieldCheck } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 
 
 
@@ -46,14 +44,12 @@ const AccountLedgerComponent = () => {
   const uiState = useAppSelector(state => state.ui) as any;
 
   // Fallback values for Redux state
-  const { user, companyName } = authState || {};
+  const { companyName } = authState || {};
   const {
     data: ledgerData,
     isLoading: loading = false,
     selectedPartyName = initialPartyName || '',
     filters = { showOldRecords: false },
-    stats: pageStats = null,
-    performance: pagePerformance = null,
     userSettings: pageUserSettings = null
   } = ledgerState || {};
 
@@ -101,49 +97,67 @@ const AccountLedgerComponent = () => {
   const [pendingMondayFinalAction, setPendingMondayFinalAction] = useState<'create' | 'delete' | null>(null);
 
   const derivedCompanyName = companyName || pageUserSettings?.company_account || 'Company';
-  const numberFormatter = useMemo(() => new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }), []);
-  const formatCurrency = useCallback((value: number) => `₹${numberFormatter.format(value)}`, [numberFormatter]);
-  const formatDate = useCallback((value?: string | null) => {
-    if (!value) return '—';
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return value;
-    return parsed.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-  }, []);
-
-  const summaryMetrics = useMemo(() => {
-    const totalCredit = pageStats?.totalCredit ?? ledgerData?.totalCredit ?? 0;
-    const totalDebit = pageStats?.totalDebit ?? ledgerData?.totalDebit ?? 0;
-    const netBalance =
-      pageStats?.netBalance ??
-      (typeof ledgerData?.totalBalance === 'number' ? ledgerData.totalBalance : totalCredit - totalDebit);
-    const totalTransactions =
-      pageStats?.totalTransactions ??
-      ledgerData?.summary?.totalEntries ??
-      (ledgerData?.ledgerEntries?.length ?? 0);
-
-    return {
-      totalCredit,
-      totalDebit,
-      netBalance,
-      totalTransactions,
-    };
-  }, [pageStats, ledgerData]);
 
   const mondayFinalData = ledgerData?.mondayFinalData;
   const hasActiveMondayFinal = Boolean(mondayFinalData?.latestEntryId);
-  const mondayFinalTransactions = mondayFinalData?.transactionCount ?? 0;
-  const mondayFinalLastDate = mondayFinalData?.latestSettlementDate ?? null;
-  const mondayFinalNet = mondayFinalData?.finalBalance ?? 0;
-  const recentTransactions = pageStats?.recentTransactions ?? [];
   const globalBusy = loading || actionLoading;
 
-  const initializeAccountLedger = useCallback(async (partyToLoad?: string) => {
-    dispatch(uiSlice.actions.setActionLoading(true));
+  const hydrateFromCache = useCallback((partyToLoad?: string) => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+
+    const cacheKey = `ledger-cache-${partyToLoad || 'default'}`;
+    const cachedPayload = window.sessionStorage.getItem(cacheKey);
+
+    if (!cachedPayload) {
+      return false;
+    }
+
+    try {
+      const cached = JSON.parse(cachedPayload);
+
+      if (Array.isArray(cached.parties) && cached.parties.length) {
+        dispatch(partiesSlice.actions.setParties(cached.parties));
+      }
+
+      if (cached.companyName) {
+        dispatch(setCompanyName(cached.companyName));
+      }
+
+      dispatch(
+        setPageMetadata({
+          stats: cached.stats ?? null,
+          userSettings: cached.userSettings ?? null,
+          performance: null,
+        }),
+      );
+
+      if (cached.ledgerData) {
+        dispatch(ledgerSlice.actions.setLedgerData(cached.ledgerData));
+      }
+
+      if (cached.selectedPartyName) {
+        dispatch(ledgerSlice.actions.setSelectedPartyName(cached.selectedPartyName));
+        dispatch(uiSlice.actions.setTypingPartyName(cached.selectedPartyName));
+        lastLoadedPartyRef.current = cached.selectedPartyName;
+      }
+
+      hasBootstrappedRef.current = true;
+      return true;
+    } catch (error) {
+      console.warn('⚠️ Failed to hydrate ledger cache:', error);
+      return false;
+    }
+  }, [dispatch]);
+
+  const initializeAccountLedger = useCallback(async (partyToLoad?: string, options?: { forceRefresh?: boolean }) => {
+    const forceRefresh = options?.forceRefresh ?? true;
     try {
       const result = await dispatch(
         loadAccountLedgerPage({
           partyName: partyToLoad,
-          forceRefresh: true
+          forceRefresh
         })
       ).unwrap();
 
@@ -160,8 +174,6 @@ const AccountLedgerComponent = () => {
     } catch (error) {
       hasBootstrappedRef.current = true;
       console.error('❌ Failed to initialize account ledger page:', error);
-    } finally {
-      dispatch(uiSlice.actions.setActionLoading(false));
     }
   }, [dispatch]);
 
@@ -169,13 +181,15 @@ const AccountLedgerComponent = () => {
   useEffect(() => {
     const decodedPartyName = initialPartyName ? decodeURIComponent(initialPartyName) : undefined;
 
-    if (decodedPartyName) {
+    const hydrated = hydrateFromCache(decodedPartyName);
+
+    if (!hydrated && decodedPartyName) {
       dispatch(ledgerSlice.actions.setSelectedPartyName(decodedPartyName));
       dispatch(uiSlice.actions.setTypingPartyName(decodedPartyName));
     }
 
-    initializeAccountLedger(decodedPartyName);
-  }, [initialPartyName, initializeAccountLedger, dispatch]);
+    initializeAccountLedger(decodedPartyName, { forceRefresh: !hydrated });
+  }, [initialPartyName, initializeAccountLedger, hydrateFromCache, dispatch]);
 
   // Update Redux typing state when selected party changes (only if not currently typing)
   useEffect(() => {
@@ -580,6 +594,41 @@ const AccountLedgerComponent = () => {
     });
   };
 
+  const handleRefresh = useCallback(async (forceRefresh = false) => {
+    if (!selectedPartyName) {
+      if (forceRefresh) {
+        toast({
+          title: "No Party Selected",
+          description: "Select a party to refresh ledger data.",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+
+    dispatch(uiSlice.actions.setActionLoading(true));
+    try {
+      const result = await dispatch(
+        loadAccountLedgerPage({
+          partyName: selectedPartyName,
+          forceRefresh,
+        })
+      ).unwrap();
+
+      lastLoadedPartyRef.current = result?.selectedPartyName || selectedPartyName;
+      setRefreshKey((prev) => prev + 1);
+    } catch (error: any) {
+      console.error('❌ Error refreshing ledger data:', error);
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to refresh ledger data. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      dispatch(uiSlice.actions.setActionLoading(false));
+    }
+  }, [dispatch, selectedPartyName, toast]);
+
   const handleToggleOldRecords = async () => {
     if (!selectedPartyName) {
       toast({
@@ -714,41 +763,6 @@ const AccountLedgerComponent = () => {
   }, [dispatch, handleRefresh, ledgerData, pendingMondayFinalAction, selectedPartyName, toast, hasActiveMondayFinal]);
 
 
-  const handleRefresh = useCallback(async (forceRefresh = false) => {
-    if (!selectedPartyName) {
-      if (forceRefresh) {
-        toast({
-          title: "No Party Selected",
-          description: "Select a party to refresh ledger data.",
-          variant: "destructive",
-        });
-      }
-      return;
-    }
-
-    dispatch(uiSlice.actions.setActionLoading(true));
-    try {
-      const result = await dispatch(
-        loadAccountLedgerPage({
-          partyName: selectedPartyName,
-          forceRefresh
-        })
-      ).unwrap();
-
-      lastLoadedPartyRef.current = result?.selectedPartyName || selectedPartyName;
-      setRefreshKey(prev => prev + 1);
-    } catch (error: any) {
-      console.error('❌ Error refreshing ledger data:', error);
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to refresh ledger data. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      dispatch(uiSlice.actions.setActionLoading(false));
-    }
-  }, [dispatch, selectedPartyName, toast]);
-
   const partySuggestions = useMemo((): string[] => {
     const names = (availableParties as Array<{ party_name?: string | null; name?: string | null }>)
       .reduce<string[]>((list, party) => {
@@ -765,10 +779,6 @@ const AccountLedgerComponent = () => {
     const unique = Array.from(new Set<string>(names));
     return unique.sort((a, b) => a.localeCompare(b));
   }, [availableParties]);
-
-  const handleTransactionAdded = useCallback(async () => {
-    await handleRefresh(true);
-  }, [handleRefresh]);
 
 
   const handleShowOldRecords = (checked: boolean) => {
@@ -927,157 +937,10 @@ const AccountLedgerComponent = () => {
                   {derivedCompanyName}
                 </span>
               </div>
-
-              <div className="flex items-center space-x-3">
-                <label className="text-sm font-semibold text-gray-700">Net Balance:</label>
-                <span className={`text-lg font-bold px-3 py-1 rounded-lg ${
-                  summaryMetrics.netBalance > 0
-                    ? 'text-green-600 bg-green-50'
-                    : summaryMetrics.netBalance < 0
-                      ? 'text-red-600 bg-red-50'
-                      : 'text-gray-600 bg-gray-50'
-                }`}>
-                  {formatCurrency(summaryMetrics.netBalance)}
-                </span>
-                <Badge
-                  variant={hasActiveMondayFinal ? 'destructive' : 'secondary'}
-                  className="text-xs"
-                >
-                  {hasActiveMondayFinal ? 'Monday Final Applied' : 'Monday Final Pending'}
-                </Badge>
-              </div>
-              </div>
-
             </div>
+
           </div>
-
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="relative overflow-hidden rounded-2xl border border-blue-100 bg-white/80 p-4 shadow-sm">
-              <div className="absolute -top-6 -right-6 h-24 w-24 rounded-full bg-blue-100 opacity-40" />
-              <div className="relative flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">Total Credit</p>
-                  <p className="mt-2 text-2xl font-bold text-blue-800">{formatCurrency(summaryMetrics.totalCredit)}</p>
-                </div>
-                <div className="rounded-full bg-blue-100 p-2 text-blue-600">
-                  <TrendingUp className="h-5 w-5" />
-                </div>
-              </div>
-            </div>
-            <div className="relative overflow-hidden rounded-2xl border border-rose-100 bg-white/80 p-4 shadow-sm">
-              <div className="absolute -top-6 -right-6 h-24 w-24 rounded-full bg-rose-100 opacity-40" />
-              <div className="relative flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-rose-600">Total Debit</p>
-                  <p className="mt-2 text-2xl font-bold text-rose-700">{formatCurrency(summaryMetrics.totalDebit)}</p>
-                </div>
-                <div className="rounded-full bg-rose-100 p-2 text-rose-600">
-                  <TrendingDown className="h-5 w-5" />
-                </div>
-              </div>
-            </div>
-            <div className="relative overflow-hidden rounded-2xl border border-emerald-100 bg-white/80 p-4 shadow-sm">
-              <div className="absolute -top-6 -right-6 h-24 w-24 rounded-full bg-emerald-100 opacity-40" />
-              <div className="relative flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600">Net Balance</p>
-                  <p className={`mt-2 text-2xl font-bold ${
-                    summaryMetrics.netBalance > 0
-                      ? 'text-emerald-600'
-                      : summaryMetrics.netBalance < 0
-                        ? 'text-red-600'
-                        : 'text-gray-700'
-                  }`}>
-                    {formatCurrency(summaryMetrics.netBalance)}
-                  </p>
-                </div>
-                <div className="rounded-full bg-emerald-100 p-2 text-emerald-600">
-                  <IndianRupee className="h-5 w-5" />
-                </div>
-              </div>
-            </div>
-            <div className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-white/80 p-4 shadow-sm">
-              <div className="absolute -top-6 -right-6 h-24 w-24 rounded-full bg-indigo-100 opacity-40" />
-              <div className="relative flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600">Transactions</p>
-                  <p className="mt-2 text-2xl font-bold text-indigo-700">{summaryMetrics.totalTransactions.toLocaleString()}</p>
-                </div>
-                <div className="rounded-full bg-indigo-100 p-2 text-indigo-600">
-                  <Activity className="h-5 w-5" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-6 grid gap-4 lg:grid-cols-3">
-            <div className="rounded-2xl border border-gray-200 bg-white/90 p-4 shadow-sm lg:col-span-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <History className="h-4 w-4 text-blue-600" />
-                  <h3 className="text-sm font-semibold text-gray-700">Recent Transactions</h3>
-                </div>
-                <span className="text-xs text-gray-500">
-                  Showing last {Math.min(recentTransactions.length, 5)} entries
-                </span>
-              </div>
-              {recentTransactions.length === 0 ? (
-                <p className="mt-3 text-sm text-gray-500">No recent transactions recorded.</p>
-              ) : (
-                <ul className="mt-3 space-y-2">
-                  {recentTransactions.slice(0, 5).map((txn: any, index: number) => (
-                    <li
-                      key={`${txn?.id || txn?.ti || index}`}
-                      className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm"
-                    >
-                      <div className="flex flex-col">
-                        <span className="font-medium text-gray-700">{txn?.party_name || txn?.partyName || 'Unknown Party'}</span>
-                        <span className="text-xs text-gray-500">
-                          {formatDate(txn?.date)} · {txn?.tns_type || txn?.tnsType}
-                        </span>
-                      </div>
-                      <span className={`font-semibold ${txn?.tns_type === 'CR' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {formatCurrency(Number(txn?.credit || txn?.debit || 0))}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className="rounded-2xl border border-gray-200 bg-white/90 p-4 shadow-sm flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4 text-indigo-600" />
-                  <h3 className="text-sm font-semibold text-gray-700">Monday Final Status</h3>
-                </div>
-              </div>
-              <div className="rounded-xl border border-dashed border-indigo-200 bg-indigo-50/60 p-4 text-sm">
-                <p className="font-semibold text-indigo-800">
-                  {hasActiveMondayFinal ? 'Settlement Applied' : 'Settlement Pending'}
-                </p>
-                <p className="mt-1 text-xs text-indigo-700">
-                  {hasActiveMondayFinal
-                    ? `${mondayFinalTransactions} transactions were settled on ${formatDate(mondayFinalLastDate)}.`
-                    : 'No Monday Final has been created for the current entries yet.'}
-                </p>
-                {hasActiveMondayFinal && (
-                  <p className="mt-2 text-xs text-indigo-700">
-                    Settled Balance: <span className="font-semibold">{formatCurrency(mondayFinalNet)}</span>
-                  </p>
-                )}
-              </div>
-              {pagePerformance && (
-                <div className="rounded-xl border border-gray-100 bg-white p-3 text-xs text-gray-600">
-                  <p className="font-semibold text-gray-700">Last refresh performance</p>
-                  <div className="mt-1 grid grid-cols-2 gap-2">
-                    <span>Total Time: <strong>{pagePerformance.totalTime ?? '-'} ms</strong></span>
-                    <span>Queries: <strong>{pagePerformance.queriesExecuted ?? '-'}</strong></span>
-                    <span>Cache Hit: <strong>{pagePerformance.cacheHit ? 'Yes' : 'No'}</strong></span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+        </div>
 
         {/* Main Content - Table and Actions */}
         <div className="flex flex-1 overflow-hidden">
@@ -1105,8 +968,7 @@ const AccountLedgerComponent = () => {
                 <TransactionAddForm
                   selectedPartyName={selectedPartyName}
                   partySuggestions={partySuggestions}
-                onTransactionAdded={handleTransactionAdded}
-                disabled={globalBusy}
+                  disabled={globalBusy}
                 />
               </div>
 

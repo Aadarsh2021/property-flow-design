@@ -1,9 +1,9 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import { partyLedgerAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { ArrowRightLeft, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
+import { useAppDispatch } from '@/hooks/redux';
+import { applyOptimisticAdd, addLedgerEntry, refreshLedgerData } from '@/store/services/ledgerService';
 
 interface TransactionAddFormProps {
   selectedPartyName: string;
@@ -19,9 +19,9 @@ const TransactionAddForm: React.FC<TransactionAddFormProps> = ({
   disabled = false,
 }) => {
   const { toast } = useToast();
+  const dispatch = useAppDispatch();
   const [counterParty, setCounterParty] = useState('');
   const [amount, setAmount] = useState('');
-  const [tnsType, setTnsType] = useState<'CR' | 'DR'>('CR');
   const [remarks, setRemarks] = useState('');
   const [loading, setLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -35,8 +35,6 @@ const TransactionAddForm: React.FC<TransactionAddFormProps> = ({
   const [inputPadding, setInputPadding] = useState(0);
 
   const normalizedSelected = selectedPartyName.trim().toLowerCase();
-  const quickAmountPresets = useMemo(() => [500, 1000, 5000, 10000], []);
-
   const uniqueSuggestions = useMemo(
     () =>
       Array.from(new Set(partySuggestions.map(name => name.trim()).filter(Boolean))).sort((a, b) =>
@@ -93,7 +91,6 @@ const TransactionAddForm: React.FC<TransactionAddFormProps> = ({
   const resetForm = () => {
     setCounterParty('');
     setAmount('');
-    setTnsType('CR');
     setRemarks('');
     setHighlightedIndex(-1);
     setInlineSuggestion('');
@@ -107,17 +104,6 @@ const TransactionAddForm: React.FC<TransactionAddFormProps> = ({
     setInlineSuggestion('');
     setTimeout(() => amountRef.current?.focus(), 0);
   }, []);
-
-  const applyQuickAmount = useCallback(
-    (value: number) => {
-      const sanitized = Number(value);
-      if (Number.isNaN(sanitized) || sanitized <= 0) return;
-      const prefix = tnsType === 'DR' ? '-' : '';
-      setAmount(`${prefix}${sanitized}`);
-      setTimeout(() => remarksRef.current?.focus(), 0);
-    },
-    [tnsType],
-  );
 
   const handleCounterKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (!showSuggestions && ['ArrowDown', 'ArrowUp', 'Tab'].includes(event.key)) {
@@ -158,19 +144,6 @@ const TransactionAddForm: React.FC<TransactionAddFormProps> = ({
       setInlineSuggestion('');
     }
   };
-
-  const toggleTransactionType = useCallback(() => {
-    setTnsType(prev => {
-      const next = prev === 'CR' ? 'DR' : 'CR';
-      if (amount) {
-        const numeric = Math.abs(parseFloat(amount.replace(/^[-+]/, '')));
-        if (!Number.isNaN(numeric) && numeric > 0) {
-          setAmount(`${next === 'DR' ? '-' : ''}${numeric}`);
-        }
-      }
-      return next;
-    });
-  }, [amount]);
 
   const handleAmountKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') {
@@ -239,29 +212,53 @@ const TransactionAddForm: React.FC<TransactionAddFormProps> = ({
     const trimmedRemarks = remarks.trim();
     const finalTnsType = sign < 0 ? 'DR' : 'CR';
 
+    const entryData = {
+      partyName: selectedPartyName,
+      involvedParty: trimmedCounterParty,
+      amount: parsedAmount,
+      tnsType: finalTnsType,
+      credit: finalTnsType === 'CR' ? parsedAmount : 0,
+      debit: finalTnsType === 'DR' ? parsedAmount : 0,
+      date: new Date().toISOString().split('T')[0],
+      remarks: trimmedRemarks,
+      ti: `GROUP_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    };
+
     setLoading(true);
     try {
-      const payload = {
+      const optimisticId = `temp_${Date.now()}`;
+      const balanceDelta = finalTnsType === 'CR' ? parsedAmount : -parsedAmount;
+      const optimisticEntry = {
+        _id: optimisticId,
+        id: optimisticId,
+        ti: entryData.ti,
+        date: entryData.date,
         partyName: selectedPartyName,
-        involvedParty: trimmedCounterParty,
+        transactionPartyName: trimmedCounterParty,
+        remarks: trimmedRemarks || `${selectedPartyName} ↔ ${trimmedCounterParty}`,
         amount: parsedAmount,
-        tnsType: finalTnsType,
-        credit: finalTnsType === 'CR' ? parsedAmount : 0,
-        debit: finalTnsType === 'DR' ? parsedAmount : 0,
-        date: new Date().toISOString().split('T')[0],
-        remarks: trimmedRemarks,
-        ti: `GROUP_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        credit: entryData.credit,
+        debit: entryData.debit,
+        balance: balanceDelta,
+        tnsType: entryData.tnsType,
+        type: entryData.tnsType === 'CR' ? 'Credit' : 'Debit',
+        isOptimistic: true,
+        createdAt: new Date().toISOString(),
       };
 
-      const response = await partyLedgerAPI.addEntry(payload);
+      await dispatch(applyOptimisticAdd({
+        optimisticEntry,
+        commissionEntry: null,
+      }));
 
-      if (!response.success) {
-        toast({
-          title: 'Error',
-          description: response.message || 'Failed to add transaction.',
-          variant: 'destructive',
-        });
-        return;
+      const result = await dispatch(addLedgerEntry({
+        entryData,
+        optimisticEntry,
+        commissionEntry: null,
+      }));
+
+      if (!addLedgerEntry.fulfilled.match(result)) {
+        throw new Error((result.payload as string) || 'Failed to add transaction');
       }
 
       toast({
@@ -270,12 +267,7 @@ const TransactionAddForm: React.FC<TransactionAddFormProps> = ({
       });
 
       resetForm();
-      const refreshResult = onTransactionAdded?.(response.data);
-      if (refreshResult && typeof (refreshResult as Promise<any>).catch === 'function') {
-        (refreshResult as Promise<any>).catch(error => {
-          console.error('❌ Failed to refresh after adding transaction:', error);
-        });
-      }
+      onTransactionAdded?.(result.payload);
     } catch (error: any) {
       console.error('❌ Failed to add transaction:', error);
       toast({
@@ -283,14 +275,16 @@ const TransactionAddForm: React.FC<TransactionAddFormProps> = ({
         description: error?.message || 'Failed to add transaction.',
         variant: 'destructive',
       });
+
+      if (selectedPartyName) {
+        dispatch(refreshLedgerData(selectedPartyName));
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const isFormDisabled = !selectedPartyName || loading || isSelfTransaction || disabled;
-  const derivedTypeLabel = tnsType === 'CR' ? 'Credit • You Receive' : 'Debit • You Pay';
-  const derivedBadgeVariant = tnsType === 'CR' ? 'default' : 'destructive';
 
   return (
     <form
@@ -302,11 +296,8 @@ const TransactionAddForm: React.FC<TransactionAddFormProps> = ({
       <div className="relative md:col-span-2 lg:col-span-5 -mt-1 mb-2 flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-semibold text-blue-700">
           <Sparkles className="w-4 h-4" />
-          <span>Quick Transaction Entry</span>
+          <span>Transaction ID</span>
         </div>
-        <Badge variant={derivedBadgeVariant} className="text-xs">
-          {derivedTypeLabel}
-        </Badge>
       </div>
 
       <div className="relative flex flex-col gap-2">
@@ -402,50 +393,12 @@ const TransactionAddForm: React.FC<TransactionAddFormProps> = ({
             let sanitized = rawValue.replace(/[^0-9+\-\.]/g, '');
             sanitized = sanitized.replace(/(?!^)[+-]/g, '');
             setAmount(sanitized);
-            const trimmed = sanitized.trim();
-            if (!trimmed) {
-              setTnsType('CR');
-              return;
-            }
-            if (trimmed.startsWith('-')) {
-              setTnsType('DR');
-            } else {
-              setTnsType('CR');
-            }
           }}
           onKeyDown={handleAmountKeyDown}
           placeholder="+1000 for credit, -500 for debit"
           className="relative z-10 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           disabled={!selectedPartyName || loading || disabled}
         />
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={toggleTransactionType}
-            disabled={loading || disabled || !selectedPartyName}
-            className="text-xs"
-          >
-            <ArrowRightLeft className="w-3 h-3 mr-1" />
-            Switch to {tnsType === 'CR' ? 'Debit' : 'Credit'}
-          </Button>
-          <div className="flex flex-wrap gap-1">
-            {quickAmountPresets.map(preset => (
-              <Button
-                key={preset}
-                type="button"
-                size="sm"
-                variant="secondary"
-                onClick={() => applyQuickAmount(preset)}
-                disabled={loading || disabled || !selectedPartyName}
-                className="text-xs"
-              >
-                {tnsType === 'CR' ? '+' : '-'}₹{preset.toLocaleString()}
-              </Button>
-            ))}
-          </div>
-        </div>
       </div>
 
       <div className="relative flex flex-col gap-2 lg:col-span-1 md:col-span-2">
